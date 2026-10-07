@@ -1,0 +1,3672 @@
+# Hybrid SLC-MLC RRAM Mixed-Signal Processing-in-Memory Architecture for Transformer Acceleration via Gradient Redistribution
+# id: W4411486499 | key: 2025_Song_HyFlexPIM_ISCA | ISCA 2025 | card: ../cards/2025_Song_HyFlexPIM_ISCA.md
+
+
+=== page 1 ===
+Hybrid SLC-MLC RRAM Mixed-Signal Processing-in-Memory
+Architecture for Transformer Acceleration via Gradient
+Redistribution
+Chang Eun Song
+
+arXiv:2506.00020v1 [cs.AR] 20 May 2025
+
+University of California, San Diego
+San Diego, CA, USA
+cesong@ucsd.edu
+
+Nam Sung Kim
+
+University of Illinois at
+Urbana–Champaign
+Urbana, IL, USA
+nam.sung.kim@gmail.com
+
+Priyansh Bhatnagar
+
+University of California, San Diego
+San Diego, CA, USA
+prbhatnagar@ucsd.edu
+
+Tajana S. Rosing
+
+University of California, San Diego
+San Diego, CA, USA
+tajana@ucsd.edu
+
+Zihan Xia
+
+University of California, San Diego
+San Diego, CA, USA
+z5xia@ucsd.edu
+
+Mingu Kang
+
+University of California, San Diego
+San Diego, CA, USA
+mingu@ucsd.edu
+
+ABSTRACT
+
+1
+
+Transformers, while revolutionary, face challenges due to their
+demanding computational cost and large data movement. To address this, we propose HyFlexPIM, a novel mixed-signal processingin-memory (PIM) accelerator for inference that flexibly utilizes
+both single-level cell (SLC) and multi-level cell (MLC) RRAM technologies to trade-off accuracy and efficiency. HyFlexPIM achieves
+efficient dual-mode operation by utilizing digital PIM for highprecision and write-intensive operations while analog PIM for high
+parallel and low-precision computations. The analog PIM further
+distributes tasks between SLC and MLC PIM operations, where a
+single analog PIM module can be reconfigured to switch between
+two operations (SLC/MLC) with minimal overhead (<1% for area
+& energy). Critical weights are allocated to SLC RRAM for high
+accuracy, while less critical weights are assigned to MLC RRAM
+to maximize capacity, power, and latency efficiency. However, despite employing such a hybrid mechanism, brute-force mapping
+on hardware fails to deliver significant benefits due to the limited
+proportion of weights accelerated by the MLC and the noticeable
+degradation in accuracy. To maximize the potential of our hybrid
+hardware architecture, we propose an algorithm co-optimization
+technique, called gradient redistribution, which uses Singular Value
+Decomposition (SVD) to decompose and truncate matrices based
+on their importance, then fine-tune them to concentrate significance into a small subset of weights. By doing so, only 5-10% of the
+weights have dominantly large gradients, making it favorable for
+HyFlexPIM by minimizing the use of expensive SLC RRAM while
+maximizing the efficient MLC RRAM. Our evaluation shows that
+HyFlexPIM significantly enhances computational throughput and
+energy efficiency, achieving maximum 1.86× and 1.45× higher than
+state-of-the-art methods.
+
+Transformer models have brought significant advancements in a
+wide range of machine learning (ML) applications, including natural language processing and computer vision [59]. However, their
+high computational cost and memory bandwidth/capacity requirements pose considerable challenges for the hardware deployment,
+given the limited resources such as computing capability, memory
+bandwidth, energy, and delay budgets [34, 64]. These difficulties
+arise from the immense memory bandwidth usage and intensive
+data transfer cost required for model operations, making it challenging to process them efficiently with conventional accelerators
+such as GPUs and ASICs [43, 55, 56, 71, 75]. As an alternative solution, memory-centric processing architectures have been emerging,
+specifically processing-in-memory (PIM) [48, 74, 80]. These technologies eliminate data movement and leverage memory’s inherent
+parallelism to enhance computational efficiency. In particular, both
+digital and analog PIM approaches have shown significant efficiency improvements - digital PIM reduces data movement costs
+while maintaining the accuracy for high bit-precision operations
+[16, 24, 32, 58, 60, 68, 79], and analog PIM demonstrates dramatic
+efficiency improvement, achieving more than two orders of magnitude benefit [5, 9, 17, 24] through low-voltage swing operations.
+To leverage such opportunities, several efforts have explored
+PIM techniques that employ DRAM, SRAM, RRAM (Resistive RAM),
+PRAM (Phase Change Memory), and other emerging memory topologies [4, 54, 70]. Out of these efforts, RRAM is one of the most widely
+explored devices for PIM acceleration due to its non-volatile memory (NVM) nature, high storage density, fast read operation, low
+energy consumption, and excellent analog programmability for the
+multi-level cell (MLC) [23, 42, 46, 58, 60, 74, 78, 80]. Despite its great
+potential in terms of efficiency, practical applications of RRAM for
+Transformer models face multiple challenges in terms of its nonideal characteristics and reliability concerns. While digital RRAM
+PIM approaches have been actively explored for various complex
+models due to their reliability and precision advantages [16, 58, 60],
+analog RRAM PIM has been explored mostly in simpler algorithms
+such as multilayer perceptrons, spiking neural networks (SNNs),
+and convolutional neural networks (CNNs), which exhibit relatively
+high inherent error resiliency within the model itself [27, 33, 69].
+
+KEYWORDS
+Processing-In-Memory, LLM, AI Processor, Accelerators, Transformer, Mixed-Signal, RRAM
+
+INTRODUCTION
+
+=== page 2 ===
+Chang Eun Song, Priyansh Bhatnagar, Zihan Xia, Nam Sung Kim, Tajana S. Rosing, and Mingu Kang
+
+On the other hand, Transformer models consist of many cascaded
+layers and often require high bit precision for specific operations,
+making them sensitive to noise sources and resulting in immediate accuracy degradation from such noise. Due to these accuracy
+concerns, a large body of work [32, 68, 79] has explored digital PIM
+solutions for processing Transformers while reducing data movement costs. However, it has shown limited improvement due to less
+parallelism in General matrix-vector multiplications (GEMV) operations than analog PIMs [72], falling short of fully leveraging the
+substantial potential for energy and delay efficiency offered by lowswing analog operations. SPIRNT [75] explored analog PIM within
+a limited scope, using it as a pre-processor before the main digital
+processing to filter redundant tokens by calculating the correlation
+scores between all query and key pairs in the RRAM array. Despite
+a few analog efforts, the study of analog PIM acceleration for Transformers remains largely unexplored, mainly due to concerns about
+accuracy degradation.
+One of the main advantages of analog RRAM PIM is its ability
+to support multi-level cell (MLC) programming, where multiple
+bits of information (2 to 6-bits) can be stored per cell based on programmable resistance levels, unlike single-level cell (SLC) which
+stores only a single bit (e.g., high vs. low). In addition, PIM with MLC
+achieves higher computing throughput as each memory cell processes multiple bits simultaneously. Despite above advantages, the
+inherent non-linearity in MLC operations leads to severe accuracy
+degradation. Our experiments demonstrate that even the simplest
+Transformer models [12] suffer catastrophic accuracy loss when
+implemented entirely with 2-bit MLC, e.g., 40% drop for BERT-Base
+with GLUE MRPC dataset.
+In contrast, SLC offers a much higher noise margin against data
+distortion, ensuring better accuracy but at the cost of significantly
+greater area and energy overhead. Exploiting both types of devices
+(SLC & MLC) in a single hardware offers a great knob to trade-off
+between efficiency and accuracy by containing the critical contents
+in the SLC while less important and error-tolerant data in the
+MLC. To unlock the true potential of enhanced efficiency and large
+capacity from analog PIM, it is desirable to process a dominant
+portion of data in the MLC. However, applying these methods to
+Transformer encounters two major challenges: 1) the error-tolerant
+portion to be processed in MLC is often not sufficient enough so
+that the acceleration offered by the hybrid architecture does not
+lead to a significant improvement in efficiency, and 2) even when
+this is not the case, it is hard to clearly demarcate which part is
+error-tolerant vs. error-susceptible.
+This work aims to tackle these challenges at the intersection
+of hardware & software by introducing a novel hybrid SLC-MLC
+RRAM mixed-signal architecture, termed HyFlexPIM along with
+an algorithmic transformation called gradient redistribution. HyFlexPIM exhibits three key characteristics (1) mixed-signal, leveraging
+both digital & analog PIM computations, (2) Hybrid, further dividing the analog PIM into SLC and MLC RRAM operations given the
+accuracy requirement, and (3) Flexible, enabling seamless switching between SLC-MLC configurations in a single PIM unit.
+On the software side, our proposed gradient redistribution technique reshapes Transformer models without accuracy compromise
+to be more compatible with the hybrid hardware platform, rather
+
+than passively relying on the inherent error resiliency of the model
+itself. In this approach, we accomplish these goals by employing
+Singular Value Decomposition (SVD) to decompose matrices based
+on their order of importance. After truncating the post-SVD matrix
+to remove redundancy, we fine-tune it so that a small portion of the
+weights have dominant importance. This approach will not only
+facilitate a clear demarcation between critical and error-tolerant sections of the task but will also enhance the size of the error-tolerant
+section for efficient hardware mapping, thereby maximizing the use
+of low-power analog processing in the MLC while achieving higher
+storage density and improved computational throughput. All SVD
+decomposition, truncation, and fine-tuning are performed entirely
+in the software in advance. Meanwhile, the hardware, featuring
+reconfigurability for hybrid SLC-MLC operations, only utilizes the
+final truncated matrices for GEMV operations for inference, resulting in lower computing and storage costs.
+Our detailed contributions are as follows:
+• We introduce architectural and circuit-level hardware designs
+to support the dual-tier approach, facilitating importance-based
+data flow with hybrid SLC-MLC RRAM mixed-signal PIM and a
+reconfigurable ADC for dynamic precision.
+• The gradient redistribution technique allows us to protect only
+the most important 5-10% & 5-20% of weights by storing them in
+the SLC for the encoder & decoder models, respectively, to achieve
+high precision while most weights are processed in the MLC.
+• We performed accuracy analysis by employing realistic circuit
+error models to reflect the non-idealities of real RRAM devices [15],
+peripheral circuitry, and the detailed computational and data flow.
+• We conducted extensive experiments on various benchmarks, including both encoder-based, decoder-based, and vision transformer
+models such as BERT [12], GPT-2 [45], Llama3 [3], and ViT-Base
+[14] with multiple datasets of GLUE (7 tasks) [63], WikiText-2 [37],
+PTB [36], and CIFAR-10 [28].
+The results indicate that HyFlexPIM exhibits superior throughput and energy efficiency of maximum 1.86× and 1.24× compared
+to state-of-the-art (SoA) methods [31], with negligible accuracy
+repercussions (less than 1%) in the encoder model and vision transformer and loss increase (less than 10% of loss) in decoder model,
+on average.
+
+2 BACKGROUND AND MOTIVATION
+2.1 Transformer
+Figure 1 illustrates the computing stages of an end-to-end Transformer encoder and decoder, which consist of multiple blocks internally. Attention-based models fundamentally consist of two primary
+modules: Multi-Head Attention (MHA) and Feed Forward Network
+(FFN). The attention mechanism is designed to selectively focus
+on a subset of segments in the input sequence while generating
+an output. The core concept involves computing a weighted sum
+of values (V), where the weights are determined by the similarity
+between a query (Q) and a set of keys (K). This process can be
+mathematically represented as follows:
+Q = WQ (𝑥),
+
+K = WK (𝑥),
+
+V = WV (𝑥)
+
+(1)
+
+where Q, K, and V are 𝐿 ×𝐷ℎ dimensional matrices with 𝐿 representing the sequence length, 𝐷ℎ as hidden dimension, and 𝑥 as input
+
+=== page 3 ===
+Previous Output
+
+Token Embeddings
+
+Linear
+𝐖𝐐
+
+Linear
+𝐖𝐊
+
+Linear
+𝐖𝐕
+
+(Dh X Dh)
+
+(Dh X Dh)
+
+(Dh X Dh)
+
+Masked
+Multi-Head Attention
+
+…
+
+Encoder Block #n
+
+Encoder
+
+Feed Forward (FFN2)
+Decoder Block #1
+
+P*V = O
+
+Proj (FC)
+
+FFN1
+
+N = 1024
+
+N= 2048
+
+N = 3072
+
+FFN2
+
+(N = Sequence Length)
+
+Figure 2: The number of operations for each stage in transformer models.
+
+Decoder Block #n
+
+Decoder
+
+𝒘𝟏,𝟏
+
+𝒘𝟐,𝟏
+
+𝒘𝟏,𝟐
+
+𝒘𝟐,𝟐
+
+𝒂𝟏 𝑻 𝒘𝟏,𝟏
+⋮
+⋮
+𝒂𝟔𝟒
+𝒘𝟔𝟒,𝟏
+
+𝒂𝟐
+
+𝒐𝟏 = % 𝒂𝒊 ∗ 𝒘𝒊,𝟏
+
+𝒘𝟏,𝟏𝟐𝟕 𝒘𝟏,𝟏𝟐𝟖
+
+…
+…
+
+𝒘𝟔𝟒,𝟏 𝒘𝟔𝟒,𝟐
+
+Sample & Hold + ADC
+Shift & Adder (S&A)
+
+(a)
+
+⋯
+⋱
+⋯
+
+𝒐𝟏 𝑻
+𝒘𝟏,𝟏𝟐𝟖
+⋮
+⋮
+=
+⋮
+𝒘𝟔𝟒,𝟏𝟐𝟖
+𝒐𝟏𝟐𝟖
+
+𝒂𝟏
+
+𝟔𝟒
+
+…
+
+Analog RRAM Processing In-Memory
+
+Analog processing-in-memory (PIM) has been extensively adopted
+for accelerating a wide range of applications with high demands
+for memory and computational resources, exploiting its significant
+parallelism, low-power computation with low-voltage swing, and
+
+…
+
+…
+
+Typically, the attention module is followed by an additional linear
+layer with a weight matrix Wproj for further processing. After MHA,
+the output is processed through a FFN consisting of two layers: FFN1
+and FFN2. FFN1 performs a linear transformation using a weight
+matrix Wffn1 of dimensions 𝐷ℎ × 𝐷 𝑓 𝑓 , followed by a non-linear
+activation function, typically ReLU or GELU. This layer projects
+the 𝐷ℎ -dimensional input to a higher-dimensional space of size
+𝐷 𝑓 𝑓 , resulting in an output dimension of 𝐿 × 𝐷 𝑓 𝑓 . Subsequently,
+FFN2 applies a linear transformation to project the intermediate
+representation back to the original hidden dimension size of 𝐿 × 𝐷ℎ
+with a weight matrix Wffn2 with dimension of 𝐷 𝑓 𝑓 × 𝐷ℎ .
+Figure 2 shows the distribution of the number of operations for
+each computation stage in transformers with respect to different sequence lengths. As a large portion (>70%) of computations in Transformers is from static weights [10, 43] and does not update them
+during inference, the weights written in the array can be reused
+over a large number of inputs without writing, which is costly due
+to the high writing voltage of NVM devices. For this reason, most
+of the Transformer’s computing pipeline can be efficiently accelerated by PIM. Furthermore, this static nature enables pre-processing
+using singular value decomposition (SVD) (described in Section 2.3)
+for improved efficiency and supports the pre-storage of weights
+processed through SVD.
+
+…
+
+embedding. Here, WQ , WK , and WV are learnable weight matrices
+for the generation of queries, keys, and values, respectively. Then,
+the attention scores are computed as the dot product between Q
+and K, followed by the application of a softmax function to obtain
+the normalized weights. The attention mechanism is formulated as
+follows with 𝑑ℎ𝑒𝑎𝑑 being the size of each head:
+!
+QK𝑇
+V
+(2)
+Attn(Q, K, V) = softmax √︁
+𝑑ℎ𝑒𝑎𝑑
+
+Vector-Matrix Multiplication
+
+Bit Line Driver
+
+Output
+
+Figure 1: Variants of Transformer model architectures and
+dataflow: (a) an encoder and (b) a decoder architecture.
+
+2.2
+
+N = 512
+
+…
+
+Feed Forward (FFN2) (Dff X Dh)
+Encoder Block #1
+
+Feed Forward (FFN1)
+
+N = 128
+
+𝒂𝟔𝟒
+
+𝒊&𝟏
+
+Cell
+Distribution
+
+Feed Forward (FFN1) (Dh X Dff)
+
+Multi-Head Attention
+
+Token
+Q*K^T = Score Softmax (S) = P
+Generation (FC)
+
+Cell
+Distribution
+
+S×𝐕
+
+Linear Layer (Dh X Dh)
+
+80
+70
+60
+50
+40
+30
+20
+10
+-
+
+Word Line Driver
+
+𝐐 × 𝐊𝐓
+𝑺𝒐𝒇𝒕𝒎𝒂𝒙
+
+Multi-Head Attention
+
+Token Embeddings
+
+Input Vector
+
+Input Tokens
+
+# of computations (x 100000000)
+
+Hybrid SLC-MLC RRAM Mixed-Signal Processing-in-Memory Architecture for Transformer Acceleration via Gradient Redistribution
+
+: RRAM cell
+SLC (1 bit)
+0
+
+1
+
+(b)
+11
+
+Resistance
+
+MLC (2 bits)
+01
+
+10
+
+(c)
+
+00
+Resistance
+
+Figure 3: Illustration of (a) analog RRAM processing-inmemory vector-matrix multiplication, (b) single-level cell
+(SLC), (c) multi-level cell (MLC) distribution, and (d) digital
+RRAM processing-in-memory NOR operation.
+
+capability to minimize explicit data movement. While various memory topologies, including RRAM [11, 20, 31, 32, 50, 75, 77], PCM [67],
+SRAM [2], and DRAM [4], have been explored, this paper focuses
+on RRAM due to its suitability for both storage and computation.
+RRAM’s non-volatile memory (NVM) nature, high storage density,
+low read power, and excellent analog programmability make it a
+highly suitable choice. Consequently, RRAM has been one of the
+most widely employed devices for the acceleration of highly parallel
+analog General matrix-vector multiplications (GEMV).
+During GEMV PIM operations, each element of the matrix is
+mapped to the conductance (=1/resistance) of the memristor in
+a bitcell. While single-level cells (SLC) contain one bit per cell
+(Figure 3(b)), MLCs store multiple bits (e.g., 2 bits or more) per
+cell as multi-level conductance (Figure 3(c)). Each element of input
+vector is applied to the all wordlines (WLs) of the RRAM array
+simultaneously, horizontal lines in Figure 3(a), by the WL driver as
+a voltage signal. When each row of the array receives one bit of
+the corresponding input element in a bit-sequential manner, and
+assuming SLC (each storing 1 bit), each bitcell performs 1-bit by
+1-bit binary multiplication. Conversely, if the cells are configured
+as MLCs, each bitcell performs 1-bit by multi-bit multiplications
+achieving higher throughput. The multiplication results from every
+cell are directly accumulated on the bitline (vertical line) of the
+array in the analog domain, generating the output of the GEMV.
+The following equation formally represents the GEMV operation
+with an input vector A1×𝑛 and matrix W𝑛×𝑚 on an RRAM crossbar
+array:
+
+=== page 4 ===
+Chang Eun Song, Priyansh Bhatnagar, Zihan Xia, Nam Sung Kim, Tajana S. Rosing, and Mingu Kang
+M
+
+N
+
+N
+4.2
+
+(
+
+x M
+
+M
+
+…
+
+0.3
+
+t
+
+Matrix
+
+n k ta n
+Ra r
+h po
+ig
+H re Im
+o
+M
+
+M
+
+Decomposition
+
+𝑼
+𝒌
+
+N
+
+𝒌
+
+Decomposition
+
+x
+
+M
+
+4.2
+
+N
+
+…
+
+0.3
+
+)
+
+x𝒌
+
+t
+
+(𝒌
+
+5.6
+
+n k ta n
+Ra r
+h po
+ig
+H re Im
+o
+M
+
+Matrix
+
+(Diagonal matrix w/ eigen values(ƛ))
+
+=
+
+M
+
+𝑽𝑻
+
+Σ (Sigma)
+
+(a)
+
+)
+
+xN
+
+0.1
+Truncating Area
+
+𝑾
+
+which indicate the importance of the corresponding dimensions,
+e.g., the rows of 𝑈 and the columns of 𝑉 𝑇 . To reduce dimensionality, as shown in Figure 4 (b), a truncated SVD is commonly used:
+𝑊 ≈ 𝑊𝑘 = 𝑈𝑘 Σ𝑘 𝑉𝑘𝑇 , where 𝑈𝑘 , Σ𝑘 , and 𝑉𝑘 contain only the first
+𝑘 columns, singular values, and rows, respectively. After truncation, Σ𝑘 𝑉𝑘𝑇 is pre-computed and stored as a matrix of size (𝑘 × 𝑁 ),
+reducing both data volume and computation cost, as illustrated in
+Figure 4 (c). While these SVD processes are typically performed in
+software, the hardware focuses on storing and utilizing the truncated matrices for inference. Although SVD is widely employed for
+data compression through truncation, proposed algorithm repurpose it to reshape the matrices, maximizing the efficiency of the
+proposed hardware, as detailed in Section 4.
+
+N
+
+=
+
+5.6
+
+0.1
+
+M
+
+𝑾
+
+𝑼
+
+N
+
+𝒌
+
+Matrix
+
+Σ (Sigma)
+(b)
+
+𝑽𝑻
+
+(Diagonal matrix w/ eigen values(ƛ))
+
+N
+
+Decomposition
+
+: Non-zero values
+
+x𝒌
+
+M
+
+: Zero values
+
+𝑾
+
+𝑼
+
+(c)
+
+Σ x𝑽
+
+3
+
+𝑻
+
+Figure 4: Post-SVD matrix applied to static weights in the
+transformer (a) during training, (b) after truncation, and (c)
+during inference.
+
+𝑜𝑗 =
+
+𝑛
+∑︁
+
+𝑎𝑖 · 𝑤 𝑖 𝑗
+
+(3)
+
+𝑖=1
+
+where 𝑤𝑖 𝑗 is a conductance corresponding to the element at the 𝑖-th
+row and 𝑗-th column of the weight matrix W whereas 𝑜 𝑗 is an 𝑗-th
+elements of output vector when an input vector ({𝑎 1, ..., 𝑎𝑛 }) was
+applied. Finally, the accumulated analog current (𝑜 𝑗 ) is captured by
+a sample-and-hold circuit, and subsequently converted to digital
+form through an analog-to-digital converter (ADC). The final result
+of the multi-bit GEMV operation is obtained via weighted-sum of
+all output bits using a shift and add (S&A) module to represent
+different bit positions of input. (Figure 3 (a))
+Despite its great potential for an efficient GEMV operation via
+full parallelism from all bitcells, practical applications of RRAM for
+Transformer models face multiple challenges due to its non-ideal
+characteristics and reliability concerns. These challenges include
+spatial mismatch from process variations, non-linear and asymmetric weight updates, limited endurance, and restricted data retention
+capabilities. Intuitively, SLC offers a higher noise margin against
+various noise sources [15] leading to better accuracy, but at the cost
+of significantly greater area, delay, and energy overhead compared
+to MLC.
+
+2.3
+
+Singular Value Decomposition (SVD)
+
+SVD is a widely utilized method [1, 35] for decomposing weight
+matrices into three smaller matrices while retaining much of the
+original information. Any matrix 𝑊 ∈ R𝑀 ×𝑁 can be transformed
+as follows:
+𝑊 = 𝑈 Σ𝑉 𝑇
+(4)
+As described in Figure 4 (a), 𝑈 and 𝑉 𝑇 are 𝑀 × 𝑀 and 𝑁 × 𝑁 orthogonal matrices, respectively, and Σ is an 𝑀 × 𝑁 diagonal matrix
+with non-negative real numbers on the diagonal. This decomposition facilitates the analysis and manipulation of the matrix 𝑊
+based on the diagonal elements, known as singular values, of Σ,
+
+HyFlexPIM
+
+In this section, we introduce the detailed architecture of HyFlexPIM, which is a mixed-signal RRAM PIM accelerator designed to
+efficiently support both SLC and MLC PIM operations with negligible overhead. This hybrid hardware creates a great synergy with
+our proposed gradient redistribution technique to be detailed in the
+following Section 4, enabling effective mapping of critical weights
+to SLC and less important weights to MLC.
+
+3.1
+
+HyFlexPIM Hardware Architecture
+
+Digital PIM, which has been extensively studied [22, 31, 72], achieves
+data movement reduction with reliable computation through simple
+bit-wise operations (e.g., NOR, INV, and others) but suffers from
+limited parallelism compared to analog PIM. While analog RRAM
+PIM offer superior parallelism, their non-ideality and expensive
+MLC write operation make them less suitable for storing real-time
+generated vectors with high bit-precision. Therefore, we opt to
+process attention computations in digital SLC RRAM arrays, which
+serve as both efficient storage and computing units. On the other
+hand, the static weights in the linear layers are processed in the
+analog PIM for the enhanced efficiency by utilizing MLC.
+As described in Figure 5, HyFlexPIM includes 24 Processing Units
+(PUs) to enable high parallelism in processing 24 layers and has a
+single input and output (IO) to receive input sequences and uses
+a global bus to communicate with each PU inside the HyFlexPIM.
+Each PU is dedicated to the computation of a single layer of the encoder or decoder, allowing the PUs to work in a pipelined fashion to
+process multiple streamed inputs. Once a specific layer is computed,
+the result is transferred to the next PU for the next layer’s processing. Note that the output of each layer is merely the size of (𝐷ℎ × 1),
+maintaining the inter-PU movement cost negligible. While mapping each PU to a single layer provides optimal performance, our
+architecture allows flexible model scaling in several ways as follows.
+1) For longer sequences (e.g., >8192) or higher hidden dimensions,
+multiple PUs collaboratively process a single layer to provide sufficient storage capacity, following tensor parallelism. 2) For models
+with fewer layers (e.g., <24), multiple PUs work collectively to
+compute a single layer in parallel, as seen in [31, 32, 50], again
+following tensor parallelism. 3) When the number of layers exceeds
+the available PUs, multiple chips are cascaded to support deeper
+layers, following pipeline parallelism. In cases 1) and 2), partial
+sums (<3 KB per PU) are transferred between PUs and aggregated
+
+=== page 5 ===
+Hybrid SLC-MLC RRAM Mixed-Signal Processing-in-Memory Architecture for Transformer Acceleration via Gradient Redistribution
+
+Analog
+Analog
+Analog
+PIM
+PIM
+PIM
+Module #15 Module #16 Module #17
+
+…
+
+Digital PIM
+Module #6 &
+Storage RRAM
+
+Digital PIM
+Module #5 &
+Storage RRAM
+
+Sample & Hold + Shift & Adder (S&A)
+
+(d)
+
+…
+
+SFU
+
+…
+
+…
+
+128 BLs
+Input
+Reg.
+(IR)
+
+Digital PIM
+Module #7 &
+Storage RRAM
+
+WL
+DRV
+
+…
+RRAM
+…
+Array
+…
+#0
+
+…
+
+Sample & Hold
+
+…
+
+…
+
+Output
+
+Analog
+Analog
+Analog
+PIM
+PIM
+PIM
+Module #21 Module #22 Module #23
+
+…
+
+Processing Unit
+
+Digital PIM
+Module #4 &
+Storage RRAM
+
+1024
+WLs
+
+Reg.
+(OR)
+
+ADC (6b or 7b)
+
+…
+
+…
+RRAM
+…
+Array
+…
+#511
+
+…
+
+Analog
+Analog
+Analog
+PIM
+PIM
+PIM
+Module #18 Module #19 Module #20
+
+Reg.
+(OR)
+
+…
+
+RRAM
+…
+Array
+…
+#255
+
+…
+
+…
+
+Analog
+Analog
+Analog
+PIM
+PIM
+PIM
+Module #12 Module #13 Module #14
+
+Output
+
+RRAM
+…
+Array
+…
+#0
+
+…
+
+Analog
+Analog
+Analog
+PIM
+PIM
+PIM
+Module #9 Module #10 Module #11
+
+Analog
+PIM
+Module #4
+
+WL
+DRV
+
+…
+
+…
+
+Digital PIM
+Module #3 &
+Storage RRAM
+
+Analog
+PIM
+Module #5
+
+Analog
+PIM
+Module #3
+
+Input
+Reg.
+(IR)
+
+…
+
+(a)
+
+Digital PIM
+Module #2 &
+Storage RRAM
+
+1024 BLs
+
+Analog
+PIM
+Module #8
+
+…
+
+Processing
+Unit #23
+
+Analog
+PIM
+Module #7
+
+…
+
+Processing
+Unit #22
+
+…
+
+Control Bus
+
+Analog
+PIM
+Module #6
+
+…
+
+Processing
+Unit #5
+
+Digital PIM
+Module #1 &
+Storage RRAM
+
+IO (Data/Address/Command IO)
+
+…
+
+Processing
+Unit #4
+
+Digital PIM
+Module #0 &
+Storage RRAM
+
+Analog
+PIM
+Module #2
+
+…
+
+Processing
+Unit #3
+
+Analog
+PIM
+Module #1
+
+…
+
+Processing
+Unit #2
+
+Inner Unit Shared Bus (OCI)
+Analog
+PIM
+Module #0
+
+…
+
+Processing
+Unit #1
+
+…
+
+HyFlexPIM
+
+Global Bus (PCIe-6.0 128GB/s)
+
+Processing
+Unit #0
+
+64
+WLs
+
+…
+
+Sample & Hold
+
+ADC (6b or 7b)
+
+Shift & Adder (S&A)
+
+…
+
+(c)
+
+(b)
+
+Figure 5: Architecture overview of the proposed HyFlexPIM, which is based on a scalable architecture with hybrid analog and
+digital RRAM PIM modules.
+
+<<3
+
+<<2
+
+Bit Line Driver
+
+<<1
+
+<<1
+
+<<2
+
+<<3
+
+𝑤)'
+
+𝑤''
+
+𝑤('
+
+𝑤&'
+
+𝑤)(
+
+𝑤'(
+
+𝑤((
+
+𝑤&(
+
+𝑤)&
+
+𝑤'&
+
+𝑤(&
+
+𝑤&&
+
+𝑤)*
+
+𝑤'*
+
+𝑤(*
+
+𝑤&*
+
+𝑎&' → 𝑎(' → 𝑎'' → 𝑎)'
+𝑎&( → 𝑎(( → 𝑎'( → 𝑎)(
+𝑎&& → 𝑎(& → 𝑎'& → 𝑎)&
+𝑎&* → 𝑎(* → 𝑎'* → 𝑎)*
+𝑨𝒊 = 𝒂𝒊𝟑 , 𝒂𝒊𝟐 , 𝒂𝒊𝟏 , 𝒂𝒊𝟎
+𝑾𝒊 = 𝒘𝒊𝟑 , 𝒘𝒊𝟐 , 𝒘𝒊𝟏 , 𝒘𝒊𝟎
+Vector Multiplication
+
+Word Line Driver
+
+in the Special Function Unit (SFU) via global bus (128 GB/s [53] as
+will be shown in Section 5.4) with negligible latency overhead (24
+cycles). For case 3), only a single hidden layer output (0.75 - 2 KB at
+hidden dimension of 768-2048) is transmitted between chips to continue processing the next layer, requiring less than 6-16 cycles over
+the PCIe-6.0 interconnect. The throughput analysis of these cases
+are given in Figure 17 with real benchmarks. Figure 5 (b) shows the
+detailed structure of the PU, which comprises eight digital RRAM
+PIM modules for attention and non-linear operations and 24 analog
+RRAM PIM modules to accelerate the other linear operation stages.
+Each module is interconnected via inner unit shared bus to transfer
+the intermediate results from each stage to the next as input. An
+analog PIM module (Figure 5 (c)) consists of 512 RRAM arrays, each
+of which includes 64×128 bitcells and peripheral circuitry such as
+Input/Output Registers (IR/OR), Sample and Hold (S&H), 6-b/7-b
+flexible ADC, Shift and Adder (S&A), Word Line Drivers (WL DRV)
+for bitwise input fetching, and conventional read circuitry and write
+driver (not shown for simplicity). Digital PIM module (Figure 5 (d))
+is mostly similar to the analog PIM, but does not require the analog
+peripheral circuitry such as ADC. IR holds the control signals of
+bit line and WL selectors as [31, 79]. The Digital PIM module also
+incorporates a Special Function Unit (SFU) to efficiently handle
+non-linear operations such as Softmax, Layer Normalization, and
+GELU. To enable these operations, we implemented max search,
+subtraction, exponentiation (via Taylor series), addition, division,
+multiplication, and square root functions, all fully pipelined using
+floating-point arithmetic. After computation, the results are converted to the integer format for further processing with negligible
+overhead as shown in Table 2. We configured each SFU to process
+256 inputs per cycle to balance the throughput of GEMV operations.
+The digital PIM module contains 256 RRAM arrays, each of which
+includes 1024 bitcell per row. In the Q × K computation, which involves INT8 × INT8 multiplication, each output generation requires
+64 NOR operations. Each NOR operation takes three columns for
+two input operand bits and one output bit [22]. Each row processing takes total five cycles (four cycles for writing and one cycle for
+reading). Based on these constraints, 256 inputs per cycle for SFU
+hit the optimal balance with GEMV throughput, e.g., 256 × 1024
+/ (64 × 3) / 5 = 273 operations. The area and energy of SFU are
+in Table 2. Note, our approach is optimized for the inference, with
+
+Sample & Hold + ADC
+Shift & Adder (S&A)
+
+𝑨𝒊 ∗ 𝑾𝒊
+= (𝒂𝒊𝟎 ∗ 𝒘𝒊𝟎 )+ (𝒂𝒊𝟏 ∗ 𝒘𝒊𝟎 ≪ 𝟏)+ (𝒂𝒊𝟐 ∗ 𝒘𝒊𝟎 ≪ 𝟐)+ (𝒂𝒊𝟑 ∗ 𝒘𝒊𝟎 ≪ 𝟑)
++ (𝒂𝒊𝟎 ∗ 𝒘𝒊𝟏 ≪ 𝟏)+ (𝒂𝒊𝟏 ∗ 𝒘𝒊𝟏 ≪ 𝟐)+ (𝒂𝒊𝟐 ∗ 𝒘𝒊𝟏 ≪ 𝟑)+ (𝒂𝒊𝟑 ∗ 𝒘𝒊𝟏 ≪ 𝟒)
++ (𝒂𝒊𝟎 ∗ 𝒘𝒊𝟐 ≪ 𝟐)+ (𝒂𝒊𝟏 ∗ 𝒘𝒊𝟐 ≪ 𝟑)+ (𝒂𝒊𝟐 ∗ 𝒘𝒊𝟐 ≪ 𝟒)+ (𝒂𝒊𝟑 ∗ 𝒘𝒊𝟐 ≪ 𝟓)
++ (𝒂𝒊𝟎 ∗ 𝒘𝒊𝟑 ≪ 𝟑)+ (𝒂𝒊𝟏 ∗ 𝒘𝒊𝟑 ≪ 𝟒)+ (𝒂𝒊𝟐 ∗ 𝒘𝒊𝟑 ≪ 𝟓)+ (𝒂𝒊𝟑 ∗ 𝒘𝒊𝟑 ≪ 𝟔)
+
+Figure 6: SLC PIM mapping and Shift & Adder operation.
+proposed SVD fine-tuning (described in Section 4) conducted prior
+to deployment on the hardware as a one-time software process,
+ensuring no additional hardware overhead for SVD processing or
+memory usage in inference.
+
+3.2
+
+MLC vs. SLC Operations
+
+The static weights are pre-loaded into the analog RRAM PIM modules before the inference begins, based on their type of storage
+format (e.g., SLC vs. MLC), using conventional write drivers and a
+wordline (WL) driver, which are omitted in Figure 5 (c) for simplicity. Note that the varying levels of resistance for MLC are written
+by iteratively applying pulses through the WL based on the desired
+resistance level [47]. As a result, the same wordline drivers are used
+for both SLC and MLC, incurring no additional hardware costs to
+support both formats. Figure 6 and Figure 7 show the detailed view
+of Figure 5(c) for SLC and MLC configurations to describe the PIM
+dot-product operation with 4-bit weights for exposition purpose.
+The weights in a column of the matrix are stored vertically in the
+RRAM array. The SLC stores bits for the weight across adjacent
+columns, e.g., 4-bit words are stored across four columns. Each bit of
+the input is given sequentially through the WL. Depending on the
+bit position of each column and the cycle of input, corresponding
+
+=== page 6 ===
+𝑎** → 𝑎,* → 𝑎+* → 𝑎-*
+𝑎*. → 𝑎,. → 𝑎+. → 𝑎-.
+
+𝑨𝒊 = 𝒂𝒊𝟑 , 𝒂𝒊𝟐 , 𝒂𝒊𝟏 , 𝒂𝒊𝟎
+𝑾𝟏 = (𝒘𝒊𝟑 , 𝒘𝒊𝟐 ), (𝒘𝒊𝟏 , 𝒘𝒊𝟎 )
+𝒘𝟏𝑴𝑺𝑩
+
+𝑨𝒊 ∗ 𝑾𝒊
+
+𝒘𝟏𝑳𝑺𝑩
+
+Vref
+
+𝒘𝟏𝑳𝑺𝑩 𝒘𝟏𝑴𝑺𝑩
+
+…
+
+Sample
+& Hold
+
++
+-
+
+VIN
+
+𝑪𝟕 𝑪𝟔 𝑪𝟓 𝑪𝟒 𝑪𝟑 𝑪𝟐 𝑪𝟏 𝑪𝟎
+
+SAR
+Logic
+MSB
+
+Capacity
+
+𝒘𝟐𝑳𝑺𝑩 𝒘𝟐𝑴𝑺𝑩 Efficiency
+𝒘𝟑𝑳𝑺𝑩 𝒘𝟑𝑴𝑺𝑩
+
+Bypass for 6-b ADC
+
+2X
+
+𝑪𝟏 = 𝟐𝟎 𝑪𝟎 , 𝑪𝟐 = 𝟐𝟏 𝑪𝟎 , … 𝑪𝟕 = 𝟐𝟔 𝑪𝟎
+
+𝒘𝟒𝑳𝑺𝑩 𝒘𝟒𝑴𝑺𝑩
+
+Vref > VIN
+
+Vref
+
+VIN
+
+Shift & Adder (S&A)
+
+Vref < VIN
+
+1.25*Vref > VIN
+
+0.5*Vref
+
+7’b1010000
+
+1.25*Vref
+
+7’b1100000
+x
+
+1.5*Vref
+
+Vector Multiplication
+
+1.5*Vref < VIN
+
+SAR-ADC
+
+1.75*Vref
+
+7’b1001000
+
+1.125*Vref
+
+…
+
+7’b1011000
+
+7’b1110000
+
+6-b ADC: Comparison from here (𝑪𝟔 )
+
+= (𝒂𝒊𝟎 ∗ 𝒘𝒊𝑳𝑺𝑩 )+ (𝒂𝒊𝟏 ∗ 𝒘𝒊𝑳𝑺𝑩 ≪ 𝟏)+ (𝒂𝒊𝟐 ∗ 𝒘𝒊𝑳𝑺𝑩 ≪ 𝟐)+ (𝒂𝒊𝟑 ∗ 𝒘𝒊𝑳𝑺𝑩 ≪ 𝟑)
++ (𝒂𝒊𝟎 ∗ 𝒘𝒊𝑴𝑺𝑩 ≪ 𝟐)+(𝒂𝒊𝟏 ∗ 𝒘𝒊𝑴𝑺𝑩 ≪ 𝟑)+(𝒂𝒊𝟐 ∗ 𝒘𝒊𝑴𝑺𝑩 ≪ 𝟒)+(𝒂𝒊𝟑 ∗ 𝒘𝒊𝑴𝑺𝑩 ≪ 𝟓)
+
+1.375*Vref
+
+Selected Path & Output
+
+(b)
+
+Figure 8: (a) 6 and 7 bits flexible SAR-ADC schematic, and (b)
+operation of SAR-ADC with reconfiguration.
+
+xembed
+
+VQ S Q X UTQ
+
+binary weights are applied in the digital shift & adder (S&A) module. The MLC operation is mostly similar, but each bitcell contains
+multi-bits, e.g., 2-bit in Figure 7. Therefore, the corresponding impact factor of 1×, 4×, 16×, ... are given for the consecutive columns
+in the S&A module. Note that the support of SLC and MLC does
+not require two distinct hardware, but sharing the same hardware
+in a reconfigurable manner with only minor additional functions
+in the digital S&A module and reconfigurable ADC.
+By Kirchhoff’s current law, the currents accumulated by bitlines
+represent the dot-product results in the analog domain. As described
+in Figure 8 (a), analog signals from 128 bitlines are first captured by
+sample and hold (S&H) circuits, then sequentially selected through a
+multiplexer before being fed to a shared successive-approximationregister (SAR) ADC. The SAR ADC performs analog-to-digital conversion using binary search algorithm by enabling capacitors in
+sequence (C7 → C1 ) for iterative voltage comparisons, where each
+comparison determines one bit of the digital output.
+Therequired
+
+ADC precision for MVM operations is given by log2 (𝑅) + 𝑤 − 1,
+where 𝑅 is the number of rows in the crossbar, 𝑤 is the bits stored
+in a bitcell. In the SLC case, an 6-bit ADC is needed to achieve the
+full bit precision assuming 64 rows. In the MLC PIM operation, as
+shown in Figure 7, two consecutive bits of weights are packed and
+mapped to a single 2-bit RRAM device. In this way, MLC improves
+efficiency with doubled throughput, increased storage density, and
+halved analog computation energy. Since we still send input bits
+one by one, the ADC resolution required for MLC only increases
+by one (6-b → 7-b) compared to that of the SLC operation. While
+numerous studies have explored truncating bit precision of ADC
+to reduce area and energy consumption [31, 32], Transformers are
+highly sensitive to such a bit truncation, leading to significant accuracy degradation. To mitigate accuracy degradation, we employ
+a full-precision ADC, configured as 6-b for SLC and 7-b for MLC,
+in a flexible bit-precision manner. As shown in Figure 8 (b), our
+ADC is designed to support up to 7-b resolution. However, by simply bypassing the comparison for the largest capacitor (C7 ), which
+corresponds to the MSB, the ADC can efficiently operate as a 6-b
+ADC without consuming additional power. Importantly, the energy
+and area overhead of this design compared to a dedicated 6-b ADC
+
+LSB
+
+(a)
+
+7’b0100000
+
+7’b1000000
+
+Sample & Hold + ADC
+
+Figure 7: MLC PIM mapping and Shift & Adder operation.
+
+Doutput
+
+𝑎*, → 𝑎,, → 𝑎+, → 𝑎-,
+
+<<2
+
+(6-b or 7-b)
+
+𝑎*+ → 𝑎,+ → 𝑎++ → 𝑎-+
+
+…
+
+Bit Line Driver
+
+<<1
+
+Bitline
+Outputs
+(0~127)
+
+<<2
+
+Word Line Driver
+
+<<3
+
+MUX
+
+Chang Eun Song, Priyansh Bhatnagar, Zihan Xia, Nam Sung Kim, Tajana S. Rosing, and Mingu Kang
+
+: Analog RRAM PIM
+: Digital RRAM PIM
+
+Multi-Head Attention
+(MHA)
+
+Q
+𝑻
+
+VK S K X UTK
+VV S V X
+
+UT
+
+① 𝑾𝑸,𝑲,𝑽(FC)
+
+V
+
+𝑸𝑲
+√𝒅
+
+𝑸𝑲𝑻
+
+K Smax √𝒅 x V
+V
+
+VProj S Proj X UTProj
+
+②
+
+Vfc1 S fc1 X UTfc1
+
+Vfc2 S fc2 X UTfc2
+
+FFN1 (FC)
+
+FFN2 (FC)
+
+Projection (FC)
+
+③
+
+Figure 9: The proposed mapping of transformer operations
+to the hybrid digital-analog RRAM PIM architecture.
+takes negligible (<1%) portion in the overall architecture. Generally, increasing the ADC precision by one bit results in doubling
+the energy consumption [29, 40]. However, because the number
+of results generated to be converted by ADC is reduced by half in
+the case of 2-b MLC, the total energy consumption for the ADC
+does not increase as compared to the SLC case. Based on reliability
+considerations, we adopt 2-b MLC to balance efficiency and reliability since measurements from a real RRAM chip [15, 61] show that
+higher-level MLCs (e.g., 3-b/4-b MLC) have a 7× higher bit error
+rate than SLC, causing severe accuracy degradation in Transformer
+models [12, 45].
+
+3.3
+
+Transformer Algorithm to HW Mapping
+
+Figure 9 illustrates the dataflow of Transformer including the four
+fully-connected (FC) layers, and MHA layer and their mapping on
+PIM. After applying SVD, truncation on the linear matrices WQ ,
+WK , and WV , and fine-tuning, the matrices are divided into two
+matrices: 𝑉 × Σ and 𝑈 𝑇 (Since input is multiplied with transposed
+version of W) and stored in the analog PIM RRAM array for the
+inference as shown in Figure 9 block 1 . After matrix multiplication
+with an input (𝑋𝑒𝑚𝑏𝑒𝑑 ) with these two matrices, Q, K, and V tokens
+are generated. The generated tokens or outputs are stored in the
+digital PIM module via the inner-unit shared bus, where partial
+sums from different sub-arrays are accumulated to finalize the
+GEMV computation before passing the results to the next stage.
+While recent analog RRAM PIM works tend to employ the SLC due
+to the non-ideality concerns [31, 32], our approach utilizes more
+efficient MLCs for the most (e.g., 90 - 95% for BERT) of less critical
+elements by relying on the proposed gradient redistribution with
+
+=== page 7 ===
+Hybrid SLC-MLC RRAM Mixed-Signal Processing-in-Memory Architecture for Transformer Acceleration via Gradient Redistribution
+
+No Computation
+
+DTh (Hard Threshold )
+
+Σ (Sigma)
+
+x
+
+…
+
+…
+
+…
+
+…
+
+Dh2
+
+…
+
+Dk
+
+…
+
+DTh
+
+𝑽𝑻
+
+…
+
+(
+
+…
+
+…
+
+𝑼
+
+x
+
+…
+
+…
+
+)
+
+Compression & Fine-tuning
+(Gradient Redistribution)
+…
+
+17.6
+13.2
+8.2
+6.2
+
+…
+
+…
+
+0.1
+
+Dk DTh
+
+…
+
+Σ x 𝑽𝑻
+
+DTh
+Dh1
+
+Σ (Sigma)
+
+Trained ƛ
+
+…
+
+x Dk
+0.2
+0.1
+
+…
+
+②
+
+Merging
+Sigma & V
+
+…
+
+…
+
+③
+
+Dh2
+
+…
+
+…
+
+Dk
+
+DTh (Hard Threshold)
+
+…
+
+…
+
+(
+
+Dh2
+
+…
+
+5.6
+4.2
+3.1
+2.2
+
+𝑼
+
+: More Important Weights (SLC)
+(w/ High Gradient)
+: Less Important Weights (MLC)
+(w/ Low Gradient)
+
+… x
+
+𝑼
+
+x
+
+…
+
+…
+
+Dh1
+
+…
+
+…
+
+DTh
+
+Dk
+
+…
+
+…
+
+As mentioned in Section 2.3, by applying SVD, the importance of
+weight data becomes more discrete due to the ordered singular
+values in Σ. This facilitates mapping critical data to SLC RRAM,
+enhancing robustness and accuracy, while less critical data can be
+mapped to MLC RRAM, optimizing area, latency, and energy efficiency. However, direct application of SVD increases computational
+overhead due to the additional matrix multiplications. To address
+this issue, we employ a hard-threshold for Σ that maintains the
+same computational complexity as the pre-SVD matrices. Figure 10,
+step 2 , illustrates the computation reduction process. For a weight
+matrix 𝑊 of size 𝐷ℎ1 × 𝐷ℎ2 , the total number of MAC computations
+before SVD is 𝐿 × 𝐷ℎ2 × 𝐷ℎ1 , and the total number of parameters
+is 𝐷ℎ1 × 𝐷ℎ2 . We truncate the Σ to keep the limited number of
+
+Matrix
+
+…
+
+Post-SVD Truncation
+
+Dh1
+
+…
+
+4.1
+
+Dh1 Weight
+
+…
+
+This section introduces the SVD-based gradient redistribution technique, designed to maximize the efficiency of the HyFlexPIM accelerator. By applying SVD and truncation, we expose the importance
+of weight elements and concentrate critical weights into a smaller
+subset through fine-tuning. This hardware-algorithm co-design preserves critical weights in SLC while utilizing efficient MLC RRAM
+for the majority of less-critical weights, maximizing the HyFlexPIM
+architecture efficiency.
+
+…
+
+…
+
+SVD-BASED GRADIENT REDISTRIBUTION
+
+Dk
+
+…
+
+①
+Static Decomposition
+
+…
+
+4
+
+Dh2
+
+…
+
+minimal impact (<1%) on accuracy as detailed in Section 6.1. The
+same process is applied on FC layer 2 in the MHA and two FFN
+layers 3 by storing their static weights in the RRAM array and
+performing the PIM operation by applying the output of previous
+layer as an input.
+While the weights of the above layers are static, the computations of Q · KT and ×V (in the orange box) are not static, i.e., both
+operands are computed in real-time given input. Therefore, we do
+not apply gradient redistribution to avoid a costly SVD computation
+on the fly, in contrast to static weights where SVD and gradient
+redistribution are pre-computed offline. We also employ only SLC
+to avoid the costly MLC writing operation, which requires iterative
+verify-read and write operations to reach the exact target conductance. Furthermore, this stage has relatively lower computation
+volume and requires high precision computations, e.g., ×V stage
+requires an operand to be 12 bits, to guarantee accuracy for a wide
+range of applications. For this reason, we employ digital PIM for
+this section (orange box) as proposed in [22, 25, 31, 73] to avoid any
+potential accuracy degradation and excessive ADC costs. Although
+the benefit of digital PIM is limited compared to analog PIM, it
+still bypasses the expensive data movement cost for the KV cache
+from the memory to the processor. We also store the intermediate
+computed results in the digital PIM with an SLC format.
+As described in Figure 1, there are two distinct types of Transformer tasks: the encoder and decoder stages. In the encoder (or the
+prefill phase of the decoder), multiple input vectors are applied to
+PIM through the wordlines over multiple cycles to perform matrixmatrix multiplications. In contrast, during the decoder phase, a
+single input vector is applied for vector-matrix multiplication, generating one token at a time. Nevertheless, the PIM operations remain
+the same, ensuring consistency in execution.
+
+)
+
+No Computation
+
+𝑽𝑻
+
+Figure 10: Hard-Thresholding and Fine-tuning the post-SVD
+matrix.
+Algorithm 1 Hybrid SLC-MLC RRAM Analog PIM Simulation
+Require: Weight matrix 𝑊 ∈ R𝑚×𝑛 , desired rank 𝑘, and optimizer
+(AdamW)
+Ensure: Optimized weight mapping for HyFlexPIM
+1: Step 1: SVD Decomposition
+2: Perform SVD on 𝑊 : 𝑊 = 𝑈 Σ𝑉 ⊤
+3: Step 2: Truncated SVD
+4: Truncate matrices: 𝑈 ∈ R𝑚×𝑘 , Σ ∈ R𝑘 ×𝑘 , 𝑉 ∈ R𝑘 ×𝑛
+5: Step 3: Fine-tuning
+6: while training for 1-3 epochs do
+7:
+Perform optimizer step (e.g., AdamW)
+8:
+Store gradients and update weights
+9: end while
+10: Step 4: Gradient-based Rank Selection
+11: Identify top singular values
+12: Step 5: Mapping Weights into PIM array
+13: Map critical weights to SLC, others to MLC
+
+ranks. Then, we combine Σ and 𝑉 𝑇 , e.g., Σ × 𝑉 𝑇 , to reduce the
+number of parameters for the inference, as described in Figure 10,
+step 3 . Consequently, the number of MAC operations changes to
+𝐿 × 𝐷ℎ2 × 𝐷𝑇 ℎ + 𝐿 × 𝐷𝑇 ℎ × 𝐷ℎ1 , where 𝐷𝑇 ℎ is the lower rank. To
+ensure that the computational load remains the same as the original
+ℎ1 ×𝐷ℎ2
+model, we replace 𝐷𝑇 ℎ with a hard threshold 𝐷
+𝐷ℎ1 +𝐷ℎ2 . By using
+ℎ1 ×𝐷ℎ2
+the hard threshold ( 𝐷
+𝐷ℎ1 +𝐷ℎ2 ), the total number of parameters for
+
+Σ × 𝑉 𝑇 and 𝑈 is also preserved before and after SVD.
+The low-rank truncation causes some accuracy degradation. For
+example, in BERT-Large, the MRPC task shows a 16% accuracy drop,
+RTE shows a 20% drop, and in GPT-2, the loss increases by more
+than 2×. To recover accuracy after truncation, we fine-tune the
+model by re-training for 1-3 epochs, as described in Steps 1-3 of
+Algorithm 1, which we found sufficient to maintain accuracy and
+loss comparable to the pre-SVD case for transformer models used
+in our evaluation. Simpler tasks often required only a single epoch
+of fine-tuning, effectively balancing computational efficiency with
+parameter reduction. Moreover, the SVD decomposition, truncation,
+and fine-tuning (Steps 1 - 4 in Algorithm 1) are performed entirely
+in software, while the final matrices 𝑉 × Σ and 𝑈 𝑇 are offloaded to
+
+=== page 8 ===
+Chang Eun Song, Priyansh Bhatnagar, Zihan Xia, Nam Sung Kim, Tajana S. Rosing, and Mingu Kang
+Absolute Gradient w.r.t Loss for Weights in 1st row
+
+Absolute Gradient w.r.t Loss for Singular Values
+
+Absolute Gradient w.r.t Loss for Singular Values
+
+0.00010
+
+0.0025
+0.0020
+0.0015
+0.0010
+0.0005
+
+0.0030
+
+Absolute Gradient
+
+0.0030
+
+Absolute Gradient
+
+Absolute Gradient
+
+0.0035
+
+0.00008
+0.00006
+0.00004
+0.00002
+0.00000
+
+0.0000
+0
+
+100 200 300
+
+400 500
+
+600
+
+1st row of Weights
+
+(a) Before SVD
+
+700 800
+
+0.0025
+
+Initial singular values
+with high gradient
+
+0.0020
+0.0015
+0.0010
+0.0005
+0.0000
+
+0
+
+100 200 300
+
+400 500
+
+600
+
+700 800
+
+0
+
+Singular Value # (Rank) à
+
+(b) After SVD, No Hard Th
+
+50
+
+100 150 200 250 300
+
+350 400
+
+Singular Value # (Rank) à
+
+(c) After SVD, Hard Th, and Fine-tuning
+
+Figure 11: Gradient distribution change for FC layer in BERT-Base: (a) gradient of each weight (order-wise) in a row before
+SVD, (b) gradient after SVD, without applying hard threshold, (c) gradient after SVD, applying hard threshold and gradient
+redistribution.
+the hardware for GEMV operations. Thus, the fine-tuning process
+incurs only one-time cost without adding any hardware overhead.
+
+4.2
+
+Gradient Redistribution
+
+While the fine-tuning in Step 3 aims to recover the accuracy, it
+also performs a crucial role, gradient redistribution, which helps to
+increase the portion of error-tolerant parts dramatically, facilitating
+the use of MLC for most of computation. The magnitude of the
+gradient of the loss function with respect to a specific weight in
+a neural network provides vital insights into the importance of
+the weight. In addition, the gradient of the loss function L with
+𝜕L
+respect to a weight 𝑤𝑖 , denoted 𝜕𝑤
+, signifies how sensitive the loss
+𝑖
+is to changes in the weight. A large gradient implies that a small
+change in the weight will result in a significant change in the loss,
+thus highlighting the weight’s critical importance to the model’s
+performance. During training, weights are updated in the direction
+that minimizes the loss function.
+Figure 11 shows the gradient redistribution resulting from the
+fine-tuning process. Since there is no notion of rank before applying SVD, we examined the gradients of the weights in a row in
+Figure 11 (a). The gradients across all weights are rather uniformly
+distributed, making it challenging to identify which ranks are more
+sensitive to loss. After applying SVD (Figure 11 (b), which is not
+hard-thresholded yet), the differences in gradients among the ranks
+remain insufficiently distinct to clearly indicate their importance.
+However, by fine-tuning the weights as shown in Algorithm 1 Step
+3, in the post-SVD matrix, the gradients are re-distributed towards
+the higher ranks, resulting in only a small portion of ranks having
+significantly higher magnitude. As illustrated in Figure 11 (c), the
+initial singular values now exhibit much higher gradients compared
+to the lower ranks, clearly indicating which ranks should be assigned to SLC for precise computation (Algorithm 1 Step 4). We
+attribute this redistribution to the fine-tuning process that attempts
+to recover the loss of information from the truncated ranks by
+putting more information on the untruncated ranks. In this process,
+the ranks with higher singular values tend to gain more information
+than the others, as these ranks are principal key components to
+represent the matrix.
+Note above nature helps not only the clear demarcation between
+error-resilient (on MLC) and error-tolerant parts (on SLC), but also
+
+facilitate more computations in MLC, dramatically improving the
+energy, throughput, and area efficiencies. By storing the gradient
+distribution after fine-tuning the truncated decomposition, we analyze the gradients for the singular values of the Σ matrix. We choose
+singular values with the top k% (k = 0, 5, 10, 30, 40, 50, 100) gradient
+magnitudes to perform the computation on SLC, while the rest is
+computed using MLC (Algorithm 1 Step 5). In this manner, we
+use a hybrid approach to minimize the accuracy degradation and
+maximize efficiency. We study the selection of optimal 𝑘 further in
+Section 6.
+
+5 METHODOLOGY
+5.1 Software Benchmarks
+Table 1: Hyper-parameters for fine-tuning.
+Model
+BERT-Base
+BERT-Large
+GPT-2
+Llama3
+ViT-Base
+
+Batch Size
+
+Learning Rate
+
+Optimizer
+
+32
+32
+2
+2
+10
+
+2e-5
+5e-6
+2e-5
+2e-5
+5e-6
+
+AdamW
+
+The proposed HyFlexPIM is evaluated on various Transformerbased models for both NLP and CV domains including the encoder
+models BERT-Base and BERT-Large, the decoder model GPT-2Small (GPT-2) and Llama-3.2-1B (Llama3), and the vision transformer model (ViT-Base) for object detection. For the encoder models, 7 datasets from the General Language Understanding Evaluation
+(GLUE) benchmark [62], which includes cola, mrpc, qnli, qqp, rte,
+sst-2, and sts-b, are used for the evaluation. The maximum sequence
+length (MSL) for all GLUE datasets is set to 128. The decoder model
+GPT-2 is tested on the WikiText-2 dataset [38] with an MSL of
+1024, and Llama3 is tested on PTB [36] with an MSL of 100. ViTBase is evaluated on the CIFAR-10 dataset with an input resolution
+of 224×224 and a patch size of 16×16. Throughout this work, we
+employ INT8 for all the linear layers and for Q, K, and V in the
+attention mechanism, while FP16 is used for other non-linear operations which are computed by HyFlexPIM’s SFU. Table 1 shows
+
+=== page 9 ===
+Hybrid SLC-MLC RRAM Mixed-Signal Processing-in-Memory Architecture for Transformer Acceleration via Gradient Redistribution
+
+the batch size, learning rate, and optimizer used for fine-tuning
+Transformer models. All the fine-tuning tasks were conducted on a
+server with a 12-core Intel Xeon Silver 4214R CPU and two NVIDIA
+GeForce RTX A6000 GPUs.
+
+5.2
+
+RRAM PIM Non-ideality Considerations
+
+We developed a simulator to evaluate the non-idealities of analog behavior in SLC-MLC PIM modules along with other accuracy
+impacts from SVD truncation, fine-tuning, and the distribution of
+analog and digital PIM modules. The simulator also models the
+serial bit computing mechanism and shift-and-add operations to
+accurately capture the accuracy impact of this specific operation
+order. This simulation incorporates the noisy RRAM behavior with
+non-ideal resistance deviating from the target. Specifically, we injected noise into the parameters of all linear layers, following the
+formula:
+𝑊˜ = 𝑊 ⊙ (1 + 𝜂),
+
+(5)
+
+Table 2: The hardware configuration and component-level
+area, power of HyFlexPIM.
+Area (𝑚𝑚 2 ) Power (mW) Parameter
+Value
+Analog RRAM Module
+Bit/Cell
+1-b/2-b
+RRAM Array 0.048 (9.6%)
+60.78 (6.5%)
+Size
+64×128
+Total
+512
+IR
+0.00065 (0.1%)
+0.13 (0.01%)
+Size/each
+64B
+OR
+0.00129 (0.3%)
+0.53 (0.1%)
+Size/each
+128B
+Resolution
+1-b
+WL DRV
+0.02 (3.7%)
+297.71 (32%)
+Total
+64×512
+Resolution
+6-b/7-b
+ADC
+0.30 (64.2%)
+512.00 (55%)
+Total
+512
+S&A
+0.10 (22%)
+59.54 (6.4%)
+Total
+512
+S&H
+6e-5 (0.01%)
+12e-6 (0.001%)
+Total
+512
+Sum
+0.47
+930.69
+Total
+11.24
+22,336.59
+24
+Digital RRAM Module
+Bit/Cell
+1-b
+RRAM Array 2.86 (35.8%) 3,890.02 (59.6%)
+Size
+1024×1024
+Total
+256
+IR
+0.0031 (0.04%)
+0.76 (0.01%)
+Size/each
+1KB
+OR
+0.0032 (0.04%)
+1.65 (0.03%)
+Size/each
+1KB
+Resolution
+1-b
+WL DRV
+0.14 (1.8%) 2,381.64 (36.5%)
+Total
+1024×256
+S&A
+0.21 (2.6%)
+119.08 (1.8%)
+Total
+1024
+S&H
+13e-5 (0.002%)
+23e-6 (0.0%)
+Total
+1024
+SFU
+4.79 (59.8%)
+138.89 (2.1%)
+# inputs
+256
+Sum
+8.01
+6,532.05
+Total
+64.05
+52,256.41
+8
+Component
+
+where 𝜂 is a Gaussian noise tensor with the same size as the weight
+tensor 𝑊 , ⊙ is element-wise multiplication, 𝑊˜ is the noisy weight
+tensor used for inference. The noise level was derived from the studies by Wan et al. [61] and Fan et al. [15], utilizing the non-idealities
+measured from the fabricated real MLC RRAM chips. Using the
+experimental data from 3 million RRAM cells in [15], which showed
+a bit error rate (BER) of approximately 4.04% after one day of programming, we reverse-calculated the standard deviation of the
+Gaussian noise 𝜂 in (5) to match the BER of real analog RRAM
+devices. On top of the RRAM device noise, we also considered the
+limited ADC resolution for the outputs.
+Analog RRAM module processes static weights, enabling multiple inferences after a single write operation and thus being free
+from endurance concerns. For the digital PIM module, where realtime generated Q, K, V, and intermediate data are supposed to
+be written, could potentially compromise RRAM endurance [72].
+However, given large amount of RRAM capacity in HyFlexPIM and
+typical RRAM endurance of 108 cycles [18], HyFlexPIM ensures
+sustainable operation beyond typical server lifespans (3-5 years)
+even with 10K daily inference requests.
+
+technology, following the methodology in [57]. For energy estimation, we utilize NVSIM [13] for RRAM, ARM Memory Compiler
+with high-density 65 nm single-port SRAM (version r0p0) [6] with
+1 GHz operating frequency, and DRAM access energy from [66].
+The near-memory processing bank energy is from [79] while HBMrelated data is sourced from [41]. We evaluate ASADI and SPRINT’s
+methodologies within our hardware to assess their effectiveness in
+our optimized mixed-signal PIM architecture.
+
+5.3
+
+5.4
+
+Hardware Baseline
+
+We benchmark our HyFlexPIM against 1) the latest study in analogdigital hybrid PIM architecture for Transformer models ASADI [31]
+using FP32, which only uses SLC PIM to contrast our effort to
+use the MLC for most computations; 2) ASADI† , using INT8 precision for linear layers which provides conservative comparison
+by improving ASADI’s efficiency; 3) SPRINT [75], which utilizes
+the digital processor with RRAM storage for the linear layer computation while using analog PIM for the limited part of attention
+(MSB 4-bit computation of Q · K); 4) a near-memory processing
+(NMP) baseline, TransPIM [79], which is based on the functionin-memory DRAM (FIMDRAM) processor [30] with HBM; and 5)
+a non-PIM baseline that processes data in a digital module consisting of INT8 dot product units derived from SPRINT [75], after
+moving data from 6.28 GB off-chip DRAM to on-chip SRAM cache,
+assuming large enough cache capacity. For direct comparison, all
+results from these baselines are scaled to the same 65nm process
+
+HyFlexPIM Configuration
+
+HyFlexPIM is designed to store all original and intermediate data
+within RRAM arrays. This also makes HyFlexPIM’s memory capacity be dependent on the input sequence length. The HyFlexPIM
+is configured to handle the MSL of 8192. For BERT-Large has 24
+layers, with each PU assigned to process a single layer. On the other
+hand, BERT-Base and GPT-2, having 12 layers, benefits from a 2×
+throughput increase with our accelerator. The analog PIM module
+comprises 512 arrays of 64×128 (1KB) RRAM for INT8 WQ , WK ,
+and WV , as well as Proj (FC), FFN1, and FFN2 matrices. Meanwhile,
+the digital PIM module includes 256 arrays of 1024×1024 (128KB)
+RRAM for intermediate matrices.
+We adopt the data transfer and on-chip communication topologies in [49], which also used full-flow RRAM. Inter-PU data transfer
+is facilitated by a 1000 GB/s On-Chip Interconnect (OCI) [26] and a
+PCIe-6.0 interface with 128 GB/s bandwidth for outer-PU communication [53]. Detailed specifications of the RRAM arrays are provided
+
+=== page 10 ===
+100
+98
+96
+94
+92
+90
+88
+86
+84
+82
+80
+
+Accuracy (%)
+
+5
+4.5
+4
+3.5
+3
+2.5
+2
+1.5
+1
+0.5
+0
+
+95
+90
+85
+80
+75
+70
+65
+60
+55
+50
+45
+
+Loss
+
+Accuracy (%)
+
+Chang Eun Song, Priyansh Bhatnagar, Zihan Xia, Nam Sung Kim, Tajana S. Rosing, and Mingu Kang
+
+MRPC CoLA QNLI
+(Matthew’s
+Correlation)
+
+QQP SST-2 STS-B
+
+(Pearson)
+
+RTE G-AVG MRPC CoLA QNLI
+(Matthew’s
+Correlation)
+
+BERT-Base
+
+0%
+
+5%
+
+10%
+
+30%
+
+40%
+
+50%
+
+100%
+
+QQP SST-2 STS-B
+
+(Pearson)
+
+RTE G-AVG
+
+BERT-Large
+
+Baseline
+
+* G-AVG: geometric average of 7 tasks’ baseline accuracy
+
+(a)
+
+FP w/o SVD
+
+WikiText-2
+
+PTB
+
+GPT-2
+
+Llama3
+
+ViT-Base
+CIFAR-10
+
+ViT-Base
+
+0%
+
+5%
+
+10%
+
+20%
+
+25%
+
+30%
+
+40%
+
+50%
+
+100%
+
+Baseline
+
+FP w/o SVD
+
+(b)
+
+Figure 12: Accuracy trends with respect to the SLC rate for (a) BERT-Base, BERT-Large, (b) GPT-2, Llama3, and ViT.
+CoLA Magnitude-based
+
+(a)
+
+44.00
+
+50.46
+
+52.76
+52.76
+52.76
+
+51.75
+
+51.91
+52.55
+52.76
+
+51.44
+52.55
+52.76
+
+48.44
+48.1
+
+50.83
+50.89
+52.72
+
+51.55
+
+46.00
+
+47.22
+47.35
+
+46.33
+46.33
+
+48.00
+
+CoLA Gradient-Based
+
+50
+%
+
+40
+%
+
+42.00
+10
+0
+L1 %
+-n
+or
+L2 m
+-n
+or
+m
+
+Protection (SLC) rate
+
+50.00
+
+30
+%
+
+50
+%
+10
+0
+L1 %
+-n
+or
+L2 m
+-n
+or
+m
+
+40
+%
+
+30
+%
+
+5%
+
+10
+%
+
+0%
+
+80.00
+
+52.00
+
+42.69
+
+81.00
+
+54.00
+
+0%
+
+83.82
+
+85.04
+85.04
+85.04
+83.81
+
+84.07
+84.7
+84.8
+
+83.82
+84.21
+84.55
+
+83.58
+84.1
+84.06
+
+83.33
+83.28
+84.06
+
+82.00
+
+Matthew’s Correlation (MC)
+
+83.00
+
+82.84
+83.43
+84.06
+
+84.00
+82.60
+82.1
+82.1
+
+Accuracy (%)
+
+85.00
+
+CoLA Rank-Based
+
+Gradient-based achieves higher MC
+
+56.00
+
+10
+%
+
+MPRC Gradient-Based
+
+44.26
+
+MPRC Rank-Based
+
+Gradient-based achieves higher accuracy
+
+5%
+
+MPRC Magnitude-based
+
+86.00
+
+Protection (SLC) rate
+
+(b)
+
+Figure 13: Accuracy comparison between weight magnitudebased vs. rank-based after SVD vs. gradient-based after SVD
+SLC selections in BERT-Base with (a) MRPC and (b) CoLA
+datasets.
+
+in Table 2. The analog modules utilize 1-bit (SLC) or 2-bit (MLC)
+one transistor and one memristor (1T1M) RRAM cells, while the
+digital modules use only 1-bit 1T1M RRAM arrays. Area and power
+configurations for the 1T1M RRAM arrays are derived from [31, 61].
+RRAM arrays read/write data in a column-parallel manner, with
+SET/RESET voltages of 1.62/3.63 V for 1-bit cells [21]. Specifically,
+the RRAM features an on-state resistance (𝑅ON ) of 6 kΩ with an
+on/off ratio of 150 [77]. To manage 6-bit/7-bit data across 64 rows
+using 1-bit/2-bit cells, a shared 6-bit/7-bit reconfigurable ADC is
+employed for 128 columns. The bitline currents are captured in 128
+sample-and-hold circuits [29, 51]. During the following 100 ns cycle,
+these analog values are sequentially input into a single 1.28 GSps
+ADC unit, while the crossbar initiates its next read operation in a
+pipelined manner. Consequently, 128 bitline currents are converted
+to digital within 100 ns before latching the subsequent set.
+The area and power specifications for the S&A unit and on-chip
+SRAM buffers (IR and OR) are sourced from [31, 52], with the DRV
+details obtained from a 1-bit digital-analog converter (DAC) in
+[31, 49]. We validate the behavior of RRAM arrays using a modified
+NVSIM [13]. Additionally, we developed an error-noise injected
+simulator to evaluate the accuracy of HyFlexPIM across various
+models and datasets as described in Section 5.2. All values have
+been scaled to a 65 nm technology node based on [57]. We use a
+65 nm general-purpose standard cell library to synthesize SFU at
+1 GHz operating frequency with Cadence Genus 19.1.
+
+6 EVALUATION
+6.1 Accuracy Recovery by Mapping on SLC
+Figure 12 illustrates the accuracy of each transformer models resulting from the hybrid SLC-MLC RRAM mapping technique with
+different protection rates. k% protection rate implies that weights
+corresponding to the singular values with top k% of the absolute
+gradients will be mapped on SLC, while the rest will be mapped
+on MLC. The baseline represents the accuracy with INT8 precision
+without in-memory computing noise, but with SVD decomposition
+and fine-tuning. FP w/o SVD refers to models that use floating-point
+without applying SVD decomposition. The accuracies of FP w/o
+SVD for BERT are from [12], GPT-2 from [44], and ViT from [76],
+while we fine-tuned Llama3. For the BERT-Base (Figure 12 (a)), it is
+observed that maintaining a 5% SLC rate in MRPC, QNLI, and STS-B
+tasks minimizes accuracy degradation to less than 1% compared to
+the baseline model with quantization. In CoLA, QQP, SST-2, and
+RTE by increasing the SLC rate to 10-30%, the accuracy drop is
+maintained to be less than 1% of the baseline. In the case of BERTLarge, the QNLI, QQP, STS-B, and RTE tasks require only a 5%
+SLC rate while the others maintain the accuracy with 10-30% rate,
+confirming greater robustness against errors from MLC compared
+to smaller models. In Figure 12 (b), we assessed the evaluation loss
+on the WikiText-2 and PTB dataset for GPT-2 and Llama3 models,
+respectively. With an SLC rate of 20%, we observe less than a 10%
+increase in loss compared to the case with a 100% SLC rate. Furthermore, for the ViT-Base on the CIFAR-10 dataset, we observe that
+an SLC rate of only 5% shows less than 1% accuracy drop. These
+findings indicate that strategic selection of SLC rates is crucial for
+maintaining high accuracy across different tasks and model sizes.
+
+6.2
+
+Gradient vs. Rank vs. Magnitude based SLC
+mapping
+
+We further investigated the advantages of gradient-based rank selection on SVD over 1) weight magnitude-based selection without
+SVD, and 2) brute-force selection of the initial top singular values
+after SVD (rank-based). Figure 13 shows that for MRPC and CoLA
+tasks in the BERT-Base model, the gradient-based approach consistently outperforms both methods. This is because the other two
+methods lack a direct connection to the loss while the gradientbased approach leverages sensitivity to the training loss, ensuring
+
+=== page 11 ===
+99.1
+
+99.1
+30.5
+34.0
+
+76.2
+81.7
+
+99.1
+
+76.2
+81.7
+29.8
+34.0
+
+99.1
+
+76.2
+81.7
+29.1
+34.0
+
+99.1
+27.7
+34.0
+
+76.2
+81.7
+
+98.7
+27.3
+4.0
+
+76.2
+81.7
+
+98.7
+
+75.2
+80.8
+30.1
+33.6
+
+98.7
+
+75.2
+80.8
+29.4
+33.6
+
+98.7
+
+75.2
+80.8
+28.7
+33.6
+
+98.7
+27.3
+3.6
+
+75.2
+80.8
+
+97.7
+27.0
+33.6
+
+29.3
+32.7
+
+28.7
+32.7
+
+28.0
+32.7
+
+26.6
+32.7
+
+26.3
+2.7
+
+28.0
+31.2
+
+27.3
+31.2
+
+26.7
+31.2
+
+25.4
+31.2
+
+25.1
+31.2
+
+25.6
+28.5
+
+75.2
+80.8
+
+97.7
+
+73.4
+79.1
+
+97.7
+
+73.4
+79.1
+
+97.7
+
+73.4
+79.1
+
+97.7
+
+73.4
+79.1
+
+95.9
+
+73.4
+79.1
+
+95.9
+
+69.9
+75.9
+
+95.9
+
+69.9
+75.9
+
+95.9
+
+69.9
+75.9
+
+95.9
+69.9
+75.9
+
+63.9
+70.3
+
+69.9
+75.9
+
+92.9
+
+92.9
+
+92.9
+
+63.9
+70.3
+25.0
+28.5
+
+24.4
+28.5
+
+22.9
+28.5
+
+16.9
+18.8
+
+16.5
+18.8
+
+16.1
+18.8
+
+20.0
+
+15.3
+18.8
+
+30.0
+
+15.1
+18.8
+
+40.0
+
+23.2
+28.5
+
+42.1
+50.0
+
+42.1
+50.0
+
+50.0
+
+42.1
+50.0
+
+42.1
+50.0
+
+60.0
+
+42.1
+50.0
+
+70.0
+
+63.9
+70.3
+
+63.9
+70.3
+
+80.0
+
+63.9
+70.3
+
+81.7
+
+81.7
+
+81.7
+
+81.7
+
+90.0
+
+81.7
+
+Normalized Energy (%)
+
+100.0
+
+92.9
+
+92.9
+
+Hybrid SLC-MLC RRAM Mixed-Signal Processing-in-Memory Architecture for Transformer Acceleration via Gradient Redistribution
+
+10.0
+0.0
+5%
+
+10%
+
+30% 40%
+N = 128
+
+50%
+
+5%
+
+10%
+
+30% 40% 50%
+N = 512
+HyFlexPIM
+
+5%
+
+10%
+
+ASADI †
+
+30% 40% 50% 5% 10% 30% 40% 50% 5% 10% 30% 40%
+N = 1024
+N = 2048
+N = 4096
+ASADI
+NMP Baseline
+SRPINT
+Non-PIM Baseline
+
+50%
+
+5%
+
+10%
+
+30% 40%
+N = 8192
+
+50%
+
+Figure 14: Normalized energy consumption of linear layers compared to the energy of ASADI† , ASADI [31], NMP baseline,
+Layerand non-PIM
+ADC
+Linear Layer
+ADC
+ReRAM write (Analog)
+S&H + S&A
+SPRINTLinear
+[75],
+baseline.ReRAM write (Analog) S&H + S&A
+
+20
+
+3.14X
+2.63X
+
+2.73X
+1.39X
+
+SRAM Access
+WL DRV (Digital)
+
+1.44X
+
+3.58X
+
+3.44X
+
+3.89X
+
+5.82X
+4.69X
+3.01X
+
+40
+
+1.35X
+
+Normalized Energy (%)
+(GPT-2)
+
+60
+
+DRAM Access
+ReRAM write (Digital)
+
+0
+
+ex
+PI
+A M
+N
+M SA (N
+=
+P
+Ba DI† 12
+se (N 8)
+N
+lin =1
+on
+-P SP e ( 28)
+IM R N=
+Ba INT 12
+se (N 8)
+lin =1
+2
+e
+(N 8)
+H
+=1
+yF
+28
+le
+)
+xP
+I
+N AS M (
+M
+N
+A
+=5
+P
+D
+I
+Ba
+1
+†
+se (N 2)
+N
+lin =5
+on
+-P SP e ( 12)
+IM R N=
+Ba INT 51
+se (N 2)
+lin =5
+1
+e
+(N 2)
+H
+=5
+yF
+12
+le
+xP
+)
+I
+N AS M (
+M
+N
+=1
+P AD
+Ba I †
+0
+se (N 24)
+N
+lin =1
+on
+-P SP e ( 024
+IM R N=
+)
+Ba INT 10
+se (N 24)
+lin =1
+02
+e
+(N
+4
+=1 )
+H
+02
+yF
+4)
+le
+H xP
+yF IM
+H lexP (N=
+yF
+le IM 128
+xP (N
+)
+IM =5
+(N 12)
+=1
+02
+4)
+
+(b)
+
+(a)
+
+80
+
+ReRAM Access
+SFU
+
+yF
+l
+
+0
+
+H
+
+2.83X
+1.67X
+
+2.84X
+
+20
+
+yF
+l
+H
+
+WL DRV (Analog)
+Dot Product (Attention)
+
+100
+
+3.23X
+
+3.85X
+
+SRAM Access
+WL DRV (Digital)
+
+3.58X
+
+4.14X
+
+DRAM Access
+ReRAM write (Digital)
+
+1.55X
+
+40
+
+4.94X
+
+60
+
+3.04X
+1.45X
+
+80
+
+ReRAM Access
+SFU
+
+ex
+PI
+A M
+N
+M SA (N
+=
+P
+Ba DI† 12
+se (N 8)
+N
+lin =1
+on
+-P SP e ( 28)
+IM R N=
+Ba INT 12
+se (N 8)
+lin =1
+2
+e
+(N 8)
+H
+=1
+yF
+28
+le
+)
+xP
+I
+N AS M (
+M
+N
+=5
+P AD
+Ba I †
+1
+se (N 2)
+N
+lin =5
+on
+-P SP e ( 12)
+IM R N=
+Ba INT 51
+se (N 2)
+lin =5
+1
+e
+(N 2)
+H
+=5
+yF
+12
+le
+xP
+)
+I
+N AS M (
+M
+N
+=1
+P AD
+Ba I †
+0
+se (N 24)
+N
+lin =1
+on
+-P SP e ( 024
+IM R N=
+)
+Ba INT 10
+se (N 24)
+lin =1
+02
+e
+(N
+4
+=1 )
+H
+02
+yF
+4)
+le
+x
+H
+yF PIM
+l
+(
+e
+N
+H
+yF xPI =1
+2
+le M
+xP (N 8)
+IM =5
+(N 12)
+=1
+02
+4)
+
+Normalized Energy (%)
+(BERT-large)
+
+100
+
+6.15X
+
+WL DRV (Analog)
+Dot Product (Attention)
+
+(c)
+
+(d)
+
+Figure 15: End-to-end energy: (a) comparison with SOA, and (b) breakdown with HyFlexPIM at 5% SLC for BERT-Large, and (c)
+comparison with SOA, and (d) breakdown with HyFlexPIM at 30% SLC for GPT-2.
+vs SPRINT
+
+12.00
+
+Normalized TOPS/mm2 (X) vs SPRINT
+
+10.00
+8.00
+6.00
+4.00
+2.00
+
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+
+0.00
+
+N = 128
+
+N = 512
+
+2.00
+1.80
+1.60
+1.40
+1.20
+1.00
+0.80
+0.60
+0.40
+0.20
+0.00
+
+N = 1024
+
+N = 2048
+
+(a) GLUE
+
+N = 4096
+
+N = 8192
+50.0
+45.0
+40.0
+35.0
+30.0
+25.0
+20.0
+15.0
+10.0
+5.0
+0.0
+
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+5%
+10%
+30%
+40%
+50%
+
+Normalized TOPS/mm2 vs ASADI †
+
+vs ASADI†
+2.00
+1.80
+1.60
+1.40
+1.20
+1.00
+0.80
+0.60
+0.40
+0.20
+0.00
+
+N = 128
+
+N = 512
+
+N = 1024
+
+N = 2048
+
+(b) WikiText-2
+
+N = 4096
+
+N = 8192
+
+Figure 16: Speedup factor compared to ASADI† [31] and
+SPRINT [75] with respect to the SLC rate and the sequence
+length.
+
+better selection of critical parameters, ultimately leading to higher
+accuracy and robustness.
+
+6.3
+
+Comparsion with Modern Accelerators
+
+We evaluate HyFlexPIM against ASADI [31], ASADI† , SPRINT [75],
+NMP baseline [79], and a non-PIM baseline using GLUE and WikiText2 datasets on BERT-Large and GPT-2 models. All comparison baselines feature distinct memory hierarchies, compute logic, on-/offchip memory storage capacity, and in-memory computing capabilities with different benchmarks. For the fair comparison with
+ASADI, we maintained the same digital and analog PIM memory
+capacity as HyFlexPIM; however, ASADI utilizes only SLC, unlike
+HyFlexPIM, while benefiting from token pruning. The token pruning ratio from [31] is applied to reflect its throughput and energy
+benefits. SPRINT [75] reports absolute energy and delay values
+for each operation including the digital processor, memory access,
+and in-memory token pruning ratio. These values are utilized to
+estimate the energy and delay overheads. Non-PIM baseline also
+exploits the energy and delay numbers of digital processor reported
+in [75], while SRAM and DRAM energy and delay numbers are from
+simulators described in Section 5.3. The NMP baseline [79] reports
+absolute energy values for near-bank processing and HBM access,
+which are exploited for energy estimation. Figure 14 shows linear
+layer energy efficiency, and Figure 15 (a, c) presents end-to-end
+energy comparison, while Figure 15 (b, d) provides HyFlexPIM’s
+energy breakdown across different sequence lengths. Additionally,
+Figure 16 compares throughput with ASADI† and SPRINT.
+
+=== page 12 ===
+Chang Eun Song, Priyansh Bhatnagar, Zihan Xia, Nam Sung Kim, Tajana S. Rosing, and Mingu Kang
+
+6.3.2 HyFlexPIM VS SPRINT. We compare HyFlexPIM with the
+SPRINT, which performs in-memory token pruning using RRAM
+PIM and executes remaining computations using a traditional digital processor. For linear layer operations, as shown in Figure 14,
+HyFlexPIM achieves maximum 5.4× energy reduction compared to
+SPRINT. In terms of end-to-end performance, HyFlexPIM demonstrates maximum 4.94× and 4.69× energy efficiency improvements
+for GLUE and WikiText-2 respectively at N=128 (Figure 15), while
+achieving 10.6× and 46× speedup (Figure 16), even when applying
+SPRINT’s 74.6% sparsity to only SPRINT’s attention operations. On
+average with 20% SLC rate, HyFlexPIM achieves a 5.34× reduction
+in linear layer energy consumption, while providing 10.1× and 44×
+end-to-end speedup for GLUE and WikiText-2 datasets, respectively.
+The benefits arise from the highly parallel HyFlexPIM architecture
+and minimized data movements. Note that SPRINT can only reduce
+the data movement of attention computation. Therefore, the proposed HyFlexPIM obtains higher speedup especially at the lower
+length of sequences, where the data movement and computation of
+FFNs dominate.
+6.3.3 HyFlexPIM VS NMP Baseline. While NMP reduces data
+movement cost compared to conventional DRAM-to-cache transfers, it still relies on auxiliary computing units located near the
+memory, rather than performing computation directly within the
+memory arrays. As a result, NMP suffers from higher energy and
+
+delay overheads from the data movement and digital computation compared to HyFlexPIM. As shown in Figure 14, HyFlexPIM
+achieves up to 3.31× higher energy efficiency than the NMP baseline [30] for linear operations. The end-to-end energy efficiency
+comparison in Figure 15, demonstrates 4.94× and 4.69× improvements for GLUE and WikiText-2, respectively.
+
+7
+6
+5
+4
+3
+2
+1
+0
+
+70
+60
+50
+40
+30
+20
+10
+0
+
+HyFlexPIM Capacity
+
+Memory
+requirements (GB)
+
+6.3.4 HyFlexPIM VS Non-PIM Baseline. For linear layer operations, HyFlexPIM achieves a maximum 6.6× energy efficiency
+improvement over the non-PIM baseline (Figure 14). The end-to-end
+energy efficiency comparison shows 6.15× and 5.82× improvements
+for GLUE and WikiText-2 respectively (Figure 15 (a, c)). These substantial gains are attributed to two main factors in the baseline:
+high energy costs from frequent DRAM off-chip data movements
+and inefficient GEMV operations in conventional digital processors
+without the benefits of PIM.
+
+HyFlexPIM
+
+Analog PIM RRAM
+
+GPT-2
+
+GPT-2†
+
+Digital PIM RRAM
+
+Llama3*
+
+Llama3**
+
+Normalized Throughput
+
+Llama3***
+
+Normalized throughput
+
+6.3.1 HyFlexPIM VS ASADI. ASADI introduces RRAM PIM hardware to accelerate end-to-end Transformer operations with FP32,
+employing a compression method designed to exploit data locality
+in attention computations. Their focus is primarily on accelerating the attention mechanism, while computing linear layers using
+analog RRAM PIM exclusively with SLC, without exploiting MLC’s
+superior efficiency. On the other hand, HyFlexPIM specifically targets the acceleration of linear layers, which represent a substantial
+computational bottleneck. For linear layer operations (Figure 14),
+our approach achieves maximum 1.24× higher energy efficiency
+compared to ASADI† (modified version to use INT8 for linear layers
+for fair comparison) with 5% SLC rate, despite ASADI† ’s potential
+accuracy degradation from INT8 quantization. These benefits are
+more pronounced with shorter sequence lengths where FFN layer
+becomes the main bottleneck. Considering end-to-end performance,
+HyFlexPIM achieves 1.1 - 1.86× speedup compared to ASADI† (Figure 16), primarily due to our 2-bit MLC implementation doubling
+the throughput with the same energy consumption. At N=1024,
+we demonstrate maximum 1.67× and 1.44× end-to-end energy efficiency improvements for BERT-Large and GPT-2, respectively
+(Figure 15 (a,c)), mainly due to ASADI’s FP32 precision overhead in
+attention computations. Furthermore, our approach offers nearly
+1.9× higher area efficiency compared to ASADI† . With approximately 20% SLC usage, the accuracy drop is less than 1% in most
+cases, while achieving an average of 1.23× improvement in linear
+layer energy efficiency and 1.79× speedup. Notably, HyFlexPIM
+achieves greater benefits with moderate sequence lengths, aligning
+well with recent trends in maintaining moderate effective sequence
+lengths through techniques like RAG models, state-space-based
+approaches, and selective attention [7, 8, 19, 39, 65].
+
+Ideal Throughput
+
+(w/o inter PU and inter chip comm overhead)
+
+† : 2 PUs processing one layer, * : Dual (x2) HyFlexPIM chips, ** : Quad (x4) HyFlexPIM chips, *** : Octa (x8) HyFlexPIM chips
+
+Figure 17: Memory requirements and throughput scalability
+of HyFlexPIM for N = 8192.
+6.3.5 HyFlexPIM scalability. As described in Section 3.1, HyFlexPIM provides flexibility and scalability through 1) tensor parallelism, where multiple PUs collaborate to enhance throughput, and
+2) pipeline parallelism across multiple chips. For example, tensor
+parallelism is applied to smaller models such as GPT-2, where two
+PUs collaboratively process a single layer, improving throughput
+by 1.99× compared to the case without parallelism, as shown in
+Figure 17. This results in only a minor degradation compared to the
+ideal 2× scalability, attributed to the PU-to-PU partial sum transfer
+overhead. Conversely, for large-scale models such as Llama3, a single PU cannot hold each layer due to its large hidden dimension so
+that two PUs process a layer. It also requires pipeline parallelism
+as a chip cannot accommodate the entire model, necessitating two
+chips at minimum. We analyze Llama3 dual/quad/octa-chip configurations. Quad and octa chips achieve 1.96× and 3.65× throughput
+improvements compared to the dual-core case including the chipto-chip communication overhead to deliver the hidden layer to the
+next chip. This results in only a minor degradation compared to
+the ideal 2× and 4× scaling benefits.
+
+7
+
+RELATED WORKS
+
+Over the last decade, RRAM PIM has been explored to the neural network acceleration [11, 20, 31, 32, 50, 75, 77]. The pioneering works, ISAAC [50] and [20] demonstrate a pipelined RRAM
+crossbar and hybrid RRAM capable of efficiently executing CNNs.
+PRIME [11] introduces a reconfigurable RRAM PIM architecture,
+where the same PIM hardware can be configured as both regular memory and computing elements. More recently, RRAM PIM
+has been applied to accelerate Transformer models. For instance,
+
+=== page 13 ===
+Hybrid SLC-MLC RRAM Mixed-Signal Processing-in-Memory Architecture for Transformer Acceleration via Gradient Redistribution
+
+SPRINT employs analog RRAM PIM to compute correlation scores
+as a pre-processor for pruning unimportant tokens in the attention
+mechanism [75]. However, the primary computation is still carried
+out by energy-intensive digital processors. Moreover, SPRINT only
+accelerates the attention mechanism, leaving other computationand memory-intensive tasks, such as FFNs, unoptimized. Similarly,
+HARDSEA [32] utilizes analog RRAM PIM solely to predict token
+relevance. ASADI [31] introduces a hybrid analog-digital RRAM
+PIM hardware and a compression method designed to exploit data
+locality in attention computing. However, ASADI relies exclusively
+on SLC RRAM, thereby missing the potential benefits of a highdensity and energy-efficient MLC RRAM PIM architecture. Importantly, most existing RRAM PIM approaches depend on the inherent
+error resilience of neural networks to circumvent the challenges
+posed by noisy analog RRAM PIM operations. In contrast, our
+approach seeks to proactively reshape the model to enhance its
+robustness, with principles that can be broadly applied to other
+memory topologies.
+
+8
+
+CONCLUSION
+
+Analog processing-in-memory (PIM) offers significant potential
+for energy and speed improvements in Transformer acceleration
+through parallel processing and multi-level cell (MLC) capabilities, while digital PIM provides reliable computation for dynamic
+weights updated in real-time. Despite these advantages, deploying PIM effectively for sophisticated models such as Transformers
+remains challenging due to various practical considerations. To
+maximize the benefits of both domains, we propose a mixed-signal
+approach that strategically assigns operations based on their characteristics, utilizing digital PIM for dynamic weights and analog
+PIM with both SLC and MLC for static weight processing.
+Rather than relying passively on inherent error resiliency, our
+gradient redistribution technique proactively reshapes models to
+be more compatible with the hybrid hardware platform. This approach enables us to maximize MLC utilization over SLC in analog
+PIM while preserving critical computations in SLC, achieving efficient processing while maintaining model accuracy. We expect
+this comprehensive approach will enable practical deployment of
+mixed-signal PIM technology in future large-scale AI systems.
+
+ACKNOWLEDGEMENTS
+This work was supported in part by PRISM and CoCoSys, centers
+in JUMP 2.0, an SRC program sponsored by DARPA #434690, and
+by the National Research Foundation of Korea (MSIT) grants RS2024-00347090 and RS-2024-00405857.
+
+REFERENCES
+[1] Hervé Abdi. Singular value decomposition (svd) and generalized singular value
+decomposition. Encyclopedia of measurement and statistics, 907(912):44, 2007.
+[2] Amogh Agrawal, Akhilesh Jaiswal, Deboleena Roy, Bing Han, Gopalakrishnan
+Srinivasan, Aayush Ankit, and Kaushik Roy. Xcel-ram: Accelerating binary
+neural networks in high-throughput sram compute arrays. IEEE Transactions on
+Circuits and Systems I: Regular Papers, 66(8):3064–3076, 2019.
+[3] Meta AI. Llama 3.2: Multilingual large language models. https://www.llama.com,
+2024.
+[4] Mustafa F Ali, Akhilesh Jaiswal, and Kaushik Roy. In-memory low-cost bit-serial
+addition using commodity dram technology. IEEE Transactions on Circuits and
+Systems I: Regular Papers, 67(1):155–165, 2019.
+[5] Tanner Andrulis, Joel S Emer, and Vivienne Sze. Raella: Reforming the arithmetic
+for efficient, low-resolution, and low-loss analog pim: No retraining required! In
+
+Proceedings of the 50th Annual International Symposium on Computer Architecture,
+pages 1–16, 2023.
+[6] ARM. Artisan Memory Compilers. https://developer.arm.com/ip-products/
+physical-ip/embedded-memory, 2021. Accessed: 2021-11-08.
+[7] Iz Beltagy, Matthew E Peters, and Arman Cohan. Longformer: The longdocument transformer. arXiv preprint arXiv:2004.05150, 2020.
+[8] Sebastian Borgeaud, Arthur Mensch, Jordan Hoffmann, Trevor Cai, Eliza Rutherford, Katie Millican, George Bm Van Den Driessche, Jean-Baptiste Lespiau, Bogdan Damoc, Aidan Clark, et al. Improving language models by retrieving from
+trillions of tokens. In International conference on machine learning, pages 2206–
+2240. PMLR, 2022.
+[9] Weidong Cao, Yilong Zhao, Adith Boloor, Yinhe Han, Xuan Zhang, and Li Jiang.
+Neural-pim: Efficient processing-in-memory with neural approximation of peripherals. IEEE Transactions on Computers, 71(9):2142–2155, 2021.
+[10] Zhiyang Chen, Yousong Zhu, Zhaowen Li, Fan Yang, Chaoyang Zhao, Jinqiao
+Wang, and Ming Tang. The devil is in details: Delving into lite ffn design for
+vision transformers. In ICASSP 2024 - 2024 IEEE International Conference on
+Acoustics, Speech and Signal Processing (ICASSP), pages 4130–4134, 2024.
+[11] Ping Chi, Shuangchen Li, Cong Xu, Tao Zhang, Jishen Zhao, Yongpan Liu,
+Yu Wang, and Yuan Xie. Prime: a novel processing-in-memory architecture
+for neural network computation in reram-based main memory. In Proceedings
+of the 43rd International Symposium on Computer Architecture, ISCA ’16, pages
+27—-39. IEEE Press, 2016.
+[12] Jacob Devlin. Bert: Pre-training of deep bidirectional transformers for language
+understanding. arXiv preprint arXiv:1810.04805, 2018.
+[13] Xiangyu Dong, Cong Xu, Yuan Xie, and Norman P. Jouppi. Nvsim: A circuitlevel performance, energy, and area model for emerging nonvolatile memory.
+IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems,
+31(7):994–1007, 2012.
+[14] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg
+Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is worth
+16x16 words: Transformers for image recognition at scale. In International
+Conference on Learning Representations, 2021.
+[15] Keming Fan, Wei-Chen Chen, Sumukh Pinge, H. S. Philip Wong, and Tajana Rosing. Efficient open modification spectral library searching in high-dimensional
+space with multi-level-cell memory, 2024.
+[16] Fei Gao, Georgios Tziantzioulis, and David Wentzlaff. Computedram: In-memory
+compute using off-the-shelf drams. In Proceedings of the 52nd annual IEEE/ACM
+international symposium on microarchitecture, page 100–113, 2019.
+[17] Sujan K Gonugondla, Mingu Kang, and Naresh R Shanbhag. A variation-tolerant
+in-memory machine learning classifier via on-chip training. JSSC, 53(11):3163–
+3173, November 2018.
+[18] Alessandro Grossi, Elisa Vianello, Mohamed M. Sabry, Marios Barlas, Laurent
+Grenouillet, Jean Coignus, Edith Beigne, Tony Wu, Binh Q. Le, Mary K. Wootters,
+Cristian Zambelli, Etienne Nowak, and Subhasish Mitra. Resistive ram endurance:
+Array-level characterization and correction techniques targeting deep learning
+applications. IEEE Transactions on Electron Devices, 66(3):1281–1288, 2019.
+[19] Albert Gu and Tri Dao. Mamba: Linear-time sequence modeling with selective
+state spaces. arXiv preprint arXiv:2312.00752, 2023.
+[20] Wei-Hsing Huang, Tai-Hao Wen, Je-Min Hung, Win-San Khwa, Yun-Chen Lo,
+Chuan-Jia Jhang, Huna-Hsi Hsu, Yu-Hsiana Chin, Yu-Chiao Chen, Chuna-Chuan
+Lo, et al. A nonvolatile al-edge processor with 4mb slc-mlc hybrid-mode reram
+compute-in-memory macro and 51.4-251tops/w. In 2023 IEEE International SolidState Circuits Conference (ISSCC), pages 15–17. IEEE, 2023.
+[21] Je-Min Hung, Cheng-Xin Xue, Hui-Yao Kao, Yen-Hsiang Huang, Fu-Chun Chang,
+Sheng-Po Huang, Ta-Wei Liu, Chuan-Jia Jhang, Chin-I Su, Win-San Khwa, et al.
+A four-megabit compute-in-memory macro with eight-bit precision based on
+cmos and resistive random-access memory for ai edge devices. Nature Electronics,
+4(12):921–930, 2021.
+[22] Mohsen Imani, Saransh Gupta, Yeseong Kim, and Tajana Rosing. Floatpim: Inmemory acceleration of deep neural network training with high precision. In
+Proceedings of the 46th International Symposium on Computer Architecture, pages
+802–815, 2019.
+[23] Yuning Jiang, Peng Huang, Zheng Zhou, and Jinfeng Kang. Circuit design of
+rram-based neuromorphic hardware systems for classification and modified
+hebbian learning. Science China Information Sciences, 62:1–19, 2019.
+[24] Hai Jin, Cong Liu, Haikun Liu, Ruikun Luo, Jiahong Xu, Fubing Mao, and Xiaofei Liao. Rehy: A reram-based digital/analog hybrid pim architecture for
+accelerating cnn training. IEEE Transactions on Parallel and Distributed Systems,
+33(11):2872–2884, 2021.
+[25] Hai Jin, Cong Liu, Haikun Liu, Ruikun Luo, Jiahong Xu, Fubing Mao, and Xiaofei
+Liao. Rehy: A reram-based digital/analog hybrid pim architecture for accelerating
+cnn training. IEEE Transactions on Parallel and Distributed Systems, 33(11):2872–
+2884, 2022.
+[26] Norman P Jouppi, Doe Hyun Yoon, Matthew Ashcraft, Mark Gottscho, Thomas B
+Jablin, George Kurian, James Laudon, Sheng Li, Peter Ma, Xiaoyu Ma, et al. Ten
+lessons from three generations shaped google’s tpuv4i: Industrial product. In
+
+=== page 14 ===
+Chang Eun Song, Priyansh Bhatnagar, Zihan Xia, Nam Sung Kim, Tajana S. Rosing, and Mingu Kang
+
+2021 ACM/IEEE 48th Annual International Symposium on Computer Architecture
+(ISCA), pages 1–14. IEEE, 2021.
+[27] Dong Eun Kim, Aayush Ankit, Cheng Wang, and Kaushik Roy. Samba: sparsity aware in-memory computing based machine learning accelerator. IEEE
+Transactions on Computers, 72(9):2615–2627, 2023.
+[28] Alex Krizhevsky. Learning multiple layers of features from tiny images. Technical
+report, 2009.
+[29] Lukas Kull, Thomas Toifl, Martin Schmatz, Pier Andrea Francese, Christian
+Menolfi, Matthias Braendli, Marcel Kossel, Thomas Morf, Toke Meyer Andersen,
+and Yusuf Leblebici. A 3.1 mw 8b 1.2 gs/s single-channel asynchronous sar adc
+with alternate comparators for enhanced speed in 32 nm digital soi cmos. IEEE
+Journal of Solid-State Circuits, 48(12):3049–3058, 2013.
+[30] Young-Cheon Kwon, Suk Han Lee, Jaehoon Lee, Sang-Hyuk Kwon, Je Min Ryu,
+Jong-Pil Son, O Seongil, Hak-Soo Yu, Haesuk Lee, Soo Young Kim, et al. 25.4
+a 20nm 6gb function-in-memory dram, based on hbm2 with a 1.2 tflops programmable computing unit using bank-level parallelism, for machine learning
+applications. In 2021 IEEE International Solid-State Circuits Conference (ISSCC),
+volume 64, pages 350–352. IEEE, 2021.
+[31] Huize Li, Zhaoying Li, Zhenyu Bai, and Tulika Mitra. Asadi: Accelerating sparse
+attention using diagonal-based in-situ computing. In 2024 IEEE International
+Symposium on High-Performance Computer Architecture (HPCA), pages 774–787.
+IEEE, 2024.
+[32] Shiwei Liu, Chen Mu, Hao Jiang, Yunzhengmao Wang, Jinshan Zhang, Feng Lin,
+Keji Zhou, Qi Liu, and Chixiao Chen. Hardsea: Hybrid analog-reram clustering
+and digital-sram in-memory computing accelerator for dynamic sparse selfattention in transformer. IEEE Transactions on Very Large Scale Integration (VLSI)
+Systems, 2023.
+[33] Shuang Liu, JJ Wang, JT Zhou, SG Hu, Qi Yu, TP Chen, and Yang Liu. An area-and
+energy-efficient spiking neural network with spike-time-dependent plasticity
+realized with sram processing-in-memory macro and on-chip unsupervised
+learning. IEEE Transactions on Biomedical Circuits and Systems, 17(1):92–104,
+2023.
+[34] Siyuan Lu, Meiqi Wang, Shuang Liang, Jun Lin, and Zhongfeng Wang. Hardware accelerator for multi-head attention and position-wise feed-forward in the
+transformer. In 2020 IEEE 33rd International System-on-Chip Conference (SOCC),
+pages 84–89. IEEE, 2020.
+[35] Xiuqing Lv, Peng Zhang, Sunzhu Li, Guobing Gan, and Yueheng Sun. Lightformer:
+Light-weight transformer using svd-based weight transfer and parameter sharing.
+In Findings of the Association for Computational Linguistics: ACL 2023, pages
+10323–10335, 2023.
+[36] Mitchell P. Marcus, Beatrice Santorini, and Mary Ann Marcinkiewicz. Building a
+large annotated corpus of English: The Penn Treebank. Computational Linguistics,
+19(2):313–330, 1993.
+[37] Stephen Merity. The WikiText Long Term Dependency Language Modeling Dataset. https://blog.salesforceairesearch.com/the-wikitext-long-termdependency-language-modeling-dataset/, 2021. Accessed: 2021-11-08.
+[38] Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. Pointer
+sentinel mixture models, 2016.
+[39] Tsendsuren Munkhdalai, Manaal Faruqui, and Siddharth Gopal. Leave no context behind: Efficient infinite context transformers with infini-attention. arXiv
+preprint arXiv:2404.07143, 2024.
+[40] Boris Murmann. ADC Performance Survey 1997-2024. [Online]. Available:
+https://github.com/bmurmann/ADC-survey.
+[41] Mike O’Connor, Niladrish Chatterjee, Donghyuk Lee, John Wilson, Aditya
+Agrawal, Stephen W Keckler, and William J Dally. Fine-grained dram: Energyefficient dram for extreme bandwidth systems. In Proceedings of the 50th Annual
+IEEE/ACM International Symposium on Microarchitecture, pages 41–54, 2017.
+[42] Mirko Prezioso, Farnood Merrikh-Bayat, Brian D Hoskins, Gina C Adam, Konstantin K Likharev, and Dmitri B Strukov. Training and operation of an integrated
+neuromorphic network based on metal-oxide memristors. Nature, 521(7550):61–
+64, 2015.
+[43] Yubin Qin, Yang Wang, Dazheng Deng, Zhiren Zhao, Xiaolong Yang, Leibo
+Liu, Shaojun Wei, Yang Hu, and Shouyi Yin. Fact: Ffn-attention co-optimized
+transformer architecture with eager correlation prediction. In Proceedings of the
+50th Annual International Symposium on Computer Architecture, ISCA ’23, New
+York, NY, USA, 2023. Association for Computing Machinery.
+[44] A. Radford, Jeffrey Wu, R. Child, David Luan, Dario Amodei, and Ilya Sutskever.
+Language models are unsupervised multitask learners. 2019.
+[45] Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya
+Sutskever, et al. Language models are unsupervised multitask learners. OpenAI
+blog, 1(8):9, 2019.
+[46] Misbah Ramadan, Nicolás Wainstein, Ran Ginosar, and Shahar Kvatinsky. Adaptive programming in multi-level cell reram. Microelectronics Journal, 90:169–180,
+2019.
+[47] Misbah Ramadan, Nicolás Wainstein, Ran Ginosar, and Shahar Kvatinsky. Adaptive programming in multi-level cell reram. Microelectronics Journal, 90:169–180,
+2019.
+
+[48] Yiming Ren, Bobo Tian, Mengge Yan, Guangdi Feng, Bin Gao, Fangyu Yue, Hui
+Peng, Xiaodong Tang, Qiuxiang Zhu, Junhao Chu, et al. Associative learning
+of a three-terminal memristor network for digits recognition. Science China
+Information Sciences, 66(2):122403, 2023.
+[49] Mehdi Saberi, Reza Lotfi, Khalil Mafinezhad, and Wouter A Serdijn. Analysis of
+power consumption and linearity in capacitive digital-to-analog converters used
+in successive approximation adcs. IEEE Transactions on Circuits and Systems I:
+Regular Papers, 58(8):1736–1748, 2011.
+[50] Ali Shafiee, Anirban Nag, Naveen Muralimanohar, Rajeev Balasubramonian,
+John Paul Strachan, Miao Hu, R. Stanley Williams, and Vivek Srikumar. Isaac:
+a convolutional neural network accelerator with in-situ analog arithmetic in
+crossbars. In Proceedings of the 43rd International Symposium on Computer
+Architecture, ISCA ’16, page 14–26. IEEE Press, 2016.
+[51] Ali Shafiee, Anirban Nag, Naveen Muralimanohar, Rajeev Balasubramonian,
+John Paul Strachan, Miao Hu, R. Stanley Williams, and Vivek Srikumar. Isaac:
+a convolutional neural network accelerator with in-situ analog arithmetic in
+crossbars. SIGARCH Comput. Archit. News, 44(3):14–26, jun 2016.
+[52] Ali Shafiee, Anirban Nag, Naveen Muralimanohar, Rajeev Balasubramonian,
+John Paul Strachan, Miao Hu, R Stanley Williams, and Vivek Srikumar. Isaac:
+A convolutional neural network accelerator with in-situ analog arithmetic in
+crossbars. ACM SIGARCH Computer Architecture News, 44(3):14–26, 2016.
+[53] Debendra Das Sharma. Pci express® 6.0 specification at 64.0 gt/s with pam4 signaling: a low latency, high bandwidth, high reliability and cost-effective
+interconnect. In 2020 IEEE Symposium on High-Performance Interconnects (HOTI),
+pages 1–8. IEEE, 2020.
+[54] Clinton W Smullen, Vidyabhushan Mohan, Anurag Nigam, Sudhanva Gurumurthi, and Mircea R Stan. Relaxing non-volatility for fast and energy-efficient
+stt-ram caches. In 2011 IEEE 17th International Symposium on High Performance
+Computer Architecture, pages 50–61. IEEE, 2011.
+[55] Chang Eun Song, Yidong Li, Amardeep Ramnani, Pulkit Agrawal, Purvi Agrawal,
+Sung-Joon Jang, Sang-Seol Lee, Tajana Rosing, and Mingu Kang. 52.5 tops/w 1.7
+ghz reconfigurable xgboost inference accelerator based on modular-unit-tree
+with dynamic data and compute gating. In 2024 IEEE Custom Integrated Circuits
+Conference (CICC), pages 1–2. IEEE, 2024.
+[56] Chang Eun Song, Ashkan Moradifirouzabadi, Tajana Rosing, and Mingu Kang. Efficient transformer acceleration via reconfiguration for encoder and decoder models and sparsity-aware algorithm mapping. In Proceedings of the 29th ACM/IEEE
+International Symposium on Low Power Electronics and Design, ISLPED ’24, page
+1–6, New York, NY, USA, 2024. Association for Computing Machinery.
+[57] Aaron Stillmaker and Bevan Baas. Scaling equations for the accurate prediction
+of cmos device performance from 180 nm to 7 nm. Integration, 58:74–81, 2017.
+[58] Nishil Talati, Saransh Gupta, Pravin Mane, and Shahar Kvatinsky. Logic design within memristive memories using memristor-aided logic (magic). IEEE
+Transactions on Nanotechnology, 15(4):635–650, 2016.
+[59] M Onat Topal, Anil Bas, and Imke van Heerden. Exploring transformers in natural
+language generation: Gpt, bert, and xlnet. arXiv preprint arXiv:2102.08036, 2021.
+[60] Minh SQ Truong, Eric Chen, Deanyone Su, Liting Shen, Alexander Glass,
+L Richard Carley, James A Bain, and Saugata Ghose. Racer: Bit-pipelined processing using resistive memory. In MICRO-54: 54th Annual IEEE/ACM International
+Symposium on Microarchitecture, page 100–116, 2021.
+[61] Weier Wan, Rajkumar Kubendran, S Burc Eryilmaz, Wenqiang Zhang, Yan Liao,
+Dabin Wu, Stephen Deiss, Bin Gao, Priyanka Raina, Siddharth Joshi, et al. 33.1
+a 74 tmacs/w cmos-rram neurosynaptic core with dynamically reconfigurable
+dataflow and in-situ transposable weights for probabilistic graphical models. In
+2020 IEEE International Solid-State Circuits Conference-(ISSCC), pages 498–500.
+IEEE, 2020.
+[62] Alex Wang. Glue: A multi-task benchmark and analysis platform for natural
+language understanding. arXiv preprint arXiv:1804.07461, 2018.
+[63] Alex Wang, Amanpreet Singh, Julian Michael, Felix Hill, Omer Levy, and
+Samuel R. Bowman. Glue: A multi-task benchmark and analysis platform for
+natural language understanding, 2019.
+[64] Hanrui Wang, Zhanghao Wu, Zhijian Liu, Han Cai, Ligeng Zhu, Chuang Gan,
+and Song Han. Hat: Hardware-aware transformers for efficient natural language
+processing. arXiv preprint arXiv:2005.14187, 2020.
+[65] Weizhi Wang, Li Dong, Hao Cheng, Xiaodong Liu, Xifeng Yan, Jianfeng Gao,
+and Furu Wei. Augmenting language models with long-term memory. Advances
+in Neural Information Processing Systems, 36, 2024.
+[66] Yuyue Wang, Xiurui Pan, Yuda An, Jie Zhang, and Glenn Reinman. Beacongnn:
+Large-scale gnn acceleration with out-of-order streaming in-storage computing.
+In 2024 IEEE International Symposium on High-Performance Computer Architecture
+(HPCA), pages 330–344. IEEE, 2024.
+[67] H-S Philip Wong, Simone Raoux, SangBum Kim, Jiale Liang, John P Reifenberg,
+Bipin Rajendran, Mehdi Asheghi, and Kenneth E Goodson. Phase change memory.
+Proceedings of the IEEE, 98(12):2201–2227, 2010.
+[68] Yuting Wu, Ziyu Wang, and Wei D Lu. Pim gpt a hybrid process in memory
+accelerator for autoregressive transformers. npj Unconventional Computing,
+1(1):4, 2024.
+
+=== page 15 ===
+Hybrid SLC-MLC RRAM Mixed-Signal Processing-in-Memory Architecture for Transformer Acceleration via Gradient Redistribution
+
+[69] Cheng-Xin Xue, Je-Min Hung, Hui-Yao Kao, Yen-Hsiang Huang, Sheng-Po Huang,
+Fu-Chun Chang, Peng Chen, Ta-Wei Liu, Chuan-Jia Jhang, Chin-I Su, et al. 16.1 a
+22nm 4mb 8b-precision reram computing-in-memory macro with 11.91 to 195.7
+tops/w for tiny ai edge devices. In 2021 IEEE International Solid-State Circuits
+Conference (ISSCC), volume 64, pages 245–247. IEEE, 2021.
+[70] Guowei Yang, Cansu Demirkiran, Zeynep Ece Kizilates, Carlos A Ríos Ocampo,
+Ayse K Coskun, and Ajay Joshi. Processing-in-memory using optically-addressed
+phase change memory. In 2023 IEEE/ACM International Symposium on Low Power
+Electronics and Design (ISLPED), pages 1–6. IEEE, 2023.
+[71] Haichao Yang, Chang Eun Song, Weihong Xu, Behnam Khaleghi, Uday Mallappa,
+Monil Shah, Keming Fan, Mingu Kang, and Tajana Rosing. Fsl-hdnn: A 5.7 tops/w
+end-to-end few-shot learning classifier accelerator with feature extraction and
+hyperdimensional computing. In 2024 IEEE European Solid-State Electronics
+Research Conference (ESSERC), pages 33–36. IEEE, 2024.
+[72] Xiaoxuan Yang, Bonan Yan, Hai Li, and Yiran Chen. Retransformer: Reram-based
+processing-in-memory architecture for transformer acceleration. In Proceedings
+of the 39th International Conference on Computer-Aided Design, pages 1–9, 2020.
+[73] Xiaoxuan Yang, Bonan Yan, Hai Li, and Yiran Chen. Retransformer: Reram-based
+processing-in-memory architecture for transformer acceleration. In Proceedings
+of the 39th International Conference on Computer-Aided Design, ICCAD ’20, New
+York, NY, USA, 2020. Association for Computing Machinery.
+
+[74] Peng Yao, Huaqiang Wu, Bin Gao, Jianshi Tang, Qingtian Zhang, Wenqiang
+Zhang, J Joshua Yang, and He Qian. Fully hardware-implemented memristor
+convolutional neural network. Nature, 577(7792):641–646, 2020.
+[75] Amir Yazdanbakhsh, Ashkan Moradifirouzabadi, Zheng Li, and Mingu Kang.
+Sparse attention acceleration with synergistic in-memory pruning and on-chip
+recomputation. In 2022 55th IEEE/ACM International Symposium on Microarchitecture (MICRO), pages 744–762. IEEE, 2022.
+[76] Kentaro Yoshioka. vision-transformers-cifar10: Training vision transformers
+(vit) and related models on cifar-10. https://github.com/kentaroy47/visiontransformers-cifar10, 2024.
+[77] Shimeng Yu, Wonbo Shim, Xiaochen Peng, and Yandong Luo. Rram for computein-memory: From inference to training. IEEE Transactions on Circuits and Systems
+I: Regular Papers, 68(7):2753–2765, 2021.
+[78] Wenqiang Zhang, Bin Gao, Jianshi Tang, Peng Yao, Shimeng Yu, Meng-Fan
+Chang, Hoi-Jun Yoo, He Qian, and Huaqiang Wu. Neuro-inspired computing
+chips. Nature electronics, 3(7):371–382, 2020.
+[79] Minxuan Zhou, Weihong Xu, Jaeyoung Kang, and Tajana Rosing. Transpim: A
+memory-based acceleration via software-hardware co-design for transformer. In
+2022 IEEE International Symposium on High-Performance Computer Architecture
+(HPCA), pages 1071–1085. IEEE, 2022.
+[80] Mohammed A Zidan, John Paul Strachan, and Wei D Lu. The future of electronics
+based on memristive systems. Nature electronics, 1(1):22–29, 2018.

@@ -1,0 +1,1717 @@
+# DL-RSIM
+# id: W2899749435 | key: 2018_Lin_DLRSIM_ICCAD | ICCAD 2018 | card: ../cards/2018_Lin_DLRSIM_ICCAD.md
+
+
+=== page 1 ===
+DL-RSIM: A Simulation Framework to Enable Reliable
+ReRAM-based Accelerators for Deep Learning
+Meng-Yao Lin*, Hsiang-Yun Cheng† , Wei-Ting Lin*, Tzu-Hsien Yang*, I-Ching Tseng*, Chia-Lin Yang*† ,
+Han-Wen Hu§ , Hung-Sheng Chang§ , Hsiang-Pang Li§ , Meng-Fan Chang‡∗
+§
+
+*National Taiwan University, † Academia Sinica,
+Macronix International Co., Ltd., ‡ National Tsing Hua University
+
+r05922028@ntu.edu.tw,hycheng@citi.sinica.edu.tw,{r06944031,r06922094,b04902016}@ntu.edu.tw,yangc@csie.ntu.edu.tw,
+{paddingtonhu,billchang,sbli}@mxic.com.tw,mfchang@ee.nthu.edu.tw
+
+ABSTRACT
+Memristor-based deep learning accelerators provide a promising solution to improve the energy eﬃciency of neuromorphic
+computing systems. However, the electrical properties and
+crossbar structure of memristors make these accelerators
+error-prone. To enable reliable memristor-based accelerators,
+a simulation platform is needed to precisely analyze the
+impact of non-ideal circuit and device properties on the inference accuracy. In this paper, we propose a ﬂexible simulation
+framework, DL-RSIM, to tackle this challenge. DL-RSIM simulates the error rates of every sum-of-products computation
+in the memristor-based accelerator and injects the errors in
+the targeted TensorFlow-based neural network model. A rich
+set of reliability impact factors are explored by DL-RSIM,
+and it can be incorporated with any deep learning neural network implemented by TensorFlow. Using three representative
+convolutional neural networks as case studies, we show that
+DL-RSIM can guide chip designers to choose a reliabilityfriendly design option and develop reliability optimization
+techniques.
+
+1
+
+INTRODUCTION
+
+Deep learning and neuromorphic algorithms have attracted
+a lot of interest in recent years as they can provide optimal solutions for many classiﬁcation and regression tasks,
+including image/speech recognition, data mining, and natural
+language processing. These neuromorphic algorithms often
+cost much more memory and computing resources than traditional methods, incurring tremendous data movements [4]. In
+conventional von Neumann architecture where computation
+and data storage are separated, such data movements become
+critical performance and energy bottleneck [8].
+∗
+
+This work is supported in part by research grants from the Ministry of
+Science and Technology of Taiwan (MOST-105-2221-E-002-156-MY2,
+MOST107-2218-E-001-004-MY3), and sponsored by Macronix Inc.,
+Hsin-chu, Taiwan (97-SC39).
+
+Permission to make digital or hard copies of all or part of this work
+for personal or classroom use is granted without fee provided that
+copies are not made or distributed for proﬁt or commercial advantage
+and that copies bear this notice and the full citation on the ﬁrst
+page. Copyrights for components of this work owned by others than
+ACM must be honored. Abstracting with credit is permitted. To copy
+otherwise, or republish, to post on servers or to redistribute to lists,
+requires prior speciﬁc permission and/or a fee. Request permissions
+from permissions@acm.org.
+ICCAD ’18, November 5–8, 2018, San Diego, CA, USA
+© 2018 Association for Computing Machinery.
+ACM ISBN 978-1-4503-5950-4/18/11. . . $15.00
+
+https://doi.org/10.1145/3240765.3240800
+
+The innovation of memristor-based computing-in-memory
+accelerator provides a promising solution to reduce data
+movements and boost the energy eﬃciency of neuromorphic
+computation. Recent work demonstrated that metal-oxide
+resistive random access memory (ReRAM) [11] can be used to
+build a crossbar structure to eﬃciently perform matrix-vector
+multiplications in convolution and fully-connected layers of
+deep neural networks [7]. With the capability of performing
+arithmetic operations beyond data storage, ReRAM-based
+computing-in-memory accelerators can provide signiﬁcant
+energy savings comparing to CPU or GPU solutions [3, 9].
+While the electrical properties and crossbar structure of
+ReRAM enable energy-eﬃcient neuromorphic computing,
+these properties also make the ReRAM-based accelerators
+error-prone. When performing matrix-vector multiplication
+in a ReRAM crossbar array, multiple wordlines are activated
+concurrently and the currents ﬂowed through diﬀerent cells in
+the same bitline are accumulated to get the sum-of-products
+result. Even if none of cells in a bitline is in error, the sumof-products result read out by the sense ampliﬁer may be
+incorrect [5] mainly due to (1) the accumulation of read noise
+from each activated cell in the bitline and (2) the imperfect
+sense ampliﬁer with limited resolution. Since many factors
+can aﬀect the reliability of ReRAM-based accelerators, a
+simulation platform is needed to estimate the impact of current sensing errors and hardware constraints on the inference
+accuracy of the targeted neural networks.
+Prior work has studied the performance and energy eﬃciency of ReRAM-based deep learning accelerators [3, 9] and
+proposed simulation tools to facilitate design space exploration [1, 12], but none of the existing simulation platforms
+completely supports ﬂexible and precise error rate analysis.
+The non-ideal circuit and device properties that cause the
+current sensing errors are usually ignored in prior systemlevel work [3, 9]. Some circuit-level [1] and behavior-level [12]
+simulation platforms take the impact of hardware errors into
+consideration. However, the circuit-level tool [1] is hard to be
+integrated with various neural networks while the behaviorlevel tool [12] provides only imprecise analysis on inference
+accuracy. As a result, a ﬂexible and accurate simulation platform that fully explore the impact of hardware errors on
+various neural network models is highly demanded.
+In this paper, we propose a ﬂexible simulation framework,
+DL-RSIM, for ReRAM-based deep learning accelerators to
+analyze the impact of non-ideal circuit and device properties
+on the inference accuracy of various neuromorphic computing
+
+=== page 2 ===
+&$%%+!#&)&
+!#'&&'$ #%
+
+C−1 Y −1 X−1
+
+
+
+Input(c, a + x, b + y) ∗ F ilter(k, x, y)) (1)
+
+c=0 y=0 x=0
+
+where β is a non-linear activation function, such as sigmoid or
+ReLU. The fully-connected layer can be viewed as a special
+case of a convolution with the largest possible ﬁlter size (i.e.,
+the size of the feature map). ReRAM-based deep learning
+accelerators primarily target on the acceleration of convolution and fully-connected layers, as these layers involve a
+signiﬁcant number of matrix-vector multiplications.
+
+2.2
+
+ReRAM Crossbar Array
+
+ReRAM is a type of non-volatile memory that stores data by
+changing cell resistances. The crossbar structure of ReRAM
+allows it to naturally compute matrix-vector multiplication
+in one constant time step. As illustrated in Figure 2(a), each
+ReRAM cell is located at the cross point of a wordline and
+a bitline. If input voltage Vi is applied to the i-th wordline,
+the current passed through the ReRAM cell with resistor
+
+,
+
+
+
+"!("'&"!
+* #
+
+  
+
+""!
+
+ 
+
+'+"!!&
+
+* #  *#""!
+
+ 
+
+  
+
+!#'&   
+
+,
+
+Output(k, a, b) = β(
+
+&$%
+
+
+ 
+
+ 
+
+'&#'&
+&$
+ 
+
+*   
+
+Figure 1: Convolutional neural network (CNN).
+Ri is equal to Vi /R
+i , and the total current ﬂows through
+a bitline (IBL ) is
+Vi /Ri . Thus, by storing ﬁlter weights
+as the conductance of ReRAM cells (1/Ri ) and converting
+input feature maps into input voltage signals, we can get
+the dot-product results (output feature maps) at the end of
+the bitlines, as shown in Figure 2(b). With the computingin-memory capability, ReRAM crossbar array provides a
+promising solution to accelerate CNNs.
+$
+
+
+
+
+
+
+2 BACKGROUND
+2.1 Convolutional Neural Network
+Convolutional neural network (CNN) is the key component
+of many deep learning applications. Figure 1 shows three
+representative types of layers in CNNs: convolution, pooling,
+and fully-connected layer. A typical CNN starts with multiple
+convolution layers to extract feature maps, and pooling layers
+are interleaved between diﬀerent convolution layers to reduce
+the size of feature maps through performing subsampling. At
+the end of the CNN, one or multiple fully-connected layers
+are used to extract feature maps and correlate the feature
+maps to the target objects. In the convolution layer, a set
+of matrix-vector multiplications are conducted to convolute
+ﬁlters with input feature maps from the previous layer to
+generate output feature maps for the next layer. Suppose
+that there are C input channels and K X × Y ﬁlters, the
+(a,b) data at the kth output feature map is calculated by the
+following equation with many sum-of-products computation:
+
+'&#'&&'$ #%
+
+!!%
+
+!!%
+
+
+
+workloads. DL-RSIM simulates the error rates of every sum-ofproducts computation in the memristor-based deep learning
+accelerator, and injects the errors in the TensorFlow-based
+neural network models. The main contributions of this work
+can be summarized as follows:
+• DL-RSIM can be incorporated with any deep learning
+neural network implemented by TensorFlow, and a rich set
+of impact factors, i.e., non-ideal circuit and device properties
+in ReRAM-based accelerators, are explored when estimating
+the inference accuracy.
+• DL-RSIM can be utilized to explore the design space
+of ReRAM-based deep learning accelerators for reliability
+optimization. The simulation results can guide chip designers
+to choose a better design option at an early design stage.
+• We demonstrate how to use DL-RSIM to develop reliability optimization techniques by proposing and evaluating
+a workload-dependent sensing scheme. Computer architects
+can use DL-RSIM to analyze which part of the neural network is more vulnerable to errors and design optimization
+techniques accordingly.
+
+
+    
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+'!$&$#
+
+
+
+ "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%$!%$  
+
+Figure 2: ReRAM crossbar for matrix-vector multiplication:
+(a) crossbar structure (b) neural network mapping.
+
+3
+
+RERAM-BASED DEEP LEARNING
+ACCELERATOR ARCHITECTURE
+
+We ﬁrst present the architecture of typical ReRAM-based
+deep learning accelerators. As shown in Figure 3, the ReRAMbased deep learning accelerator is composed of multiple computation units (CUs) connected with on-chip interconnects.
+Each CU has multiple crossbar arrays, which are responsible for the acceleration of matrix-vector multiplications in
+convolution and fully-connected layers. A wordline driver
+(WLD), such as a digital-to-analog converter (DAC) or an
+inverter [9], is connected to each wordline of the ReRAM
+crossbar array, in order to convert the input feature map
+data to input voltage. The accumulated currents on bitlines
+(sum-of-products results) are read out by multi-level sense
+ampliﬁers (SAs). As a multi-level SA consumes a signiﬁcant
+amount of power and chip area [1, 9], each SA is shared by
+multiple bitlines. In addition to the crossbar arrays, there is
+one on-chip buﬀer in each CU for temporarily storing input
+and output feature maps. A non-linear function (ReLU) unit
+and a pooling unit are also included in the CU to support
+the implementation of non-linear function and pooling layer
+in the neural network.
+When performing a matrix-vector multiplication (dotproduct computation), the input vector is encoded using
+multiple clock cycles, as an area- and energy-eﬃcient WLD
+usually has limited resolution [9]. Since a practical ReRAM
+cell can store only a limited number of bits [7, 9], each data
+in the original ﬁlter weight is also partitioned and mapped
+onto diﬀerent bitlines. Ideally, all the wordlines in the crossbar array can be activated concurrently in one single cycle.
+
+=== page 3 ===
+!#$# 
+
+ 
+
+
+
+
+
+
+
+
+$!
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+$#
+
+$#
+
+
+!
+!!&
+
+!
+!!&
+
+!
+!!&
+
+!
+!!&
+
+$ $%
+
+$ $%
+
+$ $%
+
+$ $%
+
+
+!
+"#!
+#
+
+
+Figure 3: ReRAM-based accelerator architecture.
+
+3.1
+
+ 
+
+ReRAM Cell
+
+The statistical randomness of ReRAM cell resistance is a
+critical issue when aiming to design a reliable ReRAM-based
+deep learning accelerator. Figure 4(a) shows the ReRAM cell
+structure, with a metal-oxide material sandwiched between
+two metal layers of electrodes. When a voltage is applied
+across a ReRAM cell, a conductive ﬁlament made out of
+oxygen vacancies is either formed (LRS, low resistance state)
+or ruptured (HRS, high resistance state) depending on the
+voltage polarity. Due to the randomness of the oxygen vacancy
+generation, the shape of the conductive ﬁlament varies from
+cycle to cycle even under the same programming condition.
+This resistance variability of ReRAM greatly impacts the
+error rate of matrix-vector multiplication. Recent work shows
+that the resistance histograms for both LRS and HRS follow
+the lognormal distribution [6]. As shown in Figure 4(b), the
+resistance distribution is mainly determined by the mean
+resistance of on-state (Ron ), the resistance ratio between
+on and oﬀ state (R-ratio = Rof f /Ron ), and the resistance
+deviation (σ) of each state. When the resistance distributions
+of LRS and HRS are overlapped, it is hard to distinguish
+between these two states at the overlapped region. As a result,
+read error is more likely to occur on a cell with smaller Rratio and/or larger σ due to the larger overlapped resistance
+region.
+
+ 
+
+ 
+
+
+
+
+
+
+
+
+
+ 
+
+    
+
+ 
+
+
+    
+
+
+
+  
+
+
+
+
+
+Figure 4: ReRAM (a) cell structure and (b) resistance distribution. σ: resistance deviation.
+
+3.2
+
+Operation Unit
+
+In addition to the statistical randomness of ReRAM cell resistance, the size of the operation unit (SOU ) also aﬀects the
+error rate of sum-of-products computation. When multiple
+wordlines are activated simultaneously, the output current
+(IBL ) of a bitline is equal to the summation of all activated
+cell currents. Since the resistance of ReRAM cells follows a
+lognormal distribution, the accumulated current on a bitline
+also follows a statistical distribution. Higher number of activated wordlines implies the accumulation of more cell resistance variance, leading to larger overlapped regions between
+neighbor states (sum-of-products values) in the accumulated
+current distribution and higher error rates. Thus, practical
+ReRAM crossbar designs [2, 10] restrict the maximum number of wordlines that can be activated concurrently (SOU )
+to avoid serious accuracy degradation. Within an OU, the
+actual number of activated wordlines depends on the number
+of non-zeros inputs, as a wordline is turned oﬀ if the input is
+zero. If there are many non-zero values in the feature maps
+of the targeted neural network (i.e., many wordlines need to
+be activated), reducing SOU degrades performance but can
+help to reduce bitline sensing error rates.
+
+
+
+!!""!
+
+
+ 
+
+!"$
+
+ 
+ "
+ !
+!#!
+
+!&
+
+ 
+
+However, only a limited number of wordlines can be activated
+concurrently in a practical design [2, 10], as activating a massive number of wordlines consumes too much power and it is
+hard to accurately read out the current accumulated from
+too many cells at the SA. Thus, each original dot-product
+computation is split into the dot-product computation of
+multiple operation units (OUs), as shown in Figure 3, with
+at most SOU wordlines activated at one single cycle. The
+dot-product result of each OU are added together and temporarily stored at the register connected to the SA. After
+summing up the dot-product result of diﬀerent OUs that
+share the same set of bitlines, a shift-and-add circuit is used
+to assemble the ﬁnal result based on the bit position of input
+and synaptic weight.
+Among these components in the CU, the inference accuracy
+of the neural network is mainly aﬀected by the non-ideal
+properties and design constraints of ReRAM cell, operation
+unit, and sense ampliﬁer. In the following subsections, we
+discuss the impact of these three components on sum-ofproducts error rates per bitline, and use an example to show
+how these errors and hardware constraints aﬀect convolution
+computation in neural networks.
+
+ &
+
+& 
+
+& %
+
+ &
+
+& 
+
+& 
+
+& 
+
+""
+
+  #" #"
+
+   #" #"
+ !!#!!"
+#!!"""
+
+
+
+""
+
+
+
+
+ 
+
+Figure 5: Dual reference sensing method.
+
+3.3
+
+Sense Ampliﬁer
+
+The design of sense ampliﬁer aﬀects the read sensing error rate
+of the sum-of-products result at each bitlines. Recent work
+showed that dual-reference sensing method can provide larger
+sensing margin and lower error rate than conventional sensing
+scheme [2]. As shown in Figure 5, when dual-reference sensing
+scheme is applied, the distance between the accumulated
+current on the bitline (IBL ) and the reference current of the
+higher state (IR [n+1]) is compared with the distance between
+IBL and the reference current of the lower state (IR [n])
+to determine the sum-of-products result. Considering the
+impact of SA safety guard band delta voltage (dVSA ), which
+represents the minimum voltage requirement to distinguish
+diﬀerent states and is related to process variation, IBL is
+sensed as the lower state if
+α ∗ [(IR [n + 1] − IBL ) − (IBL − IR [n])] ≥ dVSA
+
+(2)
+
+where α is a constant that equals to the sensing speed of the
+SA divided by the SA input node capacitance. Otherwise,
+IBL is sensed as the higher state if
+α ∗ [(IR [n + 1] − IBL ) − (IBL − IR [n])] < −dVSA
+
+(3)
+
+=== page 4 ===
+$#./,#
+(+ $&'.#,
+
+#!*(+*-#
+2
+
+
+
+ 
+ 
+
+ ,&%&)'
+"*.+,*"/!.
+
+
+
+
+
+
+
+
+ 
+
+ 
+
+ #!*(+*-&.&*)
+
+
+
+
+
+
+
+
+2!'#
+!*)0*'/.&*) /''2
+!*))#!.#"
+
+,,*,&)!'/"#"*/.+/.
+
+Dot-Product Computation under Hardware
+Constraints
+
+To sum up the hardware constraints and non-ideal circuit/device properties mentioned above, we use an example to
+show how these limitations aﬀect the process of dot-product
+computation in neural networks. Figure 6(a) represents the
+original dot-product computation. Due to the limited WLD
+resolution, bits-per-cell, and OU size, the original feature
+maps and ﬁlters are ﬁrst partitioned into smaller OU-based
+bit-level computation units. We call this process Decomposition. As shown in Figure 6(b), the feature map is divided
+based on the WLD resolution (1 bit in this example). For example, the ﬁrst data, 2, in the feature map is partitioned into
+1 (MSB) and 0 (LSB). The original ﬁlter is also partitioned
+into MSB and LSB columns based on the bits-per-cell (1 bit
+in this example). Since only a limited number of wordlines
+can be activated concurrently, the computation should be
+split into several OU-based portions. Suppose that SOU =2,
+the MSB and LSB of the feature map and ﬁlter are further
+split into two portions.
+After decomposition, OU-based dot-product computation
+is performed, as shown in Figure 6(c). For example, at the
+ﬁrst cycle, the dot-product of the LSBs of the upper-half
+feature map (0,1) and the weights stored in OU1 is computed,
+generating the ﬁrst output feature map (1,1). During the dotproduct computation, the unstable cell resistance and nonideal SA may generate error results, as shown in Figure 6(d).
+In this example, the fourth output feature map is wrongly
+sensed as (1,1) instead of original (1,0).
+Finally, the OU-based bit-level results need to be resembled
+to get the ﬁnal result of the dot-product computation and
+pass to the next neural network layer. We call this process
+Composition, as shown in Figure 6(e). During Composition,
+the dot-product outputs of the same bit-position in the input
+feature map but diﬀerent OUs are ﬁrst added together. For
+example, the ﬁrst two outputs (1,1) and (0,0) are summed up
+to get the new output (1,1). Then, shift-and-add of the new
+outputs generated by the ﬁrst step is calculated based on the
+bit-position of the input feature map to get the new result
+(3,5) in the second step. At the last step, shift-and-add is
+performed based on the bit-position of the ﬁlter, in order to
+get the ﬁnal error-included dot-product result (3∗21 +5∗20 =
+11). In this example, the original output, 9 (Figure 6(a)),
+is changed to 11, due to the errors induced by unstable
+ReRAM cells, accumulated currents at bitlines within an OU,
+and non-ideal SA. To analyze the impact of these hardwareinduced errors on the inference accuracy of neural networks,
+
+#!*(+*-# 2
+,#-*'/.&*)
+ &.-+#,!#''
+
+/.+/.
+$#./,#
+(+
+
+3.4
+
+a simulation platform which integrates the modeling of error
+rates per bitline with the OU-based dot-product computation
+process is needed.
+
+,&%&)'*/.+/.
+
+Larger dVSA means it is more likely to sense a wrong value, as
+the correctness of SA is only guaranteed when the diﬀerence
+between IR [n + 1] − IBL and IBL − IR [n] is larger than
+dVSA /α. In addition, adjusting IR [n] and IR [n + 1] based on
+workload characteristics can help to improve the inference
+accuracy of the targeted neural network. The resolution of
+SA also aﬀects the error rate. A sense ampliﬁer with lower
+resolution consumes less power and provides faster sensing
+speed [10], but the sum-of-products error rate increases as
+some bits (states) are truncated.
+
+#!*(+*-# 2
+*+#,.&*) /)&.
+
+
+
+
+
+
+
+#!*(+*-# 2$#./,#
+(+ &.+*-&.&*)
+
+
+1 
+
+
+
+1 
+
+#!*(+*-# 2$&'.#, &.
++*-&.&*)
+
+1  1 
+
+,,*,
+&)!'/"#"
+,#-/'.
+
+#*(+*-&.&*)
+
+",,*,++#,)!#
+
+Figure 6: An example of OU-based dot-product computation.
+
+4
+
+DL-RSIM: SIMULATION FRAMEWORK
+
+DL-RSIM is a simulation framework that enables the analysis
+on the impact of non-ideal circuit and device properties on
+the inference accuracy for memristor-based deep learning
+accelerators. Figure 7 shows the simulation framework of our
+DL-RSIM, which is composed of two modules. The NVM Error Analytical Module takes a set of hardware conﬁgurations
+(e.g., ReRAM cell properties, SA-related parameters, etc)
+as input parameters, and estimates the error rates of each
+sum-of-products computation per bitline within an OU. The
+TensorFlow-based Inference Accuracy Simulation Module is
+based on a typical TensorFlow inference ﬂow and incorporates the underlying ReRAM-based hardware conﬁguration
+and estimated error rates of an OU from the NVM Error
+Analytical Module to generate inference accuracy for the target input feature map and neural network model. All the
+input hardware conﬁgurations are listed in Table 1 and the
+detailed designs of each module are described in the following
+subsections.
+  
+
+  
+
+   
+
+   
+ 
+ 
+      
+ 
+
+Figure 7: Simulation framework of DL-RSIM.
+
+4.1
+
+NVM Error Analytical Module
+
+The NVM Error Analytical Module estimates the error rates
+of each sum-of-products results per bitline within an OU, considering the non-ideal ReRAM cell and SA. Figure 8 shows
+the simulation ﬂow of this module. First, given the number
+of bits per cell, Ron , R-ratio, and resistance deviation (σ),
+we can build the cell resistance distribution, which is modeled by the Probability Density Function (PDF) of lognormal
+
+=== page 5 ===
+OU size (SOU )
+
+Number of output bits per SA
+SA reference current of each state
+e.g., mean of each state
+SA safety guard band delta voltage
+Max number of wordlines that can be
+activated concurrently within a crossbar array
+
+distribution [6], from low-resistance to high-resistance states:
+1
+√
+
+P (Ri ) =
+
+
+
+∗ exp
+
+(−
+
+2
+
+(log(Ri ) − μi )
+)
+2(σi ) 2
+
+
+
+(4)
+
+Ri σi 2π
+where μi is the mean resistance and σi is the resistance deviation of state i. μi = Ron at the lowest-resistance state and
+μi = Ron ∗ R-ratio at the highest-resistance state. According
+to the Ohm’s law, we can use Jacobian to get the PDF of
+cell current distribution, which is modeled by:
+
+⎛
+
+P (Ii ) =
+
+1
+√
+
+Ii σi 2π
+
+∗ exp ⎝ (−
+
+
+
+(log( VIir ) − μi ) 2
+2(σi ) 2
+
+⎞
+
+)⎠
+
+5*63087.32$2%)"
+
+*005*6.67&2(*).675.'87.32
+
+8.0)&((8180&7*)
+(855*27).675.'87.32
+
+67.1&7**55355&7*64*5'.70.2*
+
+   
+
+
+
+8.0)(*00(855*27
+
+
+1
+8.0)(*00(855*27
+1
+&
+
+8&05*+*5*2(*
+6*26.2,1*7-3)
+
+32*#.632
+
+/;
+
+/;
+
+(5)
+
+In this paper, Vr = 0.6V + bitline clamping error, and the bitline
+clamping error is less than 0.03V.
+We sample 32000 times for each possible sum-of-products result in
+this paper. The resistance of the bitline itself is also included when
+calculating the accumulated current.
+
+2
+
+!#5*63087.32
+
+
+
+where Vr is the bitline clamping voltage1 .
+We then transform PDF into Cumulative Distribution
+Function (CDF), so that we can use the Monte Carlo sampling method to get the accumulated current distribution
+(i.e., sum-of-products results) within an OU, as shown in
+Figure 8(b). In an OU, it is possible to activate 1 to SOU
+wordlines, depending on the number of non-zero inputs. Since
+the accumulated current distribution varies when diﬀerent
+number of wordlines within an OU are activated, we generate
+one chart for each possible number of activated wordlines.
+Each chart of accumulated current distribution is derived by
+using the Monte Carlo sampling method. For example, if N
+wordlines are activated within an OU when WLD resolution
+= 1 and bits-per-cell = 1, there are N+1 possible sum-ofproducts results (0 to N). For each possible sum-of-products
+result, we use Monte Carlo to get current samples from the
+CDF of HRS and LRS, and add these currents together. For
+instance, if sum-of-products = 2, we sum up the current of
+two samples from the CDF of LRS and N-2 samples from the
+CDF of HRS. This sampling process is repeated several times
+to accurately estimate the accumulated current distribution2 .
+Finally, we estimate the error rates of each sum-of-products
+results based on the selected SA sensing scheme (e.g., SA
+resolution, SA reference current, dVSA , etc), as shown in
+Figure 8(c). When dual reference sensing scheme is applied,
+Equation 2 is used to determine whether each sample in the
+accumulated current distribution is correctly read out. We
+generate an error table for each possible number of activated
+1
+
+&5)9&5*(32+.,85&7.32
+.764*5(*00325&7.3
+
+
+
+ 
+
+1
+793#.632
+ 
+
+
+
+1
+
+*5535+.0*
+32*#.632
+*&0
+
+*26*) 
+
+ 
+
+793#.632*7(
+55355&7*
+
+'
+"55352&0:7.(&03)80*
+
+
+
+SA IR [n]
+SA dVSA
+
+Cell resistance deviation of each state
+
+wordlines within an OU, as the number of activated wordline
+is input-dependent and is unknown at this stage. For each
+possible sum-of-products result k, we calculate the percentage
+of sensing k as all possible values, from 0 to the total number
+of activated wordlines. For example, when one wordline is
+activated and real sum-of-products result is 0, the percentage
+of being sensed as 0 and 1 are both recorded in the table. The
+estimated error rates are written into a Python Pickle File
+(PKL ﬁle), which is easy to dump and load into programs.
+The PKL ﬁle is passed to the TensorFlow-based Inference
+Accuracy Simulation Module, in order to analyze the impact
+of current sensing errors on the inference accuracy.
+
+!
+
+Cell R-ratio
+Cell resistance
+deviation (σ )
+SA resolution
+
+Description
+Number of bits to encode input voltage levels
+Number of bits stored in each cell
+Cell resistance of on-state
+Cell resistance ratio between the
+highest state and the lowest state
+
+
+
+Name
+WLD resolution
+Bits-per-cell
+Cell Ron
+
+(-&57!
+
+Table 1: Input hardware conﬁgurations of DL-RSIM.
+
+(
+
+*2635039'&6*) 2+*5*2(*((85&(:.180&7.323)80*
+
+Figure 8: The ﬂow of NVM Error Analytical Module.
+
+4.2
+
+TensorFlow-based Inference Accuracy
+Simulation Module
+
+TensorFlow-based Inference Accuracy Simulation Module
+models the impact of accumulated current sensing errors
+per bitline within an OU on the inference accuracy of the
+targeted neural network. Figure 9 shows the simulation ﬂow
+of this module. Figure 9(a) is a typical TensorFlow inference
+ﬂow with two convolution layers and one fully-connected
+layer. We modify convolution and fully-connected layers to
+incorporate the errors induced by non-ideal circuit and device
+properties into the neural network, as shown in Figure 9(b).
+Three additional functions, Decomposition, Error Injection,
+and Composition, are added into the convolution and fullyconnected layers, in order to perform OU-based computation
+and integrate with the current sensing error rates per bitline
+within an OU provided by the NVM Error Analytical Module.
+The error-injected results are then compared with the ideal
+results to get the inference accuracy, as shown in Figure 9(c).
+In the following, we use the OU-based dot-product computation example in Figure 6 to describe the modiﬁed convolution
+and fully-connected layers in detail.
+Decomposition. The goal of decomposition is to partition
+original feature maps and ﬁlters, so that we can compute the
+dot-product results in an OU-based manner. Figure 10 shows
+the ﬂow of Decomposition. First, original feature maps from
+the input or pooling layer are transformed to ﬁxed-point representation using the same method introduced by Shaﬁee et
+al. [9], and these feature maps are decomposed based on the
+WLD resolution. The MSB to LSB bits of each data in the
+feature maps are separated into diﬀerent groups. The original
+
+=== page 6 ===
+#%)(()&
+"%'
+
+&+&$#)&($#
+"$!
+
+ &'$!)($#
+('%&!!
+
+#'$& !$+' "$!
+
+&&$&!
+
+on the error rate. The error-injected output feature maps are
+then passed to the Composition function.
++*1+(0/&+*
+0((4 +**" /"!
+
+$"%$'($#
+
+#%)(!,&
+
+$$!#
+
+&&$&# ($#
+
+$#*$!)($#
+
+$"%$'($#
+
+$$!#
+
+!&')!('
+
+)!!,$##(
+
+$"%&&')!('
+
+     
+"--+-#&("
+
++/,-+!0 /+0/,0/.
+ /&1/"!2+-!(&*"
+
+$#*$!)($#
+)!!,$##(
+
+$#*$!)($#
+
+
+
+     
+
+--+-*'" /&+*
+
+*!"3"--+-#&("/+#&*!/%""--+--/"
+
+*!+)*0)"-$"*"-/+
+
+
+
+
+"(
+
+
+
+
+-&$&*(+0/,0/.
+
+
+
+"*."!
+
+
+
+
+
+
+
++"--+-
+
+*!"3"!--+--/"
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+--+-&*'" /"!
++0/,0/.
+
+
+
+
+++,#+-((!+/,-+!0 /+0/,0/.
+
++),+.&/&+*
+
+#&#)&,
+
+Figure 9: The ﬂow of TensorFlow-based Inference Accuracy
+Simulation Module.
+ﬁlters are also transformed to ﬁxed-point representation and
+are separated into MSB to LSB groups by the underlying
+bits-per-cell. Considering that limited number of wordlines
+can be activated concurrently within a crossbar array, we
+further partition the feature maps and ﬁlters based on which
+OU is responsible for the sum-of-products computation. The
+example in Figure 6(b) shows that, by applying the Decomposition process, the original input feature map is separated into
+four groups based on bit position and SOU , while the original
+ﬁlter spans across two bitlines and is partitioned into two
+OU-based groups (OU1 and OU2). After the Decomposition
+process, we can use the original Convolution/Fully-connected
+function in TensorFlow to perform OU-based dot-product
+computation and pass the output feature maps to the newly
+added Error Injection function to generate error-included
+output data, considering the accumulated current sensing
+errors per bitline within an OU.
+$"!
+ 
+  "!
+
+ !" 
+%  "!
+
+
+  
+
+
+
+
+
+#'$& !$+' #&#)&,")!($#$)!
+
+"!%
+
+!"
+
+,!/"+0/,0/."!+*/%""--+--/"
+
+Figure 11: The ﬂow of Error Injection.
+Composition. After the errors are injected, we recompose
+these OU-based bit-level data into the ﬁnal dot-product
+outputs. Figure 12 shows the ﬂow of Composition. First,
+based on OU size, the outputs of the OUs that share the
+same set of bitlines are added together. We then perform
+shift-and-add based on the bit-position of the feature map,
+followed by the shift-and-add based on the bit-position of the
+ﬁlter. The example in Figure 6(e) shows that, by applying
+the Composition process, we can resemble the OU-based
+bit-level outputs (1,1), (0, 0), (0,1), (1,1), into the ﬁnal
+error-included result (11). The error-injected and recomposed
+output feature maps are then transformed from ﬁxed-point
+representation to ﬂoating-point representation and passed to
+the next TensorFlow pooling layer.
+ 
+ ! ! 
+
+!!! ! 
+   
+ 
+
+! 
+
+Error Injection. To analyze the impact of accumulated current
+sensing errors per bitline within an OU on the inference
+accuracy, we need to inject the error rates provided by the
+NVM Error Analytical Module. First, for each data in the
+original output feature maps, we index the PKL error ﬁle to
+get the probability of each possible sensing value, as shown
+in Figure 11(a). For example, assume that the second bit in
+the fourth output data is 0. By indexing the PKL error ﬁle,
+we know that the probability of sensing 0, 1, 2, are 90%, 8%,
+and 2%, respectively. Figure 11(b) shows how to inject errors
+in the outputs based on the indexed error rate. We ﬁrst use
+a random number generator to generate a number, A, that
+falls into the range between 0 and 100. We then compare A
+with the probability of each possible sensing value to get the
+error-injected data. In this example, A is smaller than 10 but
+larger than 2, so the original output 0 is changed to 1 based
+
+ 
+ !
+  
+
+ 
+ 
+  
+
+
+
+Figure 12: The ﬂow of Composition.
+
+ !" ! %!"! 
+
+Figure 10: The ﬂow of Decomposition.
+
+ 
+
+ ! 
+
+ 
+
+ !
+ ! 
+%! 
+
+#"!  "%!
+
+"! 
+
+5
+
+EXPERIMENTAL RESULTS
+
+In this section, we ﬁrst validate the correctness of our DLRSIM by comparing the modeled current distribution with
+SPICE. We then use three representative CNNs as case studies to show that DL-RSIM can help chip designers to select
+reliability-friendly design options and develop reliability optimization techniques to reduce error rates.
+
+5.1
+
+Validation
+
+We use the simulation results from SPICE to validate the correctness of DL-RSIM. With the same LRS and HRS resistance
+distribution [6], we compare the accumulated current distribution derived from SPICE and DL-RSIM when SOU = 9.
+When simulating the accumulated current on a bitline, SPICE
+models the interference between cells, which is not modeled
+in DL-RSIM. Figure 13 shows that the accumulated current
+distribution generated by our analytical module is similar
+to SPICE. The root mean square error between these two
+accumulated current distributions is less than 0.5%.
+
+=== page 7 ===
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+((&((*
+
+
+
+
+
+Case studies
+
+Three representative picture classiﬁcation and face recognition datasets, including MNIST, CIFAR-10 and Youtube
+Face (YTF), are utilized to show the impact of diﬀerent hardware conﬁgurations on the inference accuracy by using our
+DL-RSIM. These experiments demonstrate how DL-RSIM
+can guide chip designers to choose better design options at
+an early design stage. Table 2 lists the neural network model
+for these datasets. Based on a practical ReRAM-based accelerator chip [2], we choose SOU = 9, WLD resolution=1, and
+single-level cell as our baseline conﬁguration in the following
+evaluation. A dual reference sensing scheme with SA resolution = 4 bits and dVSA = 0 is used in these experiments
+except when exploring the impact of dVSA in Section 5.2.4.
+
+convolution
+
+MNIST
+CIFAR-10
+YTF
+
+1 layer
+3 layers
+4 layers
+
+fully
+connected
+2 layers
+3 layers
+2 layers
+
+data
+precision
+<IL=2,FL=4>
+<IL=3,FL=6>
+<IL=3,FL=6>
+
+
+
+
+
+
+
+
++$&!'(&+*),#+ ' ("*#"%
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*"&
+
+
+
+
+
+
+
+
+
+
+
+
+
+smaller σ implies smaller tail regions in the cell resistance and
+current distribution. As shown in Figure 15(a), the sensing
+error rate per bitline decreases as σ decreases, since the
+overlapped region between neighbor states in the accumulated
+current distribution becomes smaller. Figure 15(b) shows that
+smaller deviation leads to higher inference accuracy. When
+R-ratio=10, the inference accuracy of MNIST is similar to
+the hardware-error-free inference accuracy (99.99%) when
+σ ≤ 3/5 σb , while the deeper CIFAR-10 and YTF needs
+smaller σ (2/5 σb ) to eliminate accuracy loss. When R-ratio
+is larger (R-ratio=50), small reduction in σ is enough to
+achieve high inference accuracy. For example, CIFAR-10 can
+achieve 86.00% accuracy by reducing the σ to 2/5 σb when
+R-ratio=10, while reducing σ to 3/5 σb is enough to achieve
+87.33% accuracy when R-ratio=50. Note that reducing σ
+can achieve an accuracy similar to the hardware-error-free
+accuracy for all datasets. Comparing Figure 15 and Figure 14,
+we can ﬁnd that reducing cell resistance deviation can help
+to improve the inference accuracy, and it is more eﬀective
+than increasing the R-ratio.
+
+original
+accuracy
+99.99%
+88.67%
+90.53%
+
+!'$#*#'"#  **(** +#
+"",* "-
+
+5.2.1 R-ratio. We ﬁrst show the impact of R-ratio on
+the inference accuracy by varying the R-ratio from 10 to
+50, with ﬁxed Ron and resistance deviation (σ) setting3 .
+Figure 14(a) shows that the error rate of each sum-of-products
+result decreases as the R-ratio increases, since increasing
+R-ratio reduces the overlapped region between LRS and
+HRS resistance distribution. For example, the error rate of 0
+decreases from 25% to 0% when the R-ratio increases from
+10 to 50. The decrease in error rates per bitline leads to the
+improvement of inference accuracy, as shown in Figure 14(b).
+For MNIST, the error-injected inference accuracy reaches
+the original accuracy (99.99%) when R-ratio ≥ 25. However,
+CIFAR-10 and YTF can achieve only 59.33% and 62.00%
+inference accuracy even when R-ratio = 50, as these two
+models are deeper than the model of MNIST and the error
+propagation at deeper networks exacerbates the accuracy
+degradation problem. These results imply that chip designers
+can choose an ReRAM cell with higher R-ratio to improve
+inference accuracy and deeper neural networks require larger
+R-ratio to avoid serious accuracy loss.
+
+
+
+
+
+
+!
+
+* +%( 
+ !   !  !
+
+ !
+
+
+   
+ &,# 
+
+
+ 
+##)
+
+
+
+
+* +%( 
+
+
+!  !  !  !  !
+
+.!
+
+
+
+
+
+ &,# 
+
+
+
+
+
+
+
+* +%( 
+ .!
+ . !  .!
+
+ .!
+
+   
+
+
+
+ 
+
+
+
+* +%( 
+!  !  !  !  !
+
+Figure 15: Impact of resistance deviation on (a) bitline error
+rate and (b) inference accuracy.
+5.2.3 Operation unit. We also evaluate the impact of various SOU on the inference accuracy, as shown in Figure 16.
+In this experiment, σ = σb but diﬀerent R-ratios are chosen
+for diﬀerent datasets, so that we can start with a baseline
+(SOU = 9) setting that has room for accuracy improvement
+and degradation (i.e., the accuracy that is imperfect but not
+too low). Smaller SOU can help to alleviate the aggregation of
+cell resistance variance when performing dot-product computations with many non-zero inputs. Larger SOU can provide
+higher degree of parallelism and better performance, but
+would signiﬁcantly degrade the inference accuracy. Figure 16
+shows that the inference accuracy increases when smaller
+SOU is applied, especially at the datasets with deeper neural
+network (CIFAR-10 and YTF). These results imply that if
+
+5.2.2 Variance of cell resistance. In addition to cell Rratio, we also evaluate the impact of various cell resistance
+deviation (σ) on the inference accuracy. We choose the σ
+in prior work [6] as the baseline setting (σb ) and change
+σ from σb to 1/5 σb . ReRAM cell designers can use devicelevel techniques, such as program-and-verify, to reduce σ, and
+3
+
+
+
+Figure 14: Impact of R-ratio on (a) error rates per bitline and
+(b) inference accuracy.
+
+Table 2: Neural network model for the target datasets. (IL:
+integer length; FL: fractional length)
+Name
+
+
+
+
+
+
+
+
+
+
+
+
+'!' &'$$"&%!
+
+Figure 13: Validation of accumulated current distribution.
+
+5.2
+
+(*"& 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%! ( % 
++(-
+
+$# &(
+
+
+
+Ron and σ are set to the same as [6].
+7
+
+=== page 8 ===
+existing cell R-ratio and σ fail to provide an acceptable inference accuracy for the targeted deep learning applications,
+reducing the number of concurrently activated wordlines can
+also help to improve the inference accuracy.
+" $"
+&$'
+
+$%!# 
+
+
+
+
+
+
+
+ $%!# 
+
+
+
+
+
+
+
+  
+
+CIFAR-10, we can greatly improve the inference accuracy.
+For YTF, we shift IR [0] (resp. IR [1]) to right by 0.000265
+(resp. 0.000397) mA, as many sum-of-products result per
+bitline are zero and one.
+
+6
+
+ $%!# 
+
+
+
+
+
+
+
+  
+
+  
+
+Figure 16: Impact of operation unit size on inference accuracy.
+
+!
+#!%
+
+5.2.4 Safety guard band delta voltage. Figure 17 shows the
+impact of dVSA on inference accuracy. We ﬁx cell resistance
+(R-ratio=40 and σ=4/5 σb ) and vary dVSA from 0 to 50mV in
+this experiment. Results show that the accuracy decreases as
+dVSA increases, since a SA with larger dVSA is more likely to
+sense a wrong value. For MNIST, dVSA ≤ 35mV is enough
+to provide an accuracy similar to the hardware-error-free
+accuracy. However, for deeper and more complex CIFAR10 and YTF, dVSA must be lower than 20mV and 5mV to
+provide acceptable accuracy. This implies that choosing a SA
+with smaller dVSA can help to improve the inference accuracy
+and deeper neural networks require smaller dVSA .
+
+
+
+
+
+
+
+
+
+! "$
+
+
+
+ 
+
+7
+
+
+#"#
+
+$&
+$&
+"% #! 
+
+ $&
+
+
+
+
+
+
+
+
+
+
+
+$&
+
+
+#"#
+
+REFERENCES
+
+
+
+[1] P. Y. Chen et al. 2018. NeuroSim: A Circuit-Level Macro Model for
+Benchmarking Neuro-Inspired Architectures in Online Learning.
+IEEE TCAD (2018), 1–1.
+[2] W. H. Chen et al. 2018. A 65nm 1Mb nonvolatile computing-inmemory ReRAM macro with sub-16ns multiply-and-accumulate
+for binary DNN AI edge processors. In ISSCC. 494–496.
+[3] P. Chi et al. 2016. PRIME: A Novel Processing-in-Memory Architecture for Neural Network Computation in ReRAM-Based Main
+Memory. In ISCA. 27–39.
+[4] H. Esmaeilzadeh et al. 2012. Neural Acceleration for GeneralPurpose Approximate Programs. In MICRO. 449–460.
+[5] Ben Feinberg et al. 2018. Making Memristive Neural Network
+Accelerators Reliable. In HPCA. 52–65.
+[6] K.C. Hsu et al. 2015. A Study of Array Resistance Distribution
+and a Novel Operation Algorithm for WOx ReRAM Memory. In
+SSDM.
+[7] M. Hu et al. 2016. Dot-product engine for neuromorphic computing: Programming 1T1M crossbar to accelerate matrix-vector
+multiplication. In DAC. 1–6.
+[8] S. W. Keckler et al. 2011. GPUs and the Future of Parallel
+Computing. IEEE Micro (2011), 7–17.
+[9] A. Shaﬁee et al. 2016. ISAAC: A Convolutional Neural Network
+Accelerator with In-Situ Analog Arithmetic in Crossbars. In ISCA.
+14–26.
+[10] F. Su et al. 2017. A 462GOPs/J RRAM-based nonvolatile intelligent processor for energy harvesting IoE system featuring
+nonvolatile logics and processing-in-memory. In VLSI-TSA. T260–
+T261.
+[11] H. S. P. Wong et al. 2012. Metal-Oxide RRAM. Proc. IEEE
+(2012), 1951–1970.
+[12] L. Xia et al. 2017. MNSIM: Simulation Platform for Memristorbased Neuromorphic Computing System. IEEE TCAD (2017),
+1–1.
+
+#&#
+(&)
+
+Figure 18: The appearance rates of diﬀerent sum-of-products
+values when SOU =9.
+&' $ 
+&' $   &' $ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+&  #! %' " *
+
+&  #! %' " *
+
+CONCLUSION
+
+We propose DL-RSIM, a ﬂexible simulation framework, to precisely explore the impact of non-ideal circuit and device properties on the inference accuracy of various neural networks.
+DL-RSIM can help chip designers to choose reliability-friendly
+options and develop reliability optimization techniques based
+on DL-RSIM’s analysis. In the future, we plan to add performance and power estimation modules in DL-RSIM to enable
+more comprehensive design space exploration.
+
+Figure 17: The impact of dVSA on inference accuracy.
+
+
+
+
+
+
+# 
+
+RELATED WORK
+
+The two most well-known simulation platforms for ReRAMbased neural network accelerators are MNSIM [12] and NeuroSim [1]. MNSIM is a behavior-level simulation platform
+that provides ﬂexible interface for users through a hierarchical module structure, and it can be utilized to estimate the
+area, power, latency, and inference accuracy. Nevertheless,
+they use only worst and average case for simulation, resulting
+in less precise estimation on inference accuracy. NeuroSim is
+a circuit-level simulation tool that takes the impact of nonideal device and circuit properties into consideration when
+estimating the area, power, and performance of ReRAMbased accelerators. However, NeuroSim’s architecture is less
+ﬂexible, since it is ﬁxed on a 2-layer multi-level perceptron
+(MLP) neural network. Comparing to these prior studies, our
+DL-RSIM can provide detailed analysis on inference accuracy
+under diﬀerent hardware conﬁgurations and support ﬂexible
+simulation for any TensorFlow-based neural network models.
+
+&  #! %' " *
+
+Figure 19: Inference accuracy improvement provided by
+workload-dependent optimization on the sensing scheme.
+5.2.5 Workload-dependent sensing scheme. We propose
+and evaluate a workload-dependent sensing scheme to show
+that chip designers can use DL-RSIM to develop reliability
+optimization techniques for ReRAM-based deep learning
+accelerators. Figure 18 shows that small values (<5) occur
+more often than large values (≥5) when performing OUbased dot-product computation in all these three datasets.
+In particular, more than 40% of sum-of-products results
+per bitline are zero due to the sparsity of feature maps
+and synaptic weights in these datasets, especially MNIST.
+Thus, we change the oﬀset of the reference current when
+distinguishing 0 from 1 (IR [0]) to increase the opportunities
+of reading out 0. Figure 19 shows that through shifting
+IR [0] to right by 0.000397 and 0.000265 mA for MNIST and
+8

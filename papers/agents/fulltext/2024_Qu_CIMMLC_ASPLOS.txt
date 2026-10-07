@@ -1,0 +1,2626 @@
+# CIM-MLC: A Multi-level Compilation Stack for Computing-In-Memory Accelerators
+# id: W4394998365 | key: 2024_Qu_CIMMLC_ASPLOS | ASPLOS 2024 | card: ../cards/2024_Qu_CIMMLC_ASPLOS.md
+
+
+=== page 1 ===
+CIM-MLC: A Multi-level Compilation Stack for
+Computing-In-Memory Accelerators
+
+arXiv:2401.12428v2 [cs.AR] 8 May 2024
+
+Songyun Qu∗
+Shixin Zhao∗
+
+Bing Li
+
+Yintao He
+
+Capital Normal University
+Beijing, China
+bing.li@cnu.edu.cn
+
+Institute of Computing Technology,
+CAS, University of Chinese Academy
+of Sciences
+Beijing, China
+heyintao19z@ict.ac.cn
+
+Xuyi Cai
+
+Lei Zhang
+
+Ying Wang†
+
+Institute of Computing Technology,
+CAS, University of Chinese Academy
+of Sciences
+Beijing, China
+caixuyi18s@ict.ac.cn
+
+State Key Lab of Processors, Institute
+of Computing Technology, Chinese
+Academy of Sciences
+Beijing, China
+zlei@ict.ac.cn
+
+State Key Lab of Processors, Institute
+of Computing Technology, Chinese
+Academy of Sciences
+Beijing, China
+wangying2009@ict.ac.cn
+
+Institute of Computing Technology,
+CAS, University of Chinese Academy
+of Sciences
+Beijing, China
+qusongyun18z,zhaoshixin22s@ict.ac.cn
+
+Abstract
+
+Therefore, we propose CIM-MLC , a universal multi-level
+compilation framework for general CIM architectures. In this
+work, we first establish a general hardware abstraction for
+CIM architectures and computing modes to represent various
+CIM accelerators. Based on the proposed abstraction, CIMMLC can compile tasks onto a wide range of CIM accelerators
+having different devices, architectures, and programming
+interfaces. More importantly, compared with existing compilation work, CIM-MLC can explore the mapping and scheduling strategies across multiple architectural tiers in CIM,
+which form a tractable yet effective design space, to achieve
+better scheduling and instruction generation results. Experimental results show that CIM-MLC achieves 3.2× inference
+speedup on average compared to prior CIM-oriented compilation work. Opensource website https://cimmlc.github.io/
+
+In recent years, various computing-in-memory (CIM) processors have been presented, showing superior performance
+over traditional architectures. To unleash the potential of
+various CIM architectures, such as device precision, crossbar
+size, and crossbar number, it is necessary to develop compilation tools that are fully aware of the CIM architectural details
+and implementation diversity. However, due to the lack of
+architectural support in current popular open-source compiling stacks such as TVM, existing CIM designs either manually deploy networks or build their own compilers, which is
+time-consuming and labor-intensive. Although some works
+expose the specific CIM device programming interfaces to
+compilers, they are often bound to a fixed CIM architecture,
+lacking the flexibility to support the CIM architectures with
+different computing granularity. On the other hand, existing
+compilation works usually consider the scheduling of limited operation types (such as crossbar-bound matrix-vector
+multiplication). Unlike conventional processors, CIM accelerators are featured by their diverse architecture, circuit, and
+device, which cannot be simply abstracted by a single level
+if we seek to fully explore the advantages brought by CIM.
+
+ACM Reference Format:
+Songyun Qu, Shixin Zhao, Bing Li, Yintao He, Xuyi Cai, Lei Zhang,
+and Ying Wang. 2024. CIM-MLC: A Multi-level Compilation Stack
+for Computing-In-Memory Accelerators. In 29th ACM International
+Conference on Architectural Support for Programming Languages
+and Operating Systems, Volume 2 (ASPLOS ’24), April 27-May 1,
+2024, La Jolla, CA, USA. ACM, New York, NY, USA, 16 pages. https:
+//doi.org/10.1145/3620665.3640359
+
+∗ Both authors contributed equally to this research.
+† Corresponding author.
+
+1
+
+Permission to make digital or hard copies of part or all of this work for
+personal or classroom use is granted without fee provided that copies are
+not made or distributed for profit or commercial advantage and that copies
+bear this notice and the full citation on the first page. Copyrights for thirdparty components of this work must be honored. For all other uses, contact
+the owner/author(s).
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+© 2024 Copyright held by the owner/author(s).
+ACM ISBN 979-8-4007-0385-0/24/04.
+https://doi.org/10.1145/3620665.3640359
+
+Introduction
+
+Advancements in computer performance have been trapped
+by the famous “memory wall” problem for decades [45]. The
+advent of data-intensive workloads, like DNNs [32], further exacerbates this problem. As a promising technology
+to combat the memory wall, computing-in-memory (CIM)
+has garnered significant attention for its capability of reducing frequent data movement and parallelizing multiplyand-accumulate (MAC) operations. A variety of CIM-based
+1
+
+=== page 2 ===
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Songyun Qu, Shixin Zhao, Bing Li, Yintao He, Xuyi Cai, Lei Zhang, and Ying Wang
+
+architectures emerge, achieving significantly improved computing efficiency for DNN applications over traditional architectures [4, 6, 11, 13, 18, 39, 42].
+To fully exploit CIM, an efficient compilation tool that
+bridges the DNN scope and various CIM hardware is needed.
+However, the development of CIM accelerators shows the
+following trends that pose thorny challenges to the design of
+a general compilation tool: (1) The diversity of CIM memory devices. Unlike the traditional computing paradigm,
+CIM hinges on memory devices to perform computations, in
+which the attributes of memory devices, like their types and
+precision levels, exert a substantial influence on the feasible
+scheduling space within a CIM compilation framework. For
+example, when comparing SRAM[26] and ReRAM, although
+both have similar latency for read operations, the cost of
+writing data is considerably higher in ReRAM [3]. Thus,
+SRAM-based CIM supports flexible data read and write updates on CIM memory [6], while ReRAM-based CIM usually
+assumes that weights are frozen in the crossbar, avoiding the
+penalty of frequent writes [13, 39]. These factors seriously
+impact the scheduling strategy and space of a CIM compiler.
+(2) The diversity of CIM architectures. In contrast
+to the common tiled PE-arrays of typical DNN accelerators [12], the architecture of CIM exhibits a diverse and
+distinct organization[30], like the structure of an individual computing unit, the number of crossbars within each
+computing unit, crossbar size, etc. Consequently, the optimization space of the CIM compiler becomes much larger.
+The CIM compiler must possess an understanding of the
+manifold forms within CIM architecture when scheduling
+and mapping DNN operations onto CIMs.
+(3) The diversity of CIM programming interface. CIM
+architectures have rich hierarchies, and the manner in which
+they are exposed to programmers varies across different chip
+designs. For example, some CIMs support fined-grained rowwise operations to realize more general-purpose arithmetic
+except convolutions and matrix multiplication [27]. To fully
+exploit CIM architecture across different applications, researchers have developed the CIM-oriented programming
+interface [4, 19]. However, the existing programming interface is deeply bound to a specific CIM design. With different
+programming interfaces, the granularity of the elementary
+computing unit that the scheduler can manage during optimization varies. A fine granularity leads to a more complex
+scheduling space, which increases the difficulty of compilation optimization.
+Therefore, the key challenges to developing a generalpurpose CIM compiler are: 1. How to perform multi-dimensional
+hardware abstraction on CIM to enhance the generality of the
+compiler? 2. How to generate the optimal mapping and scheduling for different CIMs that expose different operation levels?
+Unfortunately, existing works are difficult to adapt to the
+diversity of CIM accelerators, and lack optimization considerations for the specific computing granularity in different
+
+CIMs, resulting in inferior performance and even failure of
+compiling. Some works manually deployed the model on
+CIMs [39] with customized mapping and scheduling policies
+that are hard to generalize to other CIMs. Some works proposed CIM-oriented compilation tools [2, 17, 22]. However,
+they are insufficient to tackle the above challenges. Most of
+the CIM compilers neglect the generality in their design. For
+example, Ambrosi et al. [2] propose a compilation tool that
+schedules matrix-vector computation (MVM) on a ReRAMbased architecture, but its performance degrades when the
+CIM architecture and computing granularity change. Meanwhile, they may also fail to fully explore the scheduling space
+of DNN operators at the corresponding computing level. For
+example, Han et al. [22] design a compilation tool to deploy
+DNNs on the ISAAC architecture [39] via an MVM-grained
+programming interface, but its optimization strategy stays
+at the computing graph level neglecting the opportunity
+to fine-control the crossbar resource allocation and MVM
+operation sequencing for better results.
+In this work, we propose a multi-level compilation stack
+for CIM accelerators to achieve more versatile and efficient
+compilation. In particular, we first introduce a three-tier
+architecture abstraction of CIM hardware, from the crossbar
+tier to the chip tier. Each tier has corresponding hardware
+architecture parameters, which can be designated to describe
+a particular CIM accelerator. Then, based on the hardware
+abstraction of CIM accelerators, we propose the computing
+mode abstraction with computing granularity ranging from
+fine to coarse to suit various programming interfaces. At
+different computing modes, we abstract the basic operation
+types of a CIM accelerator as meta-operator sets, specifically
+supported operators in the CIM like memory row read/write,
+and MVM operator with crossbars. We can then use the metaoperator sets to represent the computation process of DNNs
+on CIM accelerators.
+Within the provided software and hardware space, we propose a multi-level scheduling approach to optimize mapping
+and scheduling for different computing modes. According
+to the computing mode given by the target CIM, our policy
+progressively optimizes computations from coarse-level computing graphs to fine-level vector computing operations and
+generates the corresponding meta-operator flow. Compared
+to existing compilation methods that optimize schedules at
+a single computational level, such as the DNN computing
+graph, our approach offers a more holistic optimization perspective, resulting in higher computing efficiency.
+The contributions of this work are summarized as follows:
+• This paper proposes a compilation stack, CIM-MLC,
+which enables automatic compilation for various CIM
+accelerators. In CIM-MLC, we propose a hardware
+abstraction of hierarchical architecture and computing
+mode of CIM architecture to support a wide range of
+CIM accelerators.
+2
+
+=== page 3 ===
+CIM-MLC: A Multi-level Compilation Stack for Computing-In-Memory Accelerators
+
+Background and Motivation
+
+2.1
+
+The Diversity of CIM for DNNs
+◆ SRAM-Based
+
+ ReRAM-Based
+Coarse
+
+Programming
+interface
+
+ nvCIM[46]
+ XNOR-RRAM[43]
+◆ XNOR-SRAM[49]
+◆ Vesti[48]
+◆ ConvSRAM[6]
+
+2.2
+
+activation
+
+OR
+
+load
+
+store
+
+Compilation Tools for CIM
+
+Neural network compilers for different computing architectures have been widely discussed in prior works, such
+as TVM [9]. However, existing machine learning compilers primarily focus on compilation optimization related to
+traditional architecture hardware where the memory and
+computing units are separated [7, 10, 14, 20, 37, 38, 44]. As
+Figure 2 shows, traditional architecture and CIM are totally
+different computation paradigms. As for traditional architectures being bottlenecked by memory accesses, their compilation tools are composed of optimization methods for
+memory efficiency improvement. For instance, the popular
+loop unrolling and unfolding approaches in the traditional
+compilation tools are for improving data locality [31]. In
+contrast, CIM architectures performing computations inside
+memory [25, 39] shall focus on improving the efficiency of
+in-situ computation instead of improving the memory efficiency in the compilation techniques and hence desire a
+specific compilation tool.
+Some researchers have noticed the problem and developed
+some CIM compilation tools [17, 22]. However, we observe
+these works are inadequate as a general compilation tool
+for CIM when summarizing them from the dimensions of
+
+ FORMS[50]
+ SRE[47]
+
+Multi-tier
+
+Single-tier
+
+DAC
+
+activation
+
+ PUMA[4]
+ Zhu et al.[51]
+ IMDP[19]
+ FPSA[28]
+ ISAAC[39]
+ PRIME [13]
+
+◆ Neural Cache[18]
+
+Fine
+
+weight
+
+ISSAC [39] and MAX2 [34] ) while others do not (e.g., a
+single-tier hierarchy only having tiled crossbars in ConvSRAM [6] and nvCIM [46]). Additionally, even though ISAAC
+and PUMA [4, 39] have a similar hierarchical structure, they
+still use different crossbar sizes and the number of crossbars.
+Accordingly, their model mapping ways are different. The
+scheduling space during the compilation is different as well.
+The programming interface refers to the computing granularity that CIM can support from the users’ view. As for the
+coarse-grained programming interface, the DNN computation is decomposed into convolution operations and then is
+performed by CIM cores (e.g., Jia et al.’s work [29]), while
+for the fine-grained programming interface, the bit-wise
+vector operations are supported by CIM crossbars (e.g., ConvSRAM [6]). Other works propose to decompose DNN operators and schedule MVM-grained operation in CIM crossbars [4, 19, 36, 43, 49]. To sum up, the diversity of existing
+CIMs for DNN raises a growing demand for an efficient general compilation tool.
+
+ ReRAM-RNN[33]
+
+⚫ GUO et al.[21]
+
+Computing unit
+
+Figure 2. Computation dataflow comparison of (a) CIM and
+(b) traditional architecture.
+
+ MAX2[34]
+
+⚫ Han et al.[23]
+
+(b) Memory unit
+
+S&H
+ADC
+S&A
+IR
+
+⚫ FLASH-Based
+
+◆ Jia et al.[29]
+
+weight
+
+(a)
+
+• Then, we propose a multi-level DNN scheduling approach, which realizes the flexible DNN operators mapping and scheduling based on the computing granularity exposed by specific CIM accelerators. We conduct
+thorough optimization at each abstraction level to generate the operation flow. The proposed multi-level optimization flow covers a much broader scheduling space
+than the previous graph or MVM-level scheduling but
+also avoids the intractability faced by single-level finegrained scheduling.
+• Compared with existing compilation work [22], the
+proposed CIM-MLC can improve the inference speed
+by up to 3.2×. We also verify the proposed compilation stack on existing CIM accelerators, PUMA [4],
+CIM work [27] and CIM work [29], to demonstrate
+the generality of CIM-MLC. Experiments show that
+CIM-MLC can accelerate the inference speed of CIM
+work [27] and CIM work [29] by 2.3× and 3.7×, respectively, while reducing the peak power consumption by
+75% for PUMA [4].
+
+2
+
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Architecture hierarchy
+
+Figure 1. Diversity of CIM architecture.
+Researchers have proposed various CIM-based DNN accelerators. We sort out the designs of recent CIM accelerators
+from three dimensions: memory device, architecture hierarchy, and programming interface, and summarize them
+in Figure 1 [4, 6, 13, 18, 19, 21, 23, 28, 29, 33, 34, 39, 43,
+46–51]. SRAM, ReRAM, and FLASH are included in the dimension of the memory device. Their different read/write
+latency and storage density affect the data mapping and
+scheduling policy of these CIMs. For example, the write latency of ReRAM/FLASH is relatively long, so CIMs based
+on ReRAM/FLASH often ford write operations during computation (e.g., Guo et al. [21] and PRIME [13]). As for the
+architecture hierarchy, some CIM designs hierarchically organize tiles, cores, and crossbars from top to bottom (e.g.,
+3
+
+=== page 4 ===
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Songyun Qu, Shixin Zhao, Bing Li, Yintao He, Xuyi Cai, Lei Zhang, and Ying Wang
+
+Table 1. Comparison of the generality of this work and the existing works.
+
+PUMA [2, 4]
+IMDP [19]
+TC-CIM [17]
+Polyhedral-based [22]
+OCC [40]
+Ours
+
+Input
+
+CIM
+architecture
+
+SRAM
+×
+×
+×
+×
+✓
+✓
+
+Hardware abstraction
+Architecture parameters
+(Abs-arch)
+&
+Computing mode
+(Abs-com)
+Section 3.2.1-3.2.3
+
+Supported Device Type
+
+Supported Programming Interface
+
+ReRAM
+✓
+✓
+✓
+✓
+✓
+✓
+
+VVM
+×
+✓
+×
+×
+✓
+✓
+
+Arch.
+Info
+Mode
+Info
+
+MISC(e.g., PCM, FLASH)
+/
+/
+/
+/
+/
+✓
+
+MVM
+✓
+✓
+✓
+✓
+✓
+✓
+
+/
+MVM
+MVM
+MVM
+MVM, MM, Conv
+/
+VVM, MVM, DNN Operators
+
+Core-tier abstraction
+
+Chip-tier abstraction
+
+CG-grained optimization
+Section 3.3.2
+
+DNN Operators
+×
+×
+×
+✓
+×
+✓
+
+Optimization Granularity
+
+CIM is XBM or Y
+WLM
+
+Crossbar-tier abstraction
+
+MVM-grained
+optimization
+Section 3.3.3
+
+CIM is WLM
+
+Meta-operator flow
+
+N
+Endo
+
+Y
+
+VVM-grained
+optimization
+Section 3.3.4
+
+NN model
+
+Meta-operator flow
+Output Use meta-operators specific
+to CM
+
+N
+Endo
+
+Use meta-operators specific
+to XBM
+
+Meta-operator flow
+Use meta-operators specific
+to WLM
+
+Figure 3. Overall workflow of CIM-MLC.
+the device type, programming interface, and optimization
+granularity (as shown in Table 1).
+Considering the device types involved, PUMA [2, 4] and
+IMDP [19] present compilation methodologies tailored to
+particular CIM architectures that rely on ReRAM. However,
+these approaches lack interoperability with alternative devices and programming interfaces. A few works have explored general compilation frameworks. TC-CIM [17] and
+Polyhedral-based [22] harness polyhedral models to facilitate the compilation process on CIM accelerators, which
+automatically identify and map MVM operations inherent
+in DNNs onto CIM. However, these two works also mainly
+focus on ReRAM-based CIM and assume that there are ample
+memory resources available for parameter loading or duplication, which overlooks crucial facts of resource-constrained
+situations that are typically encountered in SRAM-based
+CIMs. Relatively, OCC [40] is a comprehensive compilation
+that encompasses abundant device types as well as numerous programming interfaces. Built upon a specialized MILR
+with an ISA, this work enables the optimization at various
+levels of granularity. Nonetheless, this work does not incorporate the coarser-grained programming interface like the
+DNN operator and does not explore the mapping optimization of DNN computation on CIMs. To summarize, current
+research on CIM compilers lacks sufficient abstraction of
+hardware and is limited in support for various architectures
+and programming interfaces in CIM accelerators.
+Regarding optimization granularity, most of the works [2,
+4, 17, 22] support the mapping and optimization of DNN at
+the level of MVM operations. However, due to the increased
+complexity of the scheduling space, existing work has not
+
+fully explored the optimization possibilities at the MVM
+granularity. For example, some of them [2, 4, 22] support
+the pipeline inter-network layers but do not consider the
+computing pipeline opportunity at the MVM-grained. In
+fact, optimizing the scheduling of MVM operations helps to
+further optimize computing efficiency.
+
+3
+
+Methodology
+
+3.1 Overview
+Figure 3 demonstrates the overview of the proposed CIMMLC. Existing CIM compilation works have poor generality
+because of their single-level scheduling policy, while CIMMLC is a general compiler that features unified abstraction
+from diverse hardware and multi-level scheduling with abundant meta-operators. The hardware abstraction provides the
+same description interface of architecture parameters (Absarch) and computing mode (Abs-com) to various CIM designs.
+To decouple the data mapping and computing scheduling
+with one architectural design, we propose the multi-level
+scheduling technology to handle the computing mode for different architectural tiers in CIMs. The multi-level scheduler
+tailors the optimization method for each computing mode,
+applies the optimization method independently or jointly according to the abstraction of the CIM accelerator, and finally
+generates the meta-operator flow for the CIM accelerator.
+
+3.2
+
+CIM Hardware Abstraction
+
+In order to support a wide range of CIM accelerators, we
+first construct the hardware abstraction, covering two key
+4
+
+=== page 5 ===
+CIM-MLC: A Multi-level Compilation Stack for Computing-In-Memory Accelerators
+(a) Chip
+
+B
+
+C A Core
+T
+R
+Core
+L
+
+C
+T
+R
+L
+
+B ALU
+
+Core
+
+Core
+
+Core
+
+Core
+
+C A
+XB
+T
+R
+L
+XB
+
+Core
+
+Core
+
+XB
+
+(e) XBM
+
+Buffer
+A
+L
+U
+
+(c) Crossbar (XB)
+
+D L1 Buffer
+
+ALU
+C
+
+Core
+
+(d) CM
+
+(b) Core
+
+D L0 Buffer
+
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Core
+
+Core
+
+Core
+
+Core
+
+Activate one or more cores
+
+C
+T
+R
+L
+
+Reg File
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+C
+
+XB
+
+XB
+
+XB
+
+XB
+
+Activate one or more physical XBs
+
+D
+
+A
+
+C
+
+SRAM
+
+B
+
+D
+A
+C
+C ADC
+
+(f) WLM
+
+Buffer
+A
+L
+U
+
+C
+T
+R
+L
+
+ReRAM
+Flash, STT-MRAM
+……
+
+Reg File
+C
+D
+T
+A
+R
+C
+L
+
+ADC
+
+Activate partial rows
+
+Figure 4. CIM Hardware Abstraction.
+parameter
+
+description
+
+format
+
+3.2.1 Chip tier architecture abstraction and core mode.
+As shown in the Figure 4(a), in the chip tier, multiple cores
+( A ) connected via a network-on-chip (NoC C ) are grouped
+into a single chip, each used for operators like convolution.
+A shared on-chip memory ( D ) is used for data storage, and
+digital arithmetic logic units (ALU B ) are used for computations beyond the scope of CIM-supported operators.
+At this tier, the minimum scheduling granularity provided
+by the CIM architecture is core. We abstract its computing
+mode as core mode (CM). In this mode, the compiler assigns
+one or more cores to complete one DNN operator (e.g., convolution) according to the operator’s demand and the core’s
+capability. The scale of computation supported by a single
+core and the total number of cores determine the maximum
+number of operators that can be concurrently mapped on
+a chip. Hence, we employ the parameter core_number to
+record the total number of cores within the chip, thus abstracting the chip’s CIM computational capacity.
+The ALU performs commonly used neural network operators such as activation functions, pooling, and CIM-specific
+operations like shift-accumulate. ALU’s functionality and
+computational speed impact the compilation of digital computation operators. We use ALU to denote the ALU computation speed and the functionality will be recorded by
+meta-operator, which we will show in Section 3.3.2.
+The type of on-chip network and data transfer rate determine the data transfer efficiency between cores. We use
+core_noc and core_noc_cost to abstract the on-chip network. Meanwhile, as the storage capacity and bandwidth
+of the global buffer jointly determine the execution time of
+data movement, L0 size and L0 BW are employed to record
+on-chip buffer capacity and bandwidth.
+The architecture parameters in chip tier are summarized
+in the Figure 5. We use the above mentioned parameters to
+abstract the CIM architecture characteristics in the chip tier
+and expose the parameters to the compilers in CM. CIMMLC will combine the characteristics of operators in DNN
+and CIM architecture parameters to optimize latency and
+energy consumption during operator mapping.
+
+of cores per row *
+𝑐𝑜𝑟𝑒_𝑛𝑢𝑚𝑏𝑒𝑟 The number of cores in the chip [number
+number of cores per column]
+
+𝐴𝐿𝑈
+𝑐𝑜𝑟𝑒_𝑛𝑜𝑐
+
+Digit computing capacity
+Network on chip(NoC) type
+
+𝑐𝑜𝑟𝑒_𝑛𝑜𝑐_𝑐𝑜𝑠𝑡 Network on chip(NoC) cost
+𝐿0 𝑠𝑖𝑧𝑒
+𝐿0 𝐵𝑊
+
+Global buffer size
+
+Global buffer bandwidth
+
+X operations per second
+'Mesh', 'H-tree', etc
+matrix record the data transfer
+cost between each core
+
+X kb
+X b/cycle
+
+Figure 5. Chip tier architecture abstraction parameters.
+parameter
+
+description
+
+𝑥𝑏_𝑛𝑢𝑚𝑏𝑒𝑟
+
+The number of xbs in the core
+
+𝐴𝐿𝑈
+𝑥𝑏_𝑛𝑜𝑐
+𝑥𝑏_𝑛𝑜𝑐_𝑐𝑜𝑠𝑡
+
+𝐿1 𝑠𝑖𝑧𝑒
+𝐿1 𝐵𝑊
+
+Digit computing capacity
+NoC type
+
+NoC cost
+Local buffer size
+
+Local buffer bandwidth
+
+format
+[number of xbs per row *
+number of xbs per column]
+X operations per second
+'Mesh', 'H-tree', etc
+matrix record the data transfer
+cost between each xb
+
+X kb
+X b/cycle
+
+Figure 6. Core tier architecture abstraction parameters.
+aspects: the architecture parameters (Abs-arch) and the computing modes (Abs-com), respectively. We model the CIMbased DNN accelerator as a hierarchical architecture, which
+contains three tiers from top to bottom: (a) chip, (b) core,
+and (c) crossbar. Meanwhile, similar architectures may support different levels of CIM operation granularity. Some CIM
+designs only support specific operators or fixed-granularity
+MVM computation, while others offer interfaces for controlling rows, enabling a wide range of computation. So,
+we design a three-level computing abstraction for CIM. As
+illustrated in Figure 4(d)-(f), the top-to-bottom levels are
+Core Mode (CM), Crossbar Mode (XBM), and Wordline Mode
+(WLM), denoting the coarse-grained to fine-grained DNN
+operators, respectively. Architecture abstraction tiers and
+computing mode abstraction levels maintain a one-to-one
+correspondence. The hardware scheduling granularity provided by the CIM architecture determines the supported computing mode and the architecture abstraction parameters exposed to the compiler. We also develop a comprehensive set
+of meta-operators, which facilitate compilation scheduling
+optimization and instruction generation and enable users to
+define and customize hardware-supported operations within
+our framework.
+
+3.2.2 Core tier architecture abstraction and crossbar
+mode. As shown in the Figure 4 (b), the core tier abstraction
+includes the features within a core, which consists of multiple
+5
+
+=== page 6 ===
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Matrix
+Dimension
+
+R
+C
+B
+
+XB
+XBR
+XBC
+
+CIM crossbar
+Dimension
+
+Songyun Qu, Shixin Zhao, Bing Li, Yintao He, Xuyi Cai, Lei Zhang, and Ying Wang
+R : matrix row
+C : matrix column
+B : data bit-width
+XB : crossbar
+XBR : crossbar row
+XBC : crossbar column
+
+these parameters to map operators to crossbars, optimizing
+the crossbar utilization.
+3.2.3 Crossbar tier architecture abstraction and wordline mode. As shown in the Figure 4 (c), The crossbar tier
+abstraction serves as the fundamental computational unit,
+describing the details component within the crossbar. The
+crossbar tier has a memory crossbar ( A ) with its peripheral
+circuits (e.g., wordline drivers, bitline drivers, and signal converters (ADC C , DAC C , etc.)). Each crossbar array’s rows
+( B ) can work independently.
+At this tier, the minimum scheduling granularity provided
+by the CIM architecture is rows. We abstract this as wordline
+mode (WLM) and use parallel row to record the number
+of rows that can be activated concurrently. The mode allows
+the CIM to optimize the power cost or alleviate the variation
+by closing partial rows of one crossbar [27, 47]. Users can define the number of rows that can be activated simultaneously
+in a crossbar. Meanwhile, the shape of the crossbar determines the maximum scale of matrix-vector multiplication
+calculations. So, we use the parameter xb_size to record the
+size of a crossbar.
+The attributes of memory cell ( D ) within the crossbar
+profoundly impact the computation process. Additionally,
+memory cell precision influences data representation and
+the requisite number of crossbars for operators, affecting
+scheduling decisions. Hence, we use the parameters Type
+and Precision to respectively record the memory cell type
+and precision.
+For the peripheral circuits, the Analog-to-Digital Converter (ADC) or a special sense amplifier usually performs
+pre-defined calculations on the readout analog signals from
+the crossbar. The Digital-to-Analog Converter (DAC) is also
+needed to complete data signal conversion. The precision of
+DAC and ADC influences computation accuracy and latency.
+We use parameters DAC and ADC to record the precision of
+DAC and ADC.
+The architecture parameters in crossbar tier are summarized in the Figure 8. We expose the whole three tiers of
+architecture abstraction parameters to the compiler in WLM.
+CIM-MLC will transform the computing process in DNNs
+into the row-wise read and write of the CIM crossbar.
+
+Figure 7. Dimension binding for DNNs mapping on CIM
+crossbar.
+parameter
+𝑥𝑏_𝑠𝑖𝑧𝑒
+
+𝐷𝐴𝐶
+
+DAC precision
+
+format
+[number of cells per row
+* number of cells per column]
+X bit
+
+𝐴𝐷𝐶
+
+ADC precision
+
+X bit
+
+𝑇𝑦𝑝𝑒
+
+type of storage cell
+
+𝑃𝑟𝑒𝑐𝑖𝑠𝑖𝑜𝑛
+𝑝𝑎𝑟𝑎𝑙𝑙𝑒𝑙 𝑟𝑜𝑤
+
+description
+The shape of crossbar
+
+‘SRAM’, ‘ReRAM’, etc
+X bit
+precision of storage cell
+Maximum number of rows that can be activated simultaneously
+
+Figure 8. Crossbar tier architecture abstraction parameters.
+
+crossbars ( A ), local buffers ( D ), and digital computation
+units ( B ). The crossbars are connected via NoC ( C ).
+The minimum scheduling granularity at this tier is crossbar, which we abstract as crossbar mode(XBM). One or multiple crossbars work together to complete one matrix-vector
+multiplication in this mode. Similar to chip tier, we use the
+xb_number to record the number of crossbars that work
+at the same time, which can decide the maximum scale
+of matrix-vector multiplications that can be concurrently
+mapped on the core. The convolution operator in DNN is decomposed into a sequence of matrix-vector multiplications
+in the XBM.
+To accommodate different CIM designs for executing MVM
+on crossbars [4, 39, 42, 51], we introduce the concept of
+VXB (Virtual Crossbar) as the computational unit rather than
+physical crossbars to facilitate the computing scheduling in
+the compiler. A dimension-binding scheme is designed to
+construct a VXB, specifying which crossbars collaborate to
+perform a single MVM. Figure 7 illustrates the dimensionbinding scheme, where the matrix dimension has matrix row
+(R), column (C), and data bit-width (B). The computing crossbar dimension refers to the crossbar itself (XB), crossbar row
+(XBR), and column (XBC). Figure 7 shows that the matrix dimension R/C/B is bound to the XBR/XBC/XBC, respectively.
+This binding represents that the data bits are spread to the
+adjacent column in the crossbar. If the matrix dimension B is
+bound to the XB, the data bits will be spread to the different
+crossbars.
+Similar to chip tier, we utilize ALU to denote the speed of
+the digital computation unit, xb_noc and xb_noc_cost for
+NoC abstraction, and L1 size and L1 BW to represent the
+local buffer characteristics at the core tier.
+The architecture parameters in core tier are summarized in
+the Figure 6. These chip and core tier parameters are exposed
+to the compilers in XBM as core tier abstraction records the
+architecture details within the core, and chip tier parameters
+record the whole top tier architecture. CIM-MLC leverages
+
+3.3
+
+Multi-Level Scheduling
+
+With the architecture abstraction and computing mode, we
+apply a multi-level scheduling strategy to optimize the efficiency of DNN inference on CIM, achieving low-latency, high
+energy-efficient deployment of models. For each computing
+mode abstraction in the associated abstracted architecture
+tier, we design the optimization method.
+Next, we introduce the whole workflow and the detailed
+optimization methods in the multi-level scheduling strategy.
+3.3.1 Multi-Level Scheduling workflow. The compilation process is illustrated in Figure 3. Firstly, the compiler
+6
+
+=== page 7 ===
+CIM-MLC: A Multi-level Compilation Stack for Computing-In-Memory Accelerators
+Conv weight
+
+Conv weight
+Core
+
+Conv weight
+
+(a)
+
+Conv
+Conv
+
+Relu
+
+Relu
+Conv
+
+Feature map
+DNN
+computing
+graph(CG)
+
+(b)
+
+Meta-operator flow Syntax
+<code> ::=<operators>* | parallel “ { ” <operators>* “ } ”
+<operators> ::= <operators>* <CIM>* <DCOM>* <DMOV>*
+<DCOM> ::=Relu(src,dst,len) | add(src1,src2,dst,len)…
+<DMOV> ::=mov(src,dst,len)
+
+Duplicate
+
+Core
+
+Sub feature map
+
+CIM can hold
+whole DNN
+
+Y
+
+N
+Chip tier
+architecture
+parameters
+
+Extract the largest
+sub-graph that can
+be hold on CIM
+
+Input
+pipelined duplication
+
+Dynamic
+programming
+
+Figure 10. The syntax of code generation in Backus Naur
+Form (BNF).
+
+Operator
+duplication
+
+Pipeline
+balance
+
+Sub-graph
+CG
+
+All node belong to
+a sub-graph
+
+Y
+
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Sub-graph
+set
+
+Output
+N
+resource-adaptive compute graph segmentation
+
+CG-grained Codegen Syntax
+<CIM> ::= <MOP_CM>
+<MOP_CM> ::= cim.readcore (type, params, coreaddr, src, dst)
+
+Figure 9. CG-grained optimization (a) Operator duplication
+illustration (b) Optimization algorithm.
+
+MOP_CM Semantics
+Data from src with parameters params are performed type operation,
+like convolution, on core coreaddr . The result is placed in Buffer dst.
+
+gets the DNN models in ONNX format [5]. ONNX represents
+the model by computation graph, in which nodes correspond
+to operators, and edges denote the data dependency between
+each operator. The compiler progresses from coarse to fine
+granularity, optimizing the computations in Computational
+Graph Grained (CG-Grained), Matrix-Vector Multiplication
+Grained (MVM-Grained), and Vector-Vector Multiplication
+Grained (VVM-Grained). These optimizations are tailored
+to the CM, XBM, and WLM architectures. We adopt a multilevel joint scheduling optimization strategy to explore the
+scheduling space of the CIM architecture effectively.
+When targeting the CM architecture, the compiler performs scheduling optimization at the CG-grained only. CGgrained optimization aims to explore operator duplication
+and pipeline strategies while considering resource constraints.
+The compiler takes the ONNX model and chip-tier hardware
+parameters as inputs. The optimization information for each
+operator is recorded by adding attributes to the nodes in
+the ONNX graph, such as the operator’s duplication. For the
+XBM architecture, the compiler inherits the optimization
+results from the CG-grained, and chip and core-tier hardware parameters to perform the MVM-grained optimization.
+MVM-grained optimization further explores the finer operator duplication and pipeline before mapping operators to
+the crossbars. When dealing with the WLM mode architecture, the compiler builds upon the optimizations from the
+CG-grained and MVM-grained and, at a finer granularity of
+row scheduling, performs optimization at the VVM-grained.
+
+Figure 11. The syntax of CG-grained codegen in BNF format
+and MOP_CM semantics.
+
+pipeline of DNN operators on CIM cores under the total
+core_number constraint. As shown in the Figure 9 (a), the operator duplication strategy enhances computational throughput by appropriately duplicating CIM-supported operators
+on cores. Meanwhile, the inter-operator pipeline strategy
+seeks to enhance execution efficiency.
+Considering various hardware resource constraints of the
+CIM architecture, we propose a resource-adaptive compute
+graph segmentation and intra-segment dynamic balancing
+pipelined duplication algorithm as Figure 9 (b) illustrated.
+This algorithm takes the ONNX format computation graph
+and chip-tier hardware parameters as input and outputs the
+subgraph set of the computing graph and the duplication
+results for CIM-supported operators.
+First, we initialize the resources and computation latency
+of each node. For convolution nodes, the computation latency scales with the output feature map size. We use dynamic programming to search for all operators’ duplication
+numbers under the core_number constraint. Then, to avoid
+the pipeline stall because of the imbalance between computing and data access of adjacent layers, we adjust the
+duplication number for each node. Meanwhile, considering
+the constraint of core_noc_cost and L0 BW, CIM-MLC will
+update the duplication number to keep the data transfer
+amount within the NOC and buffer capability. Once the CIMunsupported node, like Relu, follows the operator, we will
+also update the duplication number under the constraint of
+ALU.
+As for the case that CIM resources are not able to hold a
+whole DNN, we iteratively construct the maximal sub-graphs
+that can fit within CIM capacity. For each constructed computation sub-graph, we update it by successively popping
+the last nodes from the subgraph. Then, we use the dynamic
+programming algorithm to get the latency of the remaining
+computation sub-graph after a node is popped out. Once the
+
+3.3.2 CG-Grained Optimization. In the core mode, the
+compiler maps DNN operators onto cores following the chip
+tier architecture parameters. We propose a computing graphgrained optimization approach to improve operator mapping,
+all without altering the operator execution process. The primary objective of this optimization level is to judiciously
+utilize hardware resources, thereby reducing latency and
+power consumption.
+Current graph-level optimization technology often overlook hardware characteristics [9]. We introduce a novel CGgrained optimization, exploring the duplication scheme and
+7
+
+=== page 8 ===
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+CG-grained duplication
+Core
+
+Core
+
+Core
+
+Multi cycle input
+
+OP 1
+
+𝑆2 0_0
+
+VXB0 VXB1
+
+0
+
+Core
+
+4 3 2 1 0
+
+Duplication: 2
+(b) 𝑆1 4 𝑆1 3 𝑆1 2 𝑆1 1 𝑆1 0
+(a)
+MVM-grained duplication
+Output
+VXB
+
+XB
+
+feature map
+
+Songyun Qu, Shixin Zhao, Bing Li, Yintao He, Xuyi Cai, Lei Zhang, and Ying Wang
+
+1
+out0
+out1
+out2
+out3
+
+2
+3
+𝑆2 0_1
+
+Specifically, MVM-grained optimization explores two key
+techniques: the duplication of the operator in the crossbars
+and MVM-grained computing pipeline to boost the computing throughput under the power limitation. The compiler
+receives the segmentation of the computing graph enriched
+with CG-level optimization information and chip and coretier hardware abstraction, completing the MVM-grained optimization under the constraints of available xb_number.
+We updated the duplication number of an operator within
+crossbars (as shown in Figure 12 (a)), which get the duplicated
+number using the following Equation:
+
+OP 2
+VXB2
+
+VXB3
+
+VXB4
+
+VXB5
+out
+
+Duplication: 3
+
+Activated crossbars: 6xbs
+(c)
+
+𝐒𝟏 𝟎 , xb{0,1} 𝐒𝟏 𝟏 , xb{0,1}
+
+𝐒𝟏 𝟐, xb{0,1}
+
+𝐒𝟏 𝟑, xb{0,1}
+
+(d)
+
+𝐒𝟏 𝟎 , xb{0,1} 𝐒𝟏 𝟏 , xb{0,1}
+
+𝐒𝟏 𝟐, xb{0,1}
+
+𝐒𝟐 𝟎_𝟏, xb{4,5}
+
+𝐒𝟏 𝟑, xb{0,1}
+
+2
+
+3
+
+𝐒𝟏 𝟒, xb{0,1}
+𝐒𝟐 𝟎_𝟏, xb{4,5}
+
+𝐒𝟐 𝟎𝟎 , xb{2,3}
+
+1
+
+𝐒𝟏 𝟒, xb{0,1}
+
+𝐒𝟐 𝟎_𝟎, xb{2,3}
+
+Activated
+crossbars:
+4xbs
+
+4
+
+5
+
+cycle
+
+𝐷 ′𝑂𝑖 = ⌊
+
+Figure 12. MVM-Grained Optimization (a) Operator duplication at VXB granularity (b) MVM-grained operator mapping
+and pipeline (c) Traditional pipeline activated crossbars (d)
+MVM-grained pipeline activated crossbars.
+
+𝑂𝑖 ∗ 𝐶𝑜𝑟𝑒
+𝑖
+𝑛𝑢𝑚𝑂
+𝑉𝑋𝐵
+𝑐𝑜𝑟𝑒 ∗ 𝐷
+𝑂𝑖
+𝑛𝑢𝑚𝑉
+𝑋𝐵
+
+⌋,
+
+(1)
+
+where 𝐶𝑜𝑟𝑒𝑉 𝑋 𝐵 is the number of VXBs in each core, 𝐷 𝑂𝑖
+is the duplication number of the operator determined by
+𝑖
+the CG-grained optimization, 𝑛𝑢𝑚𝑂
+𝑐𝑜𝑟𝑒 is the number of cores
+𝑂𝑖
+occupied by this operator 𝑂𝑖 , 𝑛𝑢𝑚𝑉 𝑋 𝐵 is the number of VXBs
+occupied by this operator 𝑂𝑖 , which can be calculated based
+on the dimension and the size of VXB and the operator.
+Usually, one operator demands multiple VXBs to store its
+weights and complete the calculation.
+MVM-grained computing pipeline strategically staggers
+the activation time of different crossbars to reduce peak
+power consumption as illustrated in Figure 12 (b). As we need
+to map a matrix-vector multiplication to multiple crossbars,
+we usually wait until all crossbars receive their inputs before
+computing in the traditional scheduling [39]. The pipeline
+strategy we propose, however, activates a crossbar as soon as
+it receives its input, completing the computing mapping to
+the crossbar. This reduces the number of crossbars that need
+to be activated simultaneously, thus lowering peak power
+consumption.
+In the example, Operator 1 (OP 1) is mapped to VXB 0 and
+VXB 1, and Operator 2 (OP 2) is mapped to VXB 2-5. Input
+𝑆 1𝑖, corresponding to one sliding window in convolution,
+enters OP 1’s VXBs in sequence to perform the MVM of
+the convolution operator, passing its output to OP 2. The
+traditional approach waits four cycles for OP 2 to begin its
+computation with 𝑆 2 0.(Figure 12 (c).) In our MVM-grained
+pipeline, after OP 1 takes two cycles, OP 2 can start running
+on VXB 2,3 and then run on VXB4,5 after the next cycle, as
+shown in Figure 12 (d). At most, four VXBs are activated
+simultaneously in contrast to that 6 VXBs in Figure 12 (c),
+reducing the peak power by ∼30%. Meanwhile, OP 2’s inputs,
+𝑆 2 0− 0 and 𝑆 2 0− 1, are half the size of 𝑆 2 0 in the traditional
+pipeline. Thus, the communication overhead in each computing stage is reduced, alleviating the pressure on on-chip
+bandwidth and the risk of pipeline stall.
+We obtain the updated duplication number and more compact pipeline in this optimization grained and we will pass
+the duplication result to the next optimization grained.
+
+latency no longer decreases, the construction of that subgraph is complete. The nodes that pop out will be used to
+construct the next maximal sub-graphs until all nodes are
+part of a single sub-graph and have duplication numbers
+assigned.
+Ultimately, we obtain the results of computing graph segmentation and operator duplication numbers at this grained
+optimization, which are subsequently passed on to the next
+optimization level.
+Meta-operator Flow Generation After the optimization, the compiler backend binds operator execution to the
+corresponding cores. As primitives used in the current ML
+compiler [31] can not support the description of CIM, we introduce a CIM meta-operator set tailored for CM (MOP_CM)
+to describe the hardware activation at the chip tier. As the
+Figure 11 shows, MOP_CM includes the 𝐶𝐼 𝑀.𝑟𝑒𝑎𝑑𝑐𝑜𝑟𝑒 instruction. In addition to the CIM meta-operators, we have
+also designed corresponding meta-operators for other operations (i.e., DCOM for digit computing operations and
+DMOV for data movement, respectively). Users have the
+flexibility to extend meta operators, aligning them with the
+hardware-supported functions. The compiler will compile
+relevant operators based on the provided meta-operators.
+The simplified syntax of code generation is shown in the Figure 10, in which the label parallel indicates the operators
+executing in parallel.
+3.3.3 MVM-Grained Optimization. As for the XBM, the
+compiler unrolls the CIM-supported operator to matrix-vector
+multiply and then maps and schedules the MVM to crossbars.
+We design MVM-grained optimization after completing CGgrained scheduling, aiming to improve resource utilization
+and computing throughput during the slide of weight kernels on feature maps in the convolution by effectively using
+the crossbars in each core.
+8
+
+=== page 9 ===
+CIM-MLC: A Multi-level Compilation Stack for Computing-In-Memory Accelerators
+MVM-grained Codegen syntax
+<CIM> ::= <MOP_XBM>
+<MOP_XBM> ::= cim.readxb xbaddr ,len |cim.writexb (xbaddr ,mat)
+cim.readxb
+
+MOP_XBM Semantics
+The len xbs from the xbaddr are readed, which complete
+the multiply of input and the data stored in the xbs
+
+cim.writexb
+
+The mat is written to the xbaddr
+
+VVM-grained Codegen Syntax
+<CIM> ::= <MOP_WLM>
+<MOP_WLM> ::= cim.readrow (rowaddr ,len)|cim.writerow (rowaddr ,value)
+MOP_WLM Semantics
+The len rows from the rowaddr are readed, which complete
+cim.readrow
+the multiply of input and the data stored in the xbs
+The value is written to the rowaddr
+cim.writerow
+
+Figure 15. The syntax of VVM-grained codegen in BNF
+format and MOP_WLM semantics.
+
+Figure 13. The syntax of MVM-grained codegen in BNF
+format and MOP_XBM semantics.
+(a) 𝐼
+
+XB1
+
+XB2
+
+OUT1
+
+OUT
+
+𝐼0
+𝐼1
+
+Get out1 in one cycle
+
+(b)
+𝐼0
+𝐼1
+𝐼2
+𝐼3
+
+VXB2
+
+0 4
+1 5
+
+8 c
+9 d
+
+VXB1
+
+VXB3
+
+2 6
+3 7
+
+a e
+b f
+
+A B
+
+C D
+
+𝑋𝐵21
+𝑋𝐵22
+
+OUT1
+
+OUT
+
+A
+B
+C
+D
+
+VXB4
+
+VXB6
+
+0 4
+1 5
+
+8 c
+9 d
+
+VXB5
+
+VXB7
+
+2 6
+3 7
+
+a e
+b f
+
+(c)
+𝐼0
+𝐼0
+𝐼1
+
+𝐼1
+
+Table 2. Architecture Parameters of CIM example.
+
+𝑋𝐵11 𝑋𝐵12 𝑋𝐵21 𝑋𝐵22
+How? Remapping
+𝑋𝐵11 𝑋𝐵12
+𝑋𝐵21 𝑋𝐵22
+
+Get out1 in two cycles
+OP 2
+
+OP 1
+VXB0
+
+𝑋𝐵11
+𝑋𝐵12
+
+1
+
+2
+
+VXB2
+
+0 8 𝐼2
+4 c 𝐼2
+
+2 a
+6 e
+
+VXB1
+
+VXB3
+
+1 9 𝐼3
+5 d 𝐼3
+
+3 b
+7 f
+
+Chip_tier
+
+A
+B
+C
+D
+
+core_number
+
+VXB4
+
+VXB6
+
+0 4
+1 5
+
+8 c
+9 d
+
+VXB5
+
+VXB7
+
+2 6
+3 7
+
+a e
+b f
+
+0 4 8 c 2 6 a e 1 5 9 d 3 7 b f 0 4 8 c 2 6 a e 1 5 9 d 3 7 b f
+0 8 2 a 1 9 3 b 4 c 6 e 5 d 7 f
+0 4 8 c 2 6 a e 1 5 9 d 3 7 b f
+2
+
+3
+
+4
+
+[2*1]
+
+xb_number
+
+[2*1]
+
+Crossbar_tier
+xb_size
+parallel row
+Precision
+
+[32*128]
+16
+2-bit
+
+in DNN and the output of OP 1 will be the input of OP
+2. For the example in Figure 14 (b), parallel row is half
+of the xb_size rows, which means only row 0 and row 4
+in VXB 0 can be activated in one cycle. In the naïve data
+mapping strategy (Figure 14 (b)), since OP 1’s output A is
+the accumulation of output of rows 0, 1, 2, and 3, it needs
+two cycles to get the output A (Figure 14 (d) up). OP 2 can
+not start its computing until outputting A is complete. As
+a result, OP 2 has to delay its computation for one cycle.
+In contrast, our data remapping scheme maps rows 1 and
+3 to different VXBs, as shown in Figure 14 (c). Then, rows
+0-3 can complete their computations and accumulate to A
+in one cycle(Figure 14 (d) down). The OP 2 can start its
+computation at Cycle 2. Meanwhile, rows 4-7 can perform
+the computations and accumulate their results to get output
+B. Therefore, as shown in Figure 14 (d), a pipeline with a
+higher throughput can be achieved using our remapping
+scheme.
+Meta-operator Flow Generation Upon completing VVMgrained optimization, the compiler uses the meta operators
+specific for WLM (MOP_WLM) to describe the corresponding hardware activation at the crossbar tier. As the Figure 15
+shows, MOP_WLM includes the 𝐶𝐼 𝑀.𝑟𝑒𝑎𝑑𝑟𝑜𝑤 instruction
+to read rows and 𝐶𝐼 𝑀.𝑤𝑟𝑖𝑡𝑒𝑟𝑜𝑤 instruction to write certain
+values to the rows. CIM-MLC generates the meta-operator
+flow by invoking the MOP_WLM, DCOM, and DMOV, for
+which the syntax is shown in the Figure 10 and Figure 15.
+
+A C
+B D
+
+(d)
+
+1
+
+Core_tier
+
+4 cycle
+
+3
+
+OP 2
+
+OP 1
+VXB0
+
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+cycle
+
+Figure 14. VVM-Grained Optimization (a) Parallelism opportunities in WLM (b) Naïve data mapping (c) Data remapping
+strategy (d) VVM-grained pipeline with naïve data mapping
+(up) and with our proposed data remapping (down).
+Meta-operator Flow Generation Upon completing MVMgrained optimization, the compiler utilizes a meta-operator
+designed for XBM (MOP_XBM) to describe the hardware activation at the core tier. The syntax at this grained is shown in
+the Figure 10 and Figure 13. Specifically, MOP_XBM includes
+the 𝐶𝐼 𝑀.𝑟𝑒𝑎𝑑𝑐𝑟𝑜𝑠𝑠𝑏𝑎𝑟 instruction for reading a specific crossbar to perform an MVM and 𝐶𝐼 𝑀.𝑤𝑟𝑖𝑡𝑒𝑐𝑟𝑜𝑠𝑠𝑏𝑎𝑟 instruction
+for writing values like convolution weights to the crossbar.
+3.3.4 VVM-Grained Optimization. In the WLM, partial
+rows within the crossbar can be activated at once, providing
+a more compact interface for vector-matrix multiplication
+compared to XBM which activates a whole crossbar for one
+computation. As shown in the Figure 14(a), when coarsegrained operators can be decomposed into fine-grained ones,
+we can explore additional parallelism opportunities. To further improve computing throughput, we propose an innovative data remapping strategy to enable a finer pipeline for
+the WLM CIM, which accounts for the updated computing
+graph with operator duplication results and whole three-tier
+abstraction.
+The main idea of the remapping strategy is to distribute
+the data that contributes to the same computation to different
+crossbars. The proposed remapping strategy is illustrated in
+Figure 14, where OP 1 and OP 2 are two adjacent operators
+
+3.4
+
+Putting it all together
+
+In this section, we put the CIM-MLC compilation process
+all together. To help enhance users’ understanding of our
+hardware abstraction and optimization methods, we have
+employed simplified networks and the CIM architecture to
+illustrate our overall compilation process. We extracted commonly used operation in DNN, Convolution-Relu [1], as
+an example. The parameters of the convolution are: input
+9
+
+=== page 10 ===
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+(a) Current ML compiler - Conv Interface
+
+data = te.placeholder((1, 3, 32, 32))
+kernel = te.placeholder((32, 3, 3, 3))
+with tvm.target.Target(" CIM ") :
+conv = topi.cuda.conv2d_nchw(data, kernel, 1, 2)
+out = topi.nn.relu(conv)
+sconv = topi.cuda.schedule_conv2d_nchw([out])
+(b) Current ML compiler - MVM Interface
+
+def conv2d2mvm(A: T.Buffer[(1024,27),], B:
+T.Buffer[(27,32),],C: T.Buffer[(1024,32),]) :
+for i in T.serial(1024):
+with T.block(”C”):
+vi = T.axis.spatial(1024,i)
+T.reads(A[vi])
+T.reads(B[vi])
+T.writes(C[vi])
+C[vi] = mvm(A[vi],B[vi])
+
+Songyun Qu, Shixin Zhao, Bing Li, Yintao He, Xuyi Cai, Lei Zhang, and Ying Wang
+(c) CM – Core Interface (Chip tier)
+
+Parallel{
+cim.readcore (conv, params, coreaddr = 0,src=0,dst=3072)
+cim.readcore (conv, params, coreaddr = 1,src=1440,dst=19456)
+}
+Relu(src=3072,dst=3072+32*32*32,len=32*32*32)
+(d) XBM – Crossbar Interface (Core tier)
+
+Init:
+cim.writexb (xbaddr , weight_matrix) for xbaddr in 0 to 3
+Compute:
+mov(src = L0 buffer0 , dst=L1 buffer0 )
+Parallel{
+cim.readxb (xbaddr =0, len = 1) //activate one crossbar from xb0
+…
+cim.readxb (xbaddr =3, len = 1)
+}
+mov(src = L1 buffer, dst=L0 buffer3072 )
+Relu(src=3072,dst=3072+32*32*32,len=32*4)
+
+(e) WLM – Rows Interface (Crossbar tier)
+
+Init:
+A = weight_matrix[ 0:16 , :]
+B = weight_matrix[16: , :]
+//remap weight
+cim.writerow (xb0 _row0~15 , A)
+cim.writerow (xb1 _row0~15 , B)
+…
+Compute:
+mov(src = L0 buffer0 , dst=L1 buffer0 )
+Parallel{
+cim.readrow (rowaddr = xb0 _row0 , len = 16)
+cim.readrow (rowaddr = xb1 _row0 , len = 16)
+… // activate xb2 _row0~15 , xb3 _row0~15
+}
+mov(src = L1 buffer, dst=L0 buffer3072 )
+Relu(src=3072,dst=3072+32*32*32,len=32*2)
+… // activate xb0 _row16~31 in the next cycle
+
+Figure 16. Generated code example for the Convolution-Relu. Left: Traditional DNN compilers; Right: CIM-MLC.
+size:(3,32,32), kernel size:(32,3,3,3), stride:1, padding:1 with
+8-bit precision for weight. We assume that the target CIM
+architecture has 2 cores, each housing 2 crossbars with 32
+row × 128 column memory cells. Each cell is capable of mapping 2 bits. As we take a portion of the compilation process
+from the complete network as an example, we simplify this
+architecture to support all common digital arithmetic operations, and the buffer bandwidths are ample, imposing no
+memory access limitations on the computation process. We
+use shared memory communication as NoC example. The
+main architecture abstraction parameters are shown in the
+Table 2. We will illustrate the generated code when assuming the architecture provides activation interfaces for cores,
+crossbars, and rows, separately.
+CG-Grained When this architecture only provides activation interfaces for cores, which means CM, we apply
+CG-grained optimizations.
+In this stage, we duplicate operators based on the hardware
+resource constraint. In this example, core_number is 2 and
+each core can support the convolution with a kernel size of
+(32x3x3x3). Consequently, CIM-MLC decides the operator
+can be duplicated twice.
+The final compiled meta-operator flow is illustrated in Figure 16(c) CM, which sequentially completes the convolution
+and ReLU operations. To enable the parallel calculation of
+the duplicated operators, we partitioned the input feature
+maps into several sub-ones with the same number as the duplicated operators. Then, we could get the buffer address of
+each sub-feature map. The duplication number for the operator is 2 and the feature map is partitioned into two sub-ones.
+So, we use two 𝑐𝑖𝑚.𝑟𝑒𝑎𝑑𝑐𝑜𝑟𝑒 to complete the convolution
+operation. As the two 𝑐𝑖𝑚.𝑟𝑒𝑎𝑑𝑐𝑜𝑟𝑒 have the same weights,
+their parameters are the same except for the 𝑠𝑟𝑐 and 𝑑𝑒𝑠
+values. We use parallel{𝑐𝑖𝑚.𝑟𝑒𝑎𝑑𝑐𝑜𝑟𝑒 (conv,params,0,0,3072),
+𝑐𝑖𝑚.𝑟𝑒𝑎𝑑𝑐𝑜𝑟𝑒 (conv,params,1,1440,19456)} to denote executing
+computation on core 0 and core 1 in parallel. Furthermore,
+as we assume the architecture supports the ReLU operation,
+we can directly invoke the Relu meta-operator. So far, we
+have gotten the meta-operator flow for performing conv-relu
+operation on CM CIM by MOP-CM, DCOM and DMOV.
+
+Traditional DNN compilers view this architecture merely
+as hardware for handling convolution and ReLU computations [31]. Therefore, during the CG level optimization, they
+may directly invoke these interfaces to perform computation
+or merge the operators to reduce memory access. The generated code may be like Figure 16 (a) [9]. Compared to our
+method, they do not account for CIM-specific characteristics
+such as duplication opportunities during the mapping phase,
+which leads to a restricted exploration of the optimization
+possibilities.
+MVM-Grained When this architecture provides programming interfaces at the core tier, which means XBM, we can
+perform the corresponding optimization, MVM-Grained optimization. In this stage, we explore the operator duplication within a core after converting the convolution to MVM.
+Given that each core has two crossbars, our approach allows
+us to update the operator duplication from 2 to 4 as each
+crossbar can support an MVM.
+As shown in the Figure 16(d) XBM, after determining
+the updated duplication number, we first write the weight
+matrix to corresponding crossbars by 𝑐𝑖𝑚.𝑤𝑟𝑖𝑡𝑒𝑥𝑏 before
+computing. Then, we load the data into local buffers using
+𝑚𝑜𝑣 operations and activate the four crossbars through the
+𝑐𝑖𝑚.𝑟𝑒𝑎𝑑𝑥𝑏 to complete four MVM operations in parallel.
+Since 1024 MVM operations are needed for one convolution,
+we generate 256 similar code segments to execute the entire
+convolution computation. Upon completing a batch of MVM
+operations, we perform ReLU calculations on the output of
+MVM to facilitate subsequent pipelines.
+As we mentioned earlier in Section 1, traditional DNN
+compilation may be difficult to explore compilation optimizations suitable for CIM at MVM-grained. They usually
+focus on operators split and rearranged by loop unrolling
+etc. from the perspective of tensor size, but they cannot take
+advantage of the computing opportunity provided by the
+memory [31]. The generated code is similar to the one depicted in Figure 16 (b) [9]. For example, if we want TVM [9]
+to support the optimization at MVM-grained for CIM, we
+must first register plenty of templates for various CIM architectures. Then, we need to modify the whole optimization
+10
+
+=== page 11 ===
+CIM-MLC: A Multi-level Compilation Stack for Computing-In-Memory Accelerators
+
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Table 3. Architecture Parameters of CIM Hardware Baseline.
+
+pass of TVM, register the function interfaces supported by
+CIM, add new classes to expose the resources of the storage
+unit, and train a new automatic compilation optimization
+module. It is time-consuming and may completely destroy
+the existing compilation framework of TVM, which is not
+worth the loss.
+VVM-Grained When this architecture offers rows activation interface within the crossbar, which means WLM, we
+will extend the data remapping at VVM-grained optimization, building upon the updated duplication.
+Within the VVM optimization, we perform fine-grained
+control over the remapping of the weight matrix onto the
+crossbars. As the xb_size row is 32 and parallel row is
+16, the original data that mapped to rows 0 to 15 (designated
+as ‘A’) and rows 16 to 31 (designated as ‘B’) in crossbar 0, is
+now divided into two distinct crossbars. ‘A’ is remapped to
+crossbar 0’s rows 0 to 15, while ‘B’ is remapped to crossbar
+1’s rows 0 to 15 by the two 𝑐𝑖𝑚.𝑤𝑟𝑖𝑡𝑒𝑟𝑜𝑤 instructions. This
+data remapping enables the concurrent computation of ‘A’
+and ‘B’ within a single cycle by 𝑐𝑖𝑚.𝑟𝑒𝑎𝑑𝑟𝑜𝑤𝑠 in parallel, a
+marked improvement over the previous mapping where ‘A’
+and ‘B’ required separate activation in two cycles to perform the cumulative calculation essential for a single MVM
+computation. This simultaneous calculation of ‘A’ and ‘B’
+within a single cycle facilitates subsequent pipelines. Similar
+to code generation in the XBM, the compiler generated the
+meta-operators flow as shown in the Figure 16(e) WLM. A
+total of 512 similar compute blocks are needed to complete
+the convolution.
+
+Chip_tier
+core_number
+ALU (ops/cycle)
+L0_BW
+
+Core_tier
+768
+1024
+384 b
+
+xb_number
+16
+ALU (ops/cycle) 1024
+L1_BW
+8192 b
+
+Computing_Mode= ‘CM’
+Chip_tier = {
+Core_tier = {
+"core_number": 16
+"xb_number": 1
+"ALU": \
+"ALU": \
+"core_noc":
+"xb_noc": \
+"Disjoint Buffer Switch"
+"xb_noc_cost": \
+"core_noc_cost": \
+"L1 size": \
+"L0 size": \
+"L1 BW": \}
+"L0 BW": \}
+
+Crossbar_tier
+xb_size
+parallel row
+DAC/ADC
+Type/Precision
+
+[128, 128]
+8
+1/8-bit
+RRAM/2-bit
+
+XB_tier = {
+"xb_size" :[1152,256]
+“parallel row":1152
+"DAC": 1-bit
+"ADC": 8-bit
+"Type": "SRAM"
+"Precision" :1-bit}
+
+Figure 17. Architecture Abstraction of Jia et al.’s work [29].
+Computing_Mode= ‘XBM’
+Core_ tier = {
+Chip_tier = {
+"xb_number": 2
+"core_number": 138
+"ALU": \
+"ALU": \
+"xb_noc": \
+"core_noc": "mesh“
+"xb_noc_cost": \
+"core_noc_cost": \
+"L1 size": 1 KB
+"L0 size": 96 KB
+"L1 BW": \}
+"L0 BW": 384 b/cycle }
+
+XB_ tier = {
+"xb_size" :[128,128]
+“parallel row":128
+"ADC": 1-bit
+"DAC": 8-bit
+"Type": "ReRAM"
+"Precision" :2-bit}
+
+Figure 18. Architecture Abstraction of PUMA [4].
+Computing_Mode= ‘WLM’
+Chip_tier = {
+Core_tier = {
+"core_number": 4
+"xb_number": 2
+"ALU": \
+"ALU": \
+"core_noc " : \
+"xb_noc": \
+"core_noc_cost": \
+"xb_noc_cost": \
+"L0 size": \
+"L1 size": \
+"L0 BW": \}
+"L1 BW": \}
+
+XB_tier = {
+"xb_size" :[256,64]
+“parallel row":32
+"DAC": 1-bit
+"ADC": 6-bit
+"Type": "SRAM"
+"Precision" :1-bit}
+
+Figure 19. Architecture Abstraction of Jain et al.’s work [27].
+
+4
+
+Experiment
+
+This section presents the evaluation of CIM-MLC. We first
+present the implementation method of CIM-MLC, and then
+conduct a comprehensive comparison and evaluation of CIMMLC with different CIM designs.
+4.1
+
+of meta-operators flow on the CIM-based DNN accelerators.
+The primary extensions include: 1. We developed computational functions to facilitate simulating meta-operation
+execution, allowing the simulator to represent CIM architectures with varying computation granularity levels. 2. We
+establish the latency model, including computation, data
+movement, etc. to evaluate the overall DNN latency.
+CIM Architecture Baseline We refer to ISAAC [39] to
+establish a CIM architecture and use it as the baseline. The
+parameters of the baseline architecture are listed in Table 3.
+The parameters that are not elaborated are considered ideal,
+indicating that their influence on the evaluation is disregarded. For example, if the on-chip buffer is assumed to have
+sufficient bandwidth, load/store time can be hidden within
+the computation time. We evaluate our CIM-MLC on the
+baseline to verify its effectiveness and compare it with PolySchedule [22], which is also a compilation work for CIMs.
+Network Benchmark First, to verify the generality of
+the scheduling method for different neural network tasks,
+we tested our operator scheduling method on multiple classic network models, including the VGG series [41], ResNet
+series [24], visual transformer (ViT) [16], etc. All models’
+
+Experiment Setup
+
+Simulator We developed a Python-based CIM functional
+simulator to verify the scheduling results, i.e., the metaoperator execution trace. Additionally, we expanded upon
+an open-source simulator from previous studies [4, 8, 15] to
+evaluate the execution latency and power efficiency of the
+generated scheduling results.
+We verify the effectiveness of the functional simulator
+by comparing it with the Pytorch framework [35]. In our
+built functional simulator, the hardware abstraction of CIM
+is described by a data structure, and meta-operators are implemented by specific functions. In this way, our functional
+simulator can perform the meta-operator flows as the DNN
+execution trace in the CIM.
+We extended the open-source simulators proposed in previous works [4, 8, 15] as the performance simulator to support the execution cycle and power consumption evaluation
+11
+
+=== page 12 ===
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Songyun Qu, Shixin Zhao, Bing Li, Yintao He, Xuyi Cai, Lei Zhang, and Ying Wang
+
+weights and activation values are quantized with 8-bit precision and are tested on the ImageNet dataset.
+Hardware Benchmark To verify the generality of CIMMLC for different CIM architectures, we conduct experiments on three CIM-based accelerators [4, 27, 29]with different device types, precision, architecture hierarchy, and programming interfaces. Among them, Jia et al. [29] proposed an
+SRAM-based CIM accelerator that includes 16 CIMUs with a
+size of 1152x256, which incorporates embedded digital logic
+and high-precision ADC to achieve parallel activation calculation of 1152 rows. PUMA [4] is a programmable CIM
+architecture based on ReRAM to support a wide range of
+neural network applications. Jain et al. [27] introduces a
+CIM SRAM macro, in which only limited rows (≤ 32) can
+be activated simultaneously in a crossbar to alleviate the
+computing variation.
+4.2
+
+Effectiveness of CIM-MLC
+
+In this section, we apply the CIM-MLC in existing CIM-based
+accelerators [4, 27, 29] to verify the generality of CIM-MLC
+and also compare CIM-MLC with previous work to show the
+effectiveness of our proposed optimization.
+Firstly, we demonstrate the comparison results of CIMMLC with these three different CIM-based accelerators. These
+works have not only the specific CIM architecture but also
+the performance optimization methods. So, we first verify
+our abstraction techniques on their CIM distinct architectures and then compare the optimized performance by our
+method with their performance.
+Work 1: The hardware abstraction results of Jia et al.’s
+work are shown in Figure 17. The parameters that are not
+elaborated are considered ideal and denoted with "\". The
+computing mode abstraction of this design is the core mode
+(CM). CIM-MLC will apply CG-grained optimization to generate the meta-operator flow when mapping and scheduling the DNN. The performance comparison between CIMMLC and Jia et al.’s work is shown in Figure 20 (a). The CGgrained P&D is the combination of the dynamic programmingbased duplication and the pipeline, bringing about 3.7× speedup
+over Jia et al.’s work as it can make full use of the limited resources and speed up the computing of the bottleneck layer
+in DNNs. The pipeline strategy can only achieve the speedup
+by 1.2× over Jia et al.’s work because the model size exceeds
+on-chip resources and the performance would not be fully
+optimized without the data mapping design.
+Work 2: Our hardware abstraction results for PUMA [4]
+are shown in Figure 18, where the computing mode is XBM.
+Thus, CIM-MLC can perform CG-grained and MVM-grained
+optimization. We compare PUMA with our work on the
+VGG16, and the results are shown in Figure 20 (b). When
+mapping the VGG16 model, the proposed MVM-grained optimization fully utilized the scheduling space of the XBM
+mode in PUMA architecture and introduced a fine-grained
+12
+
+MVM-grained pipeline. Our evaluation of peak power includes the power consumption of ADC/DAC, XB activation
+computation, and data movement. Our assessment shows
+that these three parts account for 10%, 83%, and 7%, respectively. Thus, CIM-MLC performs fine-grained time-division
+activation of XBs and associated ADC/DACs, thereby significantly reducing the peak power by 75%.
+Work 3: Figure 19 presents the hardware abstraction
+of Jain et al.’s CIM macro [27] that has 𝑊 𝐿𝑀 computing
+mode. For a fair comparison, we use the VGG7 model as
+the benchmark and evaluate the scheduling results of CIMMLC and the original result under the same resource constraints. As shown in Figure 20 (c), with the three-level
+scheduling optimization (i.e., CG-grained, MVM-grained,
+and VVM-grained), we achieve a speedup of about 2.3× over
+Jain et al.’s work. Meanwhile, we show the speedup of CGgrained optimization and MVM-grained optimization, respectively. CG-grained optimization can achieve a speedup
+of 1.2×, while MVM-grained optimization cannot further
+bring effective acceleration improvement. This is because
+this CIM macro has limited on-chip resources, especially
+the small number of XBs in a Core, leading to the ineffectiveness of MVM-grained optimization for improving the
+speedup. The VVM-grained optimization fully improves the
+computing pipeline efficiency between adjacent operators by
+converting serial computations into parallel computations,
+thereby achieving a speedup.
+Comparison to CIM-oriented compilers: We compared
+our method with the existing general-purpose CIM compiler
+tool Poly-Schedule [22]. Poly-Schedule [22] supports the
+compilation of CIM-based accelerators for CM and XBM, using operator duplication techniques based on greedy strategies and batch pipeline strategies for acceleration. Compared
+with this work, CIM-MLC can optimize the internal computation pipeline of a single input image and explore the
+fine-grained scheduling space of the XBM mode to achieve
+better scheduling. We compared the operator scheduling results between Poly-Schedule and CIM-MLC in the same CIM
+architecture abstracted in Table 3. As shown in Figure 20 (d),
+compared to the latency result without any optimization, the
+Poly-Schedule [22] utilizes on-chip resources with a greedy
+strategy to reduce 84% computation cycles. Our work explores the fine-grained optimization space and reduces the
+computation cycles by up to 95%, which achieves about 3.2×
+speedup compared to the work [22].
+4.3
+
+Performance Analysis
+
+In this section, we analyze the speedup results of different granularity scheduling optimization in the multi-level
+scheduling for the baseline architecture in Table 3. The network benchmark is the ResNet series [24]. The results are
+shown in Figure 21. In Figure 21 (a), we separate the optimization methods (i.e., CG-Pipeline and CG-Duplication,
+CG-P&D) in the CG-grained optimization and investigate
+
+=== page 13 ===
+CIM-MLC: A Multi-level Compilation Stack for Computing-In-Memory Accelerators
+
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Speedup
+CG-grained w/ P&D
+
+3.7
+
+CG-grained w/ Pipeline
+
+1.2
+
+Jia et al.[29]
+
+(a)
+
+Normalized peak power
+75%
+
+CG+MVM-grained
+PUMA[2, 4]
+
+1
+0
+
+1
+
+2
+
+3
+
+(b)
+
+4
+
+0
+
+50
+
+Speedup
+
+(c)
+
+1.2
+1.2
+
+CIM-MLC
+
+95%
+
+Poly-Schedule[22]
+
+84%
+
+200
+
+250
+
+300
+
+w/o optimization
+
+1
+0
+
+150
+
+Latency
+2.3
+
+CG+MVM+VVM-grained
+CG+MVM-grained
+CG-grained
+Jain et al.[27]
+
+100
+
+1
+
+(d)
+
+2
+
+0
+
+250000
+
+500000
+
+CG-Pipeline
+
+CG-Duplication
+
+CG-P&D 1.8
+
+CG+MVM-Duplication
+
+Speedup
+
+100
+
+1.12
+
+CG+MVM+VVM-Remap
+
+1.1
+
+1.6
+
+1.08
+1.4
+1.06
+
+10
+
+1.2
+
+1.04
+
+1
+1
+
+1.02
+
+0.8
+
+ResNet18 ResNet34 ResNet50 ResNet101
+
+(a)
+
+1
+ResNet18 ResNet34 ResNet50 ResNet101
+
+ResNet18 ResNet34 ResNet50 ResNet101
+
+(c)
+
+(b)
+
+Normalized peak power
+
+Figure 20. (a) Comparison of the speedup between this work and the schedule method in work [29]; (b) Comparison of the
+peak power consumption between this work and the schedule method in PUMA [2, 4]; (c) Comparison of the speedup between
+this work and the schedule method in work[27]; (d) Comparison of the latency between this work and the schedule method in
+work [22].
+20
+
+ResNet18
+ResNet34
+ResNet50
+ResNet101
+
+15
+10
+5
+0
+
+W/O
+optimization
+
+CG
+
+CG+MVM- CG+MVMDuplication P&D
+
+(d)
+
+Figure 21. (a) Speedup of CG-grained optimization; (b) Speedup of CG+MVM-grained optimization; (c) Speedup of
+CG+MVM+VVM-grained optimization; (d) Comparison result of the peak power.
+their results, and the results are normalized to the results
+of the baseline architecture in CM mode without any optimization. In Figure 21 (b)-(c), the fine-grained optimization
+is with the coarse-grained ones to show the advantage of
+the multi-grained optimization. The results of Figure 21 (b)
+are normalized to the CG-P&D results in Figure 21 (a), and
+Figure 21 (c)’s results use the results in Figure 21 (b) as the
+baseline.
+It can be observed that the model structure has a significant impact on the scheduling results. As shown in Figure 21
+(a), in CG-grained optimization, as the depth of ResNet increases, the speedup achieved by pipeline (CG-Pipeline) increases from 2.3× to 4.7×. The pipeline strategy can fully
+perform parallel computation between adjacent operators.
+However, with the increase of the model size (from ResNet18
+to ResNet101), the speedup of duplication (CG-Duplication)
+decreases from 25.4× to 3.1×. When combining the pipeline
+and duplication strategies (CG-P&D), ResNet series models
+achieve significant performance improvements up to 123×.
+As shown in Figure 21 (b), CG+MVM-Duplication increase
+the speedup of ResNet50/ResNet101 by approximately 1.8×
+/ 1.4× over the CG-P&D. Meanwhile, as shown in Figure 21
+(d), the normalized peak power consumption increases by
+approximately 5× to 16× for the ResNet series in CG-grained
+optimization since the number of crossbars that work at the
+
+same time increases, leading to the high power consumption of CIM accelerator. Then, MVM-grained optimization
+reduces peak power consumption by up to 85% (ResNet101)
+thanks to its fine-grained pipeline strategy that lowers the
+peak activated crossbar number.
+The results in Figure 21 (c) show that the speedup of
+ResNet50 in the VVM-grained optimization can be 10% higher
+than that of the MVM-grained optimization because the data
+remapping strategy improves the pipeline throughput.
+4.4 Sensitive Study of CIM Architecture
+In this section, we evaluate the effect of the change of CIM architecture parameters on the scheduling results of CIM-MLC.
+We use a transformer network architecture, ViT [16], as the
+benchmark. The baselined architecture uses the parameters
+from Table 3 except for the crossbar size is 128 × 256.
+4.4.1 Core Number & Crossbar Number. First, we investigate the effect of different core numbers on the effectiveness of CIM-MLC. The results are shown in Figure 22 (a).
+As the total number of cores increases from 256 to 1024, the
+speedup achieved by CIM-MLC grows as well. Since on-chip
+resources gradually increase, CIM-MLC can fully show the
+potential of the duplication strategy as well as the pipeline.
+Therefore, the speedup of the CG-grained optimization increased from 15× to 30×. In the MVM-grained optimization,
+13
+
+=== page 14 ===
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+40
+
+Speedup
+
+35
+
+40
+
+CG -Grained
+CG+MVM-Grained
+CG+MVM+VVM-Grained
+
+35
+
+Songyun Qu, Shixin Zhao, Bing Li, Yintao He, Xuyi Cai, Lei Zhang, and Ying Wang
+40
+
+CG -Grained
+CG+MVM-Grained
+CG+MVM+VVM-Grained
+
+35
+
+40
+
+CG -Grained
+CG+MVM-Grained
+CG+MVM+VVM-Grained
+
+35
+
+30
+
+30
+
+30
+
+30
+
+25
+
+25
+
+25
+
+25
+
+20
+
+20
+
+20
+
+20
+
+15
+
+15
+
+15
+
+15
+
+10
+
+10
+
+10
+
+256
+
+512
+
+768
+
+Core number
+
+(a)
+
+1024
+
+8
+
+12
+
+16
+
+10
+64×512
+
+20
+
+CG -Grained
+CG+MVM-Grained
+CG+MVM+VVM-Grained
+
+128×256
+
+256×128
+
+Crossbar number
+
+Crossbar size
+
+(b)
+
+(c)
+
+512×64
+
+64
+
+32
+
+16
+
+8
+
+Parallel row
+
+(d)
+
+Figure 22. (a) Scheduling results with the different number of cores in a chip; (b) Scheduling results with different numbers of
+crossbars in a core; (c) Scheduling results with different crossbar sizes; (d) Scheduling results with different parallel rows in a
+crossbar.
+4.4.3 Parallel Row. When the number of parallel rows
+in the crossbar is changed, the scheduling result can be observed in Figure 22 (d). If the number of parallel rows is
+decreased, it may be challenging to achieve effective acceleration through MVM-grained scheduling, while the VVMgrained remapping strategy can mitigate the impact of this
+reduction on latency. Specifically, when the number of parallel rows is 8, VVM-grained scheduling can achieve an acceleration of approximately 20% beyond the optimization
+results of MVM-grained scheduling.
+
+as the number of cores increased, the proposed method could
+duplicate a single operator to different crossbars to fully utilize resources, achieving a maximum speedup improvement
+of about 1.1× compared to the CG-grained optimization. In
+the VVM-grained optimization, a finer pipeline reduced the
+equivalent activation times of the crossbar, further resulting
+in a speedup improvement of approximately 1.2× compared
+to the CG-grained result. Figure 22 (b) shows the performance speedup achieved by CIM-MLC when the number of
+crossbars in each core varies. Similar to the results of the
+core number, the speedup grows as the crossbar number
+increases.
+
+5
+
+Conclusion
+
+We propose CIM-MLC, a general compilation tool for the
+CIM architecture that consists of hardware and computation
+abstraction and a multi-level operator scheduling method.
+The hardware abstraction method, Abs-arch, provides a unified description of CIM architectures from chip to crossbar tier. Three computing mode abstractions are established
+to represent different granularity of the programming interface. A set of meta-operators is established to describe
+the computing process under different modes. Besides, the
+multi-level scheduling optimization method is proposed to
+explore the acceleration potential of the CIM architecture,
+from CG-grained to MVM-grained and VVM-grained, and
+output the corresponding meta-operator flow. Comprehensive experimental results show that CIM-MLC has wide software and hardware adaptability. What’s more, the proposed
+CIM-MLC can serve as the middleware between neural network models and CIM hardware, reducing the design burden
+on experts in the fields of CIM architecture and neural network algorithms.
+
+4.4.2 Crossbar Size. Figure 22 (c) compares the speedup
+achieved by CIM-MLC as the crossbar size changes. As the
+crossbar row size increases from 64 to 256, the CG-grained
+speedup gradually increases. This is because larger row sizes
+increase the amount of input data required by the crossbar,
+which puts pressure on the bandwidth and leads to longer
+computing latency. The CG-grained pipeline optimization
+can reduce data feeding pressure, resulting in better acceleration. Since the weight matrix size of ViT matches the
+crossbar size when it changes from (64 × 512) to (256 × 128),
+the MVM-grained can make full use of redundant crossbar
+resources to achieve the same acceleration. The speedup of
+VVM-grained gradually increases because as the crossbar column size decreases, the same weight needs to be mapped on
+more crossbars in the horizontal direction. The VVM-grained
+remapping strategy can make full use of the advantages of
+these horizontal crossbars, which reduce the calculation delay in the crossbar, and achieve better acceleration. Upon
+increasing the number of crossbar rows to 512, the speedup
+has considerably decreased. This can be attributed to the fact
+that ViT comprises numerous matrices with a row size of 768,
+necessitating two vertical crossbars (512 × 64) for mapping.
+Consequently, ViT needs more resources, requiring it to be
+segmented and mapped on the given CIM, ultimately leading
+to a decrease in speedup.
+
+6
+
+Acknowledgments
+
+This work was supported by the National Natural Science
+Foundation of China under NSFC.62222411.
+
+References
+[1] Abien Fred Agarap. Deep learning using rectified linear units (relu).
+arXiv preprint arXiv:1803.08375, 2018.
+14
+
+=== page 15 ===
+CIM-MLC: A Multi-level Compilation Stack for Computing-In-Memory Accelerators
+[2] Joao Ambrosi, Aayush Ankit, Rodrigo Antunes, Sai Rahul Chalamalasetti, Soumitra Chatterjee, Izzat El Hajj, Guilherme Fachini, Paolo
+Faraboschi, Martin Foltin, and Sitao Huang. Hardware-software codesign for an analog-digital accelerator for machine learning. In 2018
+IEEE International Conference on Rebooting Computing (ICRC), pages
+1–13. IEEE, 2018.
+[3] Shaahin Angizi, Zhezhi He, Dayane Reis, Xiaobo Sharon Hu, Wilman
+Tsai, Shy Jay Lin, and Deliang Fan. Accelerating deep neural networks
+in processing-in-memory platforms: Analog or digital approach? In
+2019 IEEE Computer Society Annual Symposium on VLSI (ISVLSI), pages
+197–202. IEEE, 2019.
+[4] Aayush Ankit, Izzat El Hajj, Sai Rahul Chalamalasetti, Geoffrey Ndu,
+Martin Foltin, R Stanley Williams, Paolo Faraboschi, Wen-mei W Hwu,
+John Paul Strachan, and Kaushik Roy. Puma: A programmable ultraefficient memristor-based accelerator for machine learning inference.
+In Proceedings of the Twenty-Fourth International Conference on Architectural Support for Programming Languages and Operating Systems,
+pages 715–731, 2019.
+[5] Junjie Bai, Fang Lu, Ke Zhang, et al. Onnx: Open neural network
+exchange. https://github.com/onnx/onnx, 2019.
+[6] Avishek Biswas and Anantha P Chandrakasan. Conv-sram: An energyefficient sram with in-memory dot-product computation for low-power
+convolutional neural networks. IEEE Journal of Solid-State Circuits,
+54(1):217–230, 2018.
+[7] Xuyi Cai, Ying Wang, and Lei Zhang. Optimus: An operator fusion
+framework for deep neural networks. ACM Transactions on Embedded
+Computing Systems, 22(1):1–26, 2022.
+[8] Pai-Yu Chen, Xiaochen Peng, and Shimeng Yu. Neurosim: A circuitlevel macro model for benchmarking neuro-inspired architectures
+in online learning. IEEE Transactions on Computer-Aided Design of
+Integrated Circuits and Systems, 37(12):3067–3080, 2018.
+[9] Tianqi Chen, Thierry Moreau, Ziheng Jiang, Lianmin Zheng, Eddie
+Yan, Meghan Cowan, Haichen Shen, Leyuan Wang, Yuwei Hu, and
+Luis Ceze. Tvm: An automated end-to-end optimizing compiler for
+deep learning. arXiv preprint arXiv:1802.04799, 2018.
+[10] Weiwei Chen, Ying Wang, Ying Xu, Chengsi Gao, Cheng Liu, and Lei
+Zhang. A framework for neural network architecture and compile
+co-optimization. ACM Transactions on Embedded Computing Systems,
+22(1):1–24, 2022.
+[11] Yiran Chen, Yuan Xie, Linghao Song, Fan Chen, and Tianqi Tang. A survey of accelerator architectures for deep neural networks. Engineering,
+6(3):264–274, 2020.
+[12] Yu-Hsin Chen, Tushar Krishna, Joel S Emer, and Vivienne Sze. Eyeriss:
+An energy-efficient reconfigurable accelerator for deep convolutional
+neural networks. IEEE journal of solid-state circuits, 52(1):127–138,
+2016.
+[13] Ping Chi, Shuangchen Li, Cong Xu, Tao Zhang, Jishen Zhao, Yongpan
+Liu, Yu Wang, and Yuan Xie. Prime: A novel processing-in-memory
+architecture for neural network computation in reram-based main
+memory. In Proceedings of the 43rd International Symposium on Computer Architecture, ISCA ’16, pages 27–39, Piscataway, NJ, USA, 2016.
+IEEE Press.
+[14] Scott Cyphers, Arjun K. Bansal, Anahita Bhiwandiwalla, Jayaram
+Bobba, Matthew Brookhart, Avijit Chakraborty, William Constable,
+Christian Convey, Leona Cook, Omar Kanawi, Robert Kimball, Jason
+Knight, Nikolay Korovaiko, Varun Kumar Vijay, Yixing Lao, Christopher R. Lishka, Jaikrishnan Menon, Jennifer Myers, Sandeep Aswath
+Narayana, Adam Procter, and Tristan J. Webb. Intel ngraph: An intermediate representation, compiler, and executor for deep learning.
+2018.
+[15] Xiangyu Dong, Cong Xu, Yuan Xie, and Norman P Jouppi. Nvsim:
+A circuit-level performance, energy, and area model for emerging
+nonvolatile memory. IEEE Transactions on Computer-Aided Design of
+Integrated Circuits and Systems, 31(7):994–1007, 2012.
+
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+[16] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani,
+Matthias Minderer, Georg Heigold, and Sylvain Gelly. An image is
+worth 16x16 words: Transformers for image recognition at scale. arXiv
+preprint arXiv:2010.11929, 2020.
+[17] Andi Drebes, Lorenzo Chelini, Oleksandr Zinenko, Albert Cohen,
+Henk Corporaal, Tobias Grosser, Kanishkan Vadivel, and Nicolas Vasilache. Tc-cim: Empowering tensor comprehensions for computing-inmemory. In IMPACT 2020-10th International Workshop on Polyhedral
+Compilation Techniques, 2020.
+[18] Charles Eckert, Xiaowei Wang, Jingcheng Wang, Arun Subramaniyan,
+Ravi Iyer, Dennis Sylvester, David Blaaauw, and Reetuparna Das. Neural cache: Bit-serial in-cache acceleration of deep neural networks.
+In 2018 ACM/IEEE 45Th annual international symposium on computer
+architecture (ISCA), pages 383–396. IEEE, 2018.
+[19] Daichi Fujiki, Scott Mahlke, and Reetuparna Das. In-memory data
+parallel processor. ACM SIGPLAN Notices, 53(2):1–14, 2018.
+[20] Chengsi Gao, Ying Wang, Cheng Liu, Mengdi Wang, Weiwei Chen,
+Yinhe Han, and Lei Zhang. Layer-puzzle: Allocating and scheduling
+multi-task on multi-core npus by using layer heterogeneity. In 2023
+Design, Automation & Test in Europe Conference & Exhibition (DATE),
+pages 1–6. IEEE, 2023.
+[21] Xinjie Guo, F Merrikh Bayat, M Bavandpour, M Klachko, MR Mahmoodi, M Prezioso, KK Likharev, and DB Strukov. Fast, energy-efficient,
+robust, and reproducible mixed-signal neuromorphic classifier based
+on embedded nor flash memory technology. In 2017 IEEE International
+Electron Devices Meeting (IEDM), pages 6–5. IEEE, 2017.
+[22] Jianhui Han, Xiang Fei, Zhaolin Li, and Youhui Zhang. Polyhedralbased compilation framework for in-memory neural network accelerators. ACM Journal on Emerging Technologies in Computing Systems
+(JETC), 18(1):1–23, 2021.
+[23] Runze Han, Peng Huang, Yachen Xiang, Chen Liu, Zhen Dong,
+Zhiqiang Su, Yongbo Liu, Lu Liu, Xiaoyan Liu, and Jinfeng Kang. A
+novel convolution computing paradigm based on nor flash array with
+high computing speed and energy efficiency. IEEE Transactions on
+Circuits and Systems I: Regular Papers, 66(5):1692–1703, 2019.
+[24] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep
+residual learning for image recognition. In Proceedings of the IEEE
+conference on computer vision and pattern recognition, pages 770–778,
+2016.
+[25] Yintao He, Ying Wang, Cheng Liu, Huawei Li, and Xiaowei Li. Tare:
+task-adaptive in-situ reram computing for graph learning. In 2021 58th
+ACM/IEEE Design Automation Conference (DAC), pages 577–582. IEEE,
+2021.
+[26] Yuquan He, Songyun Qu, Gangliang Lin, Cheng Liu, Lei Zhang, and
+Ying Wang. Processing-in-sram acceleration for ultra-low power visual
+3d perception. In Proceedings of the 59th ACM/IEEE Design Automation
+Conference, pages 295–300, 2022.
+[27] Saurabh Jain, Longyang Lin, and Massimo Alioto. ±cim sram for signed
+in-memory broad-purpose computing from dsp to neural processing.
+IEEE Journal of Solid-State Circuits, 56(10):2981–2992, 2021.
+[28] Yu Ji, Youyang Zhang, Xinfeng Xie, Shuangchen Li, Peiqi Wang, Xing
+Hu, Youhui Zhang, and Yuan Xie. Fpsa: A full system stack solution for
+reconfigurable reram-based nn accelerator architecture. In Proceedings
+of the Twenty-Fourth International Conference on Architectural Support
+for Programming Languages and Operating Systems, pages 733–747,
+2019.
+[29] Hongyang Jia, Murat Ozatay, Yinqi Tang, Hossein Valavi, Rakshit
+Pathak, Jinseok Lee, and Naveen Verma. 15.1 a programmable neuralnetwork inference accelerator based on scalable in-memory computing. In 2021 IEEE International Solid-State Circuits Conference (ISSCC),
+volume 64, pages 236–238. IEEE, 2021.
+[30] Bing Li, Bonan Yan, and Hai Li. An overview of in-memory processing
+with emerging non-volatile memory for data-intensive applications.
+15
+
+=== page 16 ===
+ASPLOS ’24, April 27-May 1, 2024, La Jolla, CA, USA
+
+Songyun Qu, Shixin Zhao, Bing Li, Yintao He, Xuyi Cai, Lei Zhang, and Ying Wang
+
+In Proceedings of the 2019 on Great Lakes Symposium on VLSI, pages
+381–386, 2019.
+[31] Mingzhen Li, Yi Liu, Xiaoyan Liu, Qingxiao Sun, Xin You, Hailong
+Yang, Zhongzhi Luan, Lin Gan, Guangwen Yang, and Depei Qian. The
+deep learning compiler: A comprehensive survey. IEEE Transactions
+on Parallel and Distributed Systems, 32(3):708–727, 2020.
+[32] Weibo Liu, Zidong Wang, Xiaohui Liu, Nianyin Zeng, Yurong Liu, and
+Fuad E Alsaadi. A survey of deep neural network architectures and
+their applications. Neurocomputing, 234:11–26, 2017.
+[33] Yun Long, Taesik Na, and Saibal Mukhopadhyay. Reram-based
+processing-in-memory architecture for recurrent neural network acceleration. IEEE Transactions on Very Large Scale Integration (VLSI)
+Systems, 26(12):2781–2794, 2018.
+[34] Manqing Mao, Xiaochen Peng, Rui Liu, Jingtao Li, Shimeng Yu, and
+Chaitali Chakrabarti. Max 2: An reram-based neural network accelerator that maximizes data reuse and area utilization. IEEE Journal
+on Emerging and Selected Topics in Circuits and Systems, 9(2):398–410,
+2019.
+[35] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein,
+and Luca Antiga. Pytorch: An imperative style, high-performance deep
+learning library. Advances in neural information processing systems, 32,
+2019.
+[36] Songyun Qu, Bing Li, Shixin Zhao, Lei Zhang, and Ying Wang. A
+coordinated model pruning and mapping framework for rram-based
+dnn accelerators. IEEE Transactions on Computer-Aided Design of
+Integrated Circuits and Systems, 2022.
+[37] Nadav Rotem, Jordan Fix, Saleem Abdulrasool, Summer Deng, Roman Dzhabarov, James Hegeman, Roman Levenstein, Bert Maher,
+Nadathur Satish, Jakob Olesen, et al. Glow: graph lowering compiler
+techniques for neural networks. corr abs/1805.00907 (2018). arXiv
+preprint arXiv:1805.00907, 2018.
+[38] Amit Sabne. Xla: Compiling machine learning for peak performance.
+2020.
+[39] Ali Shafiee, Anirban Nag, Naveen Muralimanohar, Rajeev Balasubramonian, John Paul Strachan, Miao Hu, R. Stanley Williams, and
+Vivek Srikumar. Isaac: A convolutional neural network accelerator
+with in-situ analog arithmetic in crossbars. In Proceedings of the 43rd
+International Symposium on Computer Architecture, ISCA ’16, pages
+14–26, Piscataway, NJ, USA, 2016. IEEE Press.
+[40] Adam Siemieniuk, Lorenzo Chelini, Asif Ali Khan, Jeronimo Castrillon,
+Andi Drebes, Henk Corporaal, Tobias Grosser, and Martin Kong. Occ:
+An automated end-to-end machine learning optimizing compiler for
+computing-in-memory. IEEE Transactions on Computer-Aided Design
+of Integrated Circuits and Systems, 41(6):1674–1686, 2021.
+[41] Karen Simonyan and Andrew Zisserman. Very deep convolutional networks for large-scale image recognition. arXiv preprint arXiv:1409.1556,
+2014.
+[42] Linghao Song, Xuehai Qian, Hai Li, and Yiran Chen. Pipelayer: A
+pipelined reram-based accelerator for deep learning. In 2017 IEEE
+international symposium on high performance computer architecture
+(HPCA), pages 541–552. IEEE, 2017.
+[43] Xiaoyu Sun, Shihui Yin, Xiaochen Peng, Rui Liu, Jae-sun Seo, and
+Shimeng Yu. Xnor-rram: A scalable and parallel resistive synaptic
+architecture for binary neural networks. In 2018 Design, Automation &
+Test in Europe Conference & Exhibition (DATE), pages 1423–1428. IEEE,
+2018.
+[44] Nicolas Vasilache, Oleksandr Zinenko, Theodoros Theodoridis, Priya
+Goyal, Zachary DeVito, William S Moses, Sven Verdoolaege, Andrew
+Adams, and Albert Cohen. Tensor comprehensions: Frameworkagnostic high-performance machine learning abstractions. arXiv
+preprint arXiv:1802.04730, 2018.
+[45] Wm A Wulf and Sally A McKee. Hitting the memory wall: Implications
+of the obvious. ACM SIGARCH computer architecture news, 23(1):20–24,
+
+1995.
+[46] Cheng-Xin Xue, Je-Min Hung, Hui-Yao Kao, Yen-Hsiang Huang, ShengPo Huang, Fu-Chun Chang, Peng Chen, Ta-Wei Liu, Chuan-Jia Jhang,
+and Chin-I Su. 16.1 a 22nm 4mb 8b-precision reram computing-inmemory macro with 11.91 to 195.7 tops/w for tiny ai edge devices.
+In 2021 IEEE International Solid-State Circuits Conference (ISSCC), volume 64, pages 245–247. IEEE, 2021.
+[47] Tzu-Hsien Yang, Hsiang-Yun Cheng, Chia-Lin Yang, I-Ching Tseng,
+Han-Wen Hu, Hung-Sheng Chang, and Hsiang-Pang Li. Sparse reram
+engine: Joint exploration of activation and weight sparsity in compressed neural networks. In Proceedings of the 46th International Symposium on Computer Architecture, pages 236–249, 2019.
+[48] Shihui Yin, Zhewei Jiang, Minkyu Kim, Tushar Gupta, Mingoo Seok,
+and Jae-Sun Seo. Vesti: Energy-efficient in-memory computing accelerator for deep neural networks. IEEE Transactions on Very Large Scale
+Integration (VLSI) Systems, 28(1):48–61, 2019.
+[49] Shihui Yin, Zhewei Jiang, Jae-Sun Seo, and Mingoo Seok. Xnor-sram:
+In-memory computing sram macro for binary/ternary deep neural
+networks. IEEE Journal of Solid-State Circuits, 55(6):1733–1743, 2020.
+[50] Geng Yuan, Payman Behnam, Zhengang Li, Ali Shafiee, Sheng Lin,
+Xiaolong Ma, Hang Liu, Xuehai Qian, Mahdi Nazm Bojnordi, and
+Yanzhi Wang. Forms: Fine-grained polarized reram-based in-situ
+computation for mixed-signal dnn accelerator. In 2021 ACM/IEEE
+48th Annual International Symposium on Computer Architecture (ISCA),
+pages 265–278. IEEE, 2021.
+[51] Zhenhua Zhu, Hanbo Sun, Yujun Lin, Guohao Dai, Lixue Xia, Song
+Han, Yu Wang, and Huazhong Yang. A configurable multi-precision
+cnn computing framework based on single bit rram. In Proceedings of
+the 56th Annual Design Automation Conference 2019, pages 1–6, 2019.
+
+16

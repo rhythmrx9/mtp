@@ -1,0 +1,895 @@
+# Design of Analog-AI Hardware Accelerators for Transformer-based Language Models (Invited)
+# id: W4391594670 | key: 2023_Burr_AnalogAITransformers_IEDM | IEDM 2023 | card: ../cards/2023_Burr_AnalogAITransformers_IEDM.md
+
+
+=== page 1 ===
+Design of Analog-AI Hardware Accelerators
+for Transformer-based Language Models (Invited)
+G. W. Burr1 , H. Tsai1 , W. Simon2 , I. Boybat2 , S. Ambrogio1 , C.-E. Ho1 , Z.-W. Liou1 , M. Rasch3 , J. Büchel2 , P. Narayanan1 , T. Gordon4 , S. Jain3 ,
+T. M. Levin4 , K. Hosokawa5 , M. Le Gallo2 , H. Smith1 , M. Ishii5 , Y. Kohda5 , A. Chen1 , C. Mackin1 , A. Fasoli1 , K. El Maghraoui3 , R. Muralidhar3 ,
+A. Okazaki5 , C.-T. Chen3 , M. M. Frank3 , C. Lammie2 , A. Vasilopoulos2 , A. M. Friz1 , J. Luquin1 , S. Teehan4 , I. Ahsan4 , A. Sebastian2 , and V. Narayanan3
+1
+
+2023 International Electron Devices Meeting (IEDM) | 979-8-3503-2767-0/23/$31.00 ©2023 IEEE | DOI: 10.1109/IEDM45741.2023.10413767
+
+2
+
+IBM Research–Almaden, San Jose, CA, USA
+email: gwburr@us.ibm.com
+3
+IBM Research–Zurich, Rüschlikon, Switzerland
+IBM Research–T. J. Watson Research Center, Yorktown Heights, NY, USA
+4
+5
+IBM Albany NanoTech, Albany, NY, USA
+IBM Tokyo Research Laboratory, Tokyo, Japan.
+
+Abstract—Analog Non-Volatile Memory-based accelerators offer high-throughput and energy-efﬁcient Multiply-Accumulate
+operations for the large Fully-Connected layers that dominate
+Transformer-based Large Language Models. We describe architectural, wafer-scale testing, chip-demo, and hardware-aware
+training efforts towards such accelerators, and quantify the
+unique raw-throughput and latency beneﬁts of Fully- (rather than
+Partially-) Weight-Stationary systems.
+Index Terms—In-memory computing, Non-volatile memory,
+large language models, analog multiply-accumulate for DNN
+inference, analog AI, deep learning accelerator, system modeling
+
+I. I NTRODUCTION
+Scaling the size of Deep Neural Network (DNN) models has been a
+key driver of progress in artiﬁcial intelligence, ﬁrst in image recognition [1] and more recently in Large Language Models (LLMs) [2]. This
+trend has greatly increased the amount of compute and energy needed
+to train these very large networks with vast datasets [3, 2], as well as to
+perform rapid inference on the resulting highly capable models [2]. The
+Graphics Processing Units (GPUs) used for these compute tasks have
+scaled greatly in capability (and quantity), but only modestly in energyefﬁciency. Reductions in computational precision since 2015 [4] have
+now mostly saturated, and the beneﬁts of sparsity [5] are much less
+applicable to the large Fully-Connected (FC) layers found in LLMs –
+leaving technology node as the primary path to still higher efﬁciency.
+Recently, numerous researchers are exploring Compute-In-Memory
+(CIM) approaches [6, 7, 8] to increase energy-efﬁciency by performing
+Multiply-Accumuate (MAC) operations within ON-chip memory
+“Tiles,” thus markedly reducing the motion of model-weights and
+partial sums. By exploiting such weight stationarity over short
+timespans with Volatile Memories (VMs) – SRAM or e-DRAM [6,
+8] – or over longer timespans with slower, ﬁnite-endurance NonVolatile Memories (NVMs) – Flash [9], Resistive-RAM [10], or phasechange memory (PCM) [11, 12] – such CIM approaches can offer high
+throughput, low latency, and high energy-efﬁciency [6, 7, 8].
+
+II. T RANSFORMER - BASED NETWORKS
+While these beneﬁts can be seen across all DNN models, they
+are particularly pronounced for workloads that exhibit large FC
+layers, such as Transformer-based models [14, 13, 2]. Such models,
+
+including BERT-base [13], BERT-large [13], and GPT-3 [2], use a
+stack of 12, 24, or 96 identically-structured layers, each comprising
+4 large FC-layers (In-projection, Out-projection, FC1, FC2) and a
+self-attention block (Fig. 1). FC-compute operations (OPs) typically
+dominate the workload, but scale linearly with sequence-length S ;
+attention-compute OPs scale as S 2 .
+Encoder-based models perform Natural Language Processing
+(NLP) classiﬁcation-tasks (sentiment analysis, etc.) by pushing an
+entire sequence of S “tokens” through the layer-stack, using all S 2
+elements of each attention-matrix (within each of the attention-heads,
+within each layer, Table 1). Decoder-based models generate one or
+more new tokens with a similar pass, except the attention-block uses
+masking and sparsity to reduce the amount of attention compute [2,
+15] to support long sequences. In an encoder-stack, tokens need to
+be staged before each attention-compute block, requiring signiﬁcant
+local scratchpad and disrupting pipelining. In contrast, the masked selfattention in a decoder-stack can proceed in a more pipelined manner,
+needing only a few incoming tokens before outgoing tokens can be
+injected into the subsequent Out-Projection block. Note that encoderbased models are trained in two steps – extensive pre-training that
+typically only needs to be performed once, followed by ﬁne-tuning
+for the particular classiﬁcation task at hand. Ultra-large LLMs are
+so capable after pre-training that sometimes only simple “prompt
+engineering” is required.
+The sheer size of these Transformer-based LLMs calls for more
+efﬁcient AI compute. While the macro-level energy-efﬁciency of a
+CIM-Tile is demonstrably high [6, 8], it is non-trivial to deliver high
+system energy-efﬁciency — but careful design can implement the
+necessary Auxiliary digital compute, and can communicate excitationvectors between Tiles and Compute-cores with reasonable energy and
+time [16]. VM-based CIM systems also need to occasionally move
+weight-vectors, in order to reuse the same small set of Tiles for many
+different FC-layers comprising different weight matrices.
+
+III. A NALOG -FABRIC A RCHITECTURE
+We recently introduced a highly programmable Analog-AI and
+Compute-In-Memory accelerator architecture [16], which utilizes a
+highly specialized set of Compute-cores and Tiles arranged within a
+common building block known as an Analog Fabric (AF) (Fig. 2),
+together with SRAM scratchpads, IO blocks, and a 2D Mesh on top of
+the building blocks. Border-Guard circuits (BGs) are placed between
+components to control dataﬂow over the 2D mesh for high throughput
+and energy-efﬁciency across a wide variety of workloads, supporting
+multi-casting of data-vectors traveling from Compute-cores to Tiles.
+This on-chip interconnect helps enable system-level utilization and
+efﬁciency well beyond current AI accelerator systems. Multiple AFs
+can share the same chiplet, which can be tiled for system scale-up.
+type
+# of layers
+hidden vector-size
+# of attn. heads/layer
+head-size
+sequence-length
+FC : attn. compute
+# of weights
+
+Fig. 1: Transformer-based models push sequences of tokens (vectors encoding
+words) through a stack of layers, each layer comprising 4 large FC-blocks and a
+self-attention (SA) block. Decoder-based architectures use a masked SA-block.
+
+BERT-base [13]
+
+BERT-large [13]
+
+GPT-3 [2]
+
+encoder
+12
+768
+12
+64
+128 – 512
+97% : 3%
+85M
+
+encoder
+24
+1024
+16
+64
+128 – 512
+98% : 2%
+302M
+
+decoder
+96
+12,288
+96
+128
+2,048
+95% : 5%
+174B
+
+Tile-size assumed
+512
+512
+tiles/layer
+38
+48
+3
+4
+CCH cores/layer
+Table 1 – Transformer-based DNN models
+
+1024
+1,728
+24
+
+Authorized licensed use limited to: INDIAN INSTITUTE OF TECHNOLOGY GUWAHATI. Downloaded on October 06,2026 at 19:05:18 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 2 ===
+Fig. 2: A base chiplet is either a) repeated vertically to create a Fully-Weight-Stationary (FWS) system, or b) reused by weight-reloading to create a Partially-WeightStationary (PWS) system. Blocks such as analog-memory Tiles, Heavy and Light Compute-cores (CCH and CCL ), scratchpads (M C ), and both off-chip and Die-to-Die
+(D2D) IO are interconnected using c) a 2D Mesh with BorderGuard circuits (BGs) for dataﬂow control. In an FWS system, both Ohm’s law and Kirchhoff’s law allow
+Analog-AI compute using Non-Volatile Memory (NVM)-based resistors; in a PWS system, weight-reloading mandates high-endurance SRAM (or e-DRAM), using
+Kirchhoff’s law or charge sharing for MAC computation with multiple word- and/or bit-lines (not shown) [8], and large Memory-Cores (or off-chip DRAM, not shown)
+to store layer-weights. (Part (c) adapted from [16].)
+
+The Tiles are the primary MAC-compute and weight storage units
+for the DNN inference workload. In NVM-based accelerators, the
+conductance G of the analog resistive device implements synaptic
+weight, while voltage level or duration implements input activations.
+Activations arrive as parallel bit-streams via the 2D Mesh and are
+converted into analog pulse durations, enabling parallel excitation of
+the analog memory array. Multiply-accumulation is performed by the
+combination of Ohm’s and Kirchhoff’s Current Laws (Fig. 2c) [17,
+7]. The resulting raw summations are converted from analog current
+and integrated charge back into digital vectors, which are then
+transmitted using the 2D Mesh. Conversion is performed in parallel
+using dedicated Current-Controlled Oscillator (CCO)-based Analogto-Digital Converters (ADCs) [12].
+Given the ﬁnite endurance, and the slow and power-hungry programming of NVM-devices, such Analog-AI systems must be FullyWeight-Stationary (FWS) – every weight must be pre-programmed
+before execution of the inference workload begins. While this requires
+unique NVM-devices for each and every weight in the model, there are
+numerous beneﬁts. No time or energy is spent moving weights during
+the workload, allowing the maximum degree of pipelining supported
+by the model. Adverse tradeoffs between efﬁciency and latency are
+avoided, so that the system inherently reaches maximum throughput
+and energy-efﬁciency at batch-sizes as low as b=2. Excess padding of
+short sequences is also not required.
+By optimizing a spatial distribution of Tiles and Compute-cores to
+meet the needs of diverse networks (including LSTMs, Transformers,
+and CNNs), together with a well-optimized 2D mesh-interconnect, we
+
+showed that this Analog-AI CIM-based architecture can be 40×-140×
+more energy-efﬁcient than the NVIDIA A100 (compared at b=8) across
+networks of interest [16]. The NVM-Tile assumed here is based on
+PCM, with characteristics (100 TOPS/W at 40 nsec integration-time)
+taken from 14nm-node circuit-simulations [16].
+We now turn to various challenges involving devices (accurate
+programming of NVM devices within high-yield arrays), array- and
+chip-circuitry (reducing nonlinearities, orchestrating vectorized communication, and efﬁciently performing specialized digital-compute),
+and algorithms (preparing model weights, maximizing DNN accuracy).
+
+IV. WAFER - SCALE TESTING
+The vast number of NVM CIM-Tiles needed (Table 1) must be
+implemented at high-yield. While identifying completely dead chips
+with Wafer-Scale Testing (WST) is straightforward, ﬂagging PCMbased Analog-AI chips that “work, but not very well” is more difﬁcult.
+Unlike a digital memory characterized by bit-error-rate and fast writelatency, an Analog-AI array requires precise conductance-tuning across
+broad resistance range. While array readout must be fast (nanosecond
+regime), models are installed infrequently — so slow and complex
+iterative-write-and-verify schemes that can maximize DNN accuracy
+by reducing write-programming errors are preferred. Yet such iterative
+schemes are far too slow for screening entire wafers. So we need to
+gauge the suitability of the PCM arrays for Analog-AI using a very
+small number of conductance-reads per device.
+Since device-to-device variability primarily manifests as broadened
+RESET (lowest-conductance) and SET (highest-conductance) distributions, we can perform efﬁcient WST for multicore PCM-based
+Analog AI by examining the sharpness of the RESET and SET
+Cumulative Distribution Functions (CDFs). Devices in an ideal array
+should exhibit nearly-identical RESET and SET resistances with large
+contrast (> 5×) [20]. Fig. 3 shows how this maximum achievable
+SET conductance varies across Tiles, chips, and a full wafer. Chips
+identiﬁed by WST as having either poor contrast or excessively high
+SET distributions tend to exhibit poor weight-programming accuracy.
+
+V. C HIP DEMONSTRATIONS OF VARIOUS DNN
+
+Fig.3: Full Wafer Maps and CDFs for the (a) S50 and (b) S90 -S10 spread, indicating
+the conductance change, expressed in digital integration counts, for the median
+(50%) SET-state conductance value and the spread between the 10% and 90% SET
+conductance.
+
+While chiplets with high NVM-yield are necessary for accurate
+DNN inference, they are not sufﬁcient. Each NVM CIM-Tile must
+implement accurate MAC operations, despite the presence of device
+and circuit noise, circuit nonlinearities, and quantization effects. The
+resulting excitation vectors must then efﬁciently move between Tiles
+and Compute-cores used for efﬁcient Auxiliary compute, leading to
+DNN results at high throughput, high energy-efﬁciency, and lowlatency – delivered at- or near the software-equivalent DNN accuracy
+
+Authorized licensed use limited to: INDIAN INSTITUTE OF TECHNOLOGY GUWAHATI. Downloaded on October 06,2026 at 19:05:18 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 3 ===
+Test Error in %
+Source
+HWA [18]
+chip [19]
+
+DNN
+
+Normalized acc. in %
+
+model-size
+
+FP32
+
+1 sec
+
+1 hour
+
+1 day
+
+57M
+45M
+
+11.8
+7.452
+
+12.22
+9.258
+
+12.36
+
+12.42
+
+RNN-T SWB300
+RNN-T LibriSpeech
+
+1 week
+9.894
+
+1 year
+
+A1h
+∗
+
+A1d
+∗
+
+12.78
+
+99.4
+98.0
+
+99.3
+
+A1w
+∗
+
+A1y
+∗
+98.9
+
+97.4
+
+HWA [18]
+BERT-base GLUE8
+85M
+17.47
+17.43
+17.55
+17.58
+17.99
+99.8
+99.8
+98.9
+HWA [18]
+ALBERT-base GLUE8
+7.8M
+19.46
+20.52
+20.45
+21.08
+22.18
+97.8
+96.4
+94.0
+HWA [this work] RoBERTa-base GLUE8
+85M
+15.83
+16.67
+16.76
+16.96
+16.97
+17.43
+98.1
+97.7
+97.7
+96.7
+Table 2 – DNN accuracy from Hardware-Aware Training [18] and chip-testing [19], plus new results for HWA training of RoBERTa-base.
+Encoder
+
+Pre-processing
+
+a
+speech
+features
+
+Enc-LSTM0
+
+Enc-LSTM1
+
+chip 1
+
+chip 2
+
+Joint
+
+Enc-LSTM3-4,
+Enc-FC
+
+Enc-LSTM2
+
+chip 3
+
+Decoder
+
+chip 4
+
+LSTM0x
+
+LSTM0h
+
+LSTM3
+
+LSTM4
+
+Enc-FC
+
+Input Wh
+Output
+MAC
+
+Input Activation
+and MAC
+
+MAC to Output
+
+Input Activation
+and MAC
+
+Digital
+core
+
+Letters
+
+Dec-Emb,
+Dec-LSTM0-1,
+Dec-FC
+
+Simulated digital processing
+
+b
+Input Wx
+
+Joint-FC
+
+chip 5
+
+h
+
+Input Wx3
+Input Wh3,
+Wx4
+Input Wh4,
+Enc-FC
+
+n
+u
+
+Experimental result:
+‘with entrees served clarets
+or other red wines such as
+swiss _ordeau_ hungarian
+or italian wines’
+
+MAC to Output
+
+Fig.4: (a) RNNT model transcribes input speech into words, character by character,
+using compute blocks mapped onto 5 chips (plus off-chip digital-compute). 45M
+weights are implemented with ∼140M PCM devices, (b) with complex routing and
+multicasting of input- and MAC-vectors across 34 Tiles. Example sentence from
+experimental results, at 9.258% Word-Error-Rate [19].
+)HDWXUH
+([WUDFWLRQ
+
+W 
+
+[
+3&0XQLWFHOO
+DUUD\
+
+/670/D\HUV
+,QSXWJDWH
++LGGHQJDWH
+2XWSXW/D\HU
+
+E
+
+W!
+
+$'&V
+
+$'&V
+
+'LDJRQDOGHFRGHU
+
+,QSXW'$
+
+:RUG(PEHGGLQJ
+
+/RFDOGLJLWDOSURFHVVLQJXQLW
+/'38
+
+0$&$IILQH6FDOLQJ5H/8
+'LJLWDO3URFHVVLQJ8QLW
+
+ı
+
+6LJPRLG
+
+W
+
+7DQK
+
+F
+
+&HOOVWDWH
+
+[
+
+0XOWLSOLFDWLRQ
+
+
+
+$GGLWLRQ
+
+)RUJHW 2XWSXW
+*DWH
+*DWH
+
+&HOO
+,QSXW
+
+ı
+
+ı
+
+W
+
+ı
+
+[
+F
+
+[
+
+
+[
+
+W
++LGGHQ
+6WDWH
+
+6LJPRLG7DQK&HOOVWDWHFRPSXWDWLRQ
+
+6LQJOH7LOH0$&
+
+$FWLYHRQFKLSOLQNV
+
+
+
+F
+%/(8
+
+
+
+
+
+
+)3
+%DVHOLQH
+
+&KLS
+
+
+
+
+
+
+
+,GHDO0$&
+
+%/(8
+
+
+
+
+
+%/(8
+
+
+
+
+
+%/(8
+
+
+
+
+
+
+
+:HLJKWHUURUDFURVVWLOHV
+LQFOXGLQJSURJUDPPLQJHUURUV
+GULIWDQGUHDGQRLVH
+
+
+
+:HLJKWHUURU 
+
+,QSXWVDUHGHOLYHUHG ,QSXW
+WKURXJKRQFKLSOLQNV *DWH
+
+
+
+0HDVXUHG0$&
+
+&L07LOH
+
+D
+
+
+
+
+
+1H[WZRUG
+
+3URGXFHG&DSWLRQ
+
+DEODFNDQGZKLWHGRJ
+LVUXQQLQJWKURXJKWKHZDWHU
+
+
+
+
+
+
+
+
+
+
+
+
+7DUJHWZHLJKW
+
+Fig. 5: a) A 64-Tile chip combines CCO-based ADCs and local digital-compute
+(scaling, ReLU activations) at each Tile, together with more complex digital
+processing (sigmoid & tanh activations, LSTM-vector OPs) at chip-center, to
+implement an image-captioning LSTM model. b) Highly-linear MAC operations
+and accurate weight-programming resulted in c) software-equivalent BLEU scores.
+
+exhibited by the original DNN model (as implemented on a CPU or
+GPU using 32-bit Floating-Point (FP32) compute). We describe several
+chip-demonstrations that extend the boundaries of total number of
+DNN weights implemented and complexity of excitation orchestration,
+the integration of highly-linear, well-characterized and optimized
+NVM CIM-Tile compute, and the implementation of Auxiliary
+compute at or near the CIM-Tiles.
+Recently, a large Recurrent Neural Network Tranducer (RNNT)
+model (Fig. 4a) was demonstrated [19], using 5 chips to encode 45M
+weights using >140M PCM devices. Tightly-orchestrated transport
+of massively-parallel excitation vectors was implemented using a 2-D
+mesh similar to Fig. 2 (here conveying durations rather than digitalbits). While nearly all MAC operations are performed on-chip, the
+remaining digital operations are performed off-chip. Near softwareequivalent accuracy (<2% degradation in Word Error Rate) was
+measured on the Librispeech dataset, along with an estimated 14×
+beneﬁt in system performance, expressed as TOPS/W or Samples/s/W,
+over existing MLPerf digital submissions based on GPUs. This chipdemo implements a large number of DNN weights, together with
+experimental demonstration of the 2-D circuit-switched mesh concept.
+On a second chip, we integrated CCO-based ADCs (one per
+integration-row) into PCM-based CIM-Tiles [21] (Fig. 5). This chip
+also features digital Auxiliary-compute for afﬁne-scaling and complex
+activation-functions (ReLU, sigmoid, tanh) at or near the CIMTiles, and was used to demonstrate an LSTM-based image-captioning
+network with high accuracy (Fig. 5). All computation (fully-connected
+layers, LSTM vector-operations) were performed on-chip; excitationvectors were pulled off-chip for data-motion between chip-blocks.
+
+VI. H ARDWARE -AWARE T RAINING OF DNN S
+We can further increase the robustness of DNN models by performing hardware-aware (HWA) training, preparing the network for the
+
+various imperfections in the Matrix-Vector-Multiplications (MVMs)
+performed on NVM-based CIM-Tiles. These arise from a variety of
+noise sources, nonlinearities and quantization effects. HWA training
+requires a model that is accurate enough to be predictive while still
+being amenable to the rapid computation needed to perform DNN
+training in reasonable time. HWA is analogous to quantization-aware
+training (QAT) methods now commonly used when deploying DNNs
+onto reduced-precision digital hardware [22].
+For instance, the image captioning network shown in Fig. 5 was
+trained with HWA techniques using a noise-model carefully matched
+to measured characteristics of the NVM-CIM tiles on the 64-Tile chip.
+In fact, starting with a model trained to high-accuracy with FP32,
+HWA training can greatly enhance the robustness of a variety of deep
+neural networks (DNNs) including recurrent neural networks (RNNs),
+and transformers (Table 2) as well as convolutional neural networks
+(CNNs) (not shown here, see Ref [18, 21]). In general, recurrent
+networks (such as LSTMs and RNNT) are the most robust to NVMbased CIM-Tile imperfections. Transformer models are reasonably
+robust, although models with fewer degrees-of-freedom tend to be less
+robust. For instance, ALBERT has the same number of operations as
+BERT-base but reuses the the same weights for all layers. While this
+may decrease the model footprint, there is a cost in both raw testerror performance and in robustness. In contrast, using HWA training
+techniques to perform the ﬁne-tuning for each GLUE classiﬁcationtask can provide fully software-equivalent accuracy on BERT-base, at
+least until the accumulated effects of one year of PCM conductancedrift after programming [18]. HWA training of RoBERTa – an
+optimized version of BERT trained on a much larger dataset – can
+provide even lower absolute test-errors (Table 2).
+As a result, we should be able to prepare many high-yield chiplets
+organized into an NVM-based Analog Fabric, accurately program
+model weights made highly robust with HWA-based ﬁne-tuning, and
+have an expectation to obtain the same accuracies as any digital system
+using ∼4-bit weights and 8-bit excitations, with high energy-efﬁciency.
+
+VII. B ENEFITS OF F ULL W EIGHT S TATIONARITY
+But one might ask: “Why make the effort to provide all the NVM
+CIM-Tiles needed for a Fully-Weight-Stationarity (FWS) system?
+Since a Partially-Weight-Stationary (PWS) system can greatly reduce
+the number of Tiles, perhaps weight-reloading can be infrequent
+enough that it is not troublesome?” To answer these questions, we
+employ the same performance simulator used in Ref [16].
+The AF used in Ref [16] was optimized for performance across
+a wide variety of workloads. Here we introduce two new AFs
+Fig. 2(a,b), designed speciﬁcally for BERT-base and BERT-large,
+containing exactly enough tiles, MC-cores, CCL and CCH cores for
+one layer of BERT-large (a few Compute-cores and Tiles are powergated for BERT-base). Die-to-Die (D2D) I/O cores are added to
+provide sufﬁcient interconnect between FWS chiplets. Both systems
+use exactly the same Tile characteristics (100 TOPS/W, 40nsec
+integration). This Tile performance (10.9 TOPs/sq.mm) matches or
+exceeds existing SRAM-based CIM-Tiles [23].
+Our AF architecture was adapted for VM-based CIM tiles, to implement a highly-efﬁcient PWS system by adding additional scratchpad
+(MC) cores (Fig. 2(b)), both for staging of excitations (b × S tokens)
+each time the workload passes through the currently-programmed
+VM-CIM tiles, and for weight-storage across all the layers (up to
+12 MB, 10 sq.mm per MC). (Alternatively, weights could be loaded
+from DRAM, albeit at a signiﬁcant energy cost.) To reduce data-trafﬁc
+and reduce weight rewriting, odd layers progress from south to north,
+even layers from north to south. These choices, and the fraction of
+the network implemented between reloading, will drive interesting
+
+Authorized licensed use limited to: INDIAN INSTITUTE OF TECHNOLOGY GUWAHATI. Downloaded on October 06,2026 at 19:05:18 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 4 ===
+VIII. C ONCLUSION
+
+Fig.6: Progress through BERT-base DNN-layer-blocks vs. time for the (a) PWS and
+(b) FWS systems. The timing of the 12-layers and b=8 sentences, the staging of all
+sentence-tokens before initiating self-attention (QKV) compute, and the staging of
+residually-connected data are all visible. PWS runs include weight-reloading before
+a CIM-Tile can be reused with different weights, and after the workload (to return
+the system to its initial state).
+
+Analog non-volatile memory (NVM)-based accelerators can offer
+high-throughput and energy-efﬁcient multiply-accumulate (MAC)
+operations for the large Fully-Connected (FC) layers that dominate
+Transformer-based Large Language Models (LLMs). We describe
+a highly heterogeneous and programmable accelerator architecture
+for DNN inference that combines Compute-In-Memory (CIM) Tiles
+for weight-stationary, energy-efﬁcient MAC operations, together with
+heterogeneous special-function Compute-cores for auxiliary digital
+computation. Massively parallel vectors of neuron-activation data are
+exchanged over short distances using a dense and efﬁcient circuitswitched 2D mesh, with analog compute implemented using Ohm’s
+law and Kirchhoff’s current law on arrays of resistive memory devices.
+If weights are accurately programmed onto NVM devices and MAC
+operations are sufﬁciently linear, competitive DNN accuracies can be
+obtained, aided by Hardware-Aware training techniques. Even though
+a Fully-Weight-Stationary system does occupy more area, it offers
+so much throughput that it effectively pays for itself in terms of
+TOPS/sq.mm. We show that an FWS system can offer a 6× higher
+raw-throughput and 7× faster latency.
+
+IX. ACKNOWLEDGEMENT
+We thank W. Wilcke, S. Narayan, S. Munetoh, S. Yamamichi,
+C. Osborn, J. Burns, R. Divakaruni, M. Khare and the IBM Research AI Hardware Center for management and logistical support.
+
+R EFERENCES
+[1]
+[2]
+[3]
+[4]
+[5]
+[6]
+[7]
+
+Fig. 7: 1-bit TOPS/W vs. 1-bit TOPS/sq.mm examples [8], with new data points
+from this study marked for Partially-Weight-Stationary (cyan solid circle) and FullyWeight-Stationary (blue solid diamond) solutions capable of implementing BERTlarge. Identical CIM-Tile performance (100 TOPS/W, 40nsec raw Tile-compute,
+open symbols) are assumed for PWS (e.g., SRAM-based CIM) and FWS (e.g.,
+PCM-based CIM [16]), assuming 8-bit excitations and 4-bit (equivalent) weights.
+
+tradeoffs across sequence-length and batch-size (here S =128 and b=8),
+which we plan to study carefully in future work.
+Fig. 6 shows the trajectory of the 8 sentences through the 12 layers
+of BERT-base, for both PWS and FWS systems, and Table 3 shows the
+results. Although the FWS system does occupy more area, the system
+throughput is signiﬁcantly higher. Thus TOPS/sq.mm is maintained
+while offering markedly reduced latency — a beneﬁt that is difﬁcult to
+recover by simply duplicating the PWS system out to iso-area. Fig. 7
+puts these quantitative performance results in context to each other and
+to prior SRAM- and NVM-based CIM studies.
+12-layer
+
+BERT-base
+Area [sq.mm]
+TOP/sec
+TOP/sec/W
+TOP/sec/sq.mm
+latency [ms]
+24-layer
+
+BERT-large
+Area [sq.mm]
+TOP/sec
+TOP/sec/W
+TOP/sec/sq.mm
+latency [ms]
+
+Partially
+WS
+210
+47.5
+27.4
+0.23
+3.70
+
+Fully
+WS
+12×94
+235
+29.1
+0.21
+0.55
+
+FWS is. . .
+5.3× larger, but. . .
+4.95× faster
+1.06× as energy-efﬁcient
+0.93× as area-efﬁcient, but
+6.75× faster
+
+Partially
+WS
+350
+82.2
+33.6
+0.23
+7.58
+
+Fully
+WS
+24×94
+495
+35.5
+0.22
+1.06
+
+FWS is. . .
+6.4× larger, but. . .
+6.02× faster
+1.06× as energy-efﬁcient
+0.94× as area-efﬁcient, but
+7.16× faster
+
+[8]
+[9]
+[10]
+[11]
+[12]
+[13]
+[14]
+[15]
+[16]
+[17]
+[18]
+[19]
+[20]
+[21]
+[22]
+[23]
+
+Table 3 – Performance modeling results: Fully- vs. Partially-Weight-Stationary
+
+A. Krizhevsky, I. Sutskever, and G. E. Hinton. “Imagenet classiﬁcation with deep
+convolutional neural networks”. In: Adv. Neur. Inf. Proc. Sys. 25 (2012).
+T. B. Brown et al. “Language Models are Few-Shot Learners”. In: arXiv:2005.14165
+(2020).
+D. Amodei and D. Hernandez. AI and Compute. URL: https://openai.com/blog/aiand-compute/.
+S. Gupta et al. “Deep Learning with Limited Numerical Precision”. In: ICML. June
+2015, pp. 1737–1746.
+T. Hoeﬂer et al. “Sparsity in deep learning: Pruning and growth for efﬁcient inference
+and training in neural networks”. In: J. Mach. Learn. Res. 22.1 (2021), pp. 10882–
+11005.
+N. Verma et al. “In-Memory Computing: Advances and Prospects”. In: IEEE Sol.State Circ. Mag. 11.3 (2019), pp. 43–55.
+G. W. Burr et al. “Ohm’s Law + Kirchhoff’s Current Law = Better AI: NeuralNetwork Processing Done in Memory with Analog Circuits will Save Energy”. In:
+IEEE Spectrum 58.12 (2021), pp. 44–49.
+N. R. Shanbhag and S. K. Roy. “Benchmarking In-Memory Computing Architectures”. In: IEEE Open J. Sol.-State Circ. Soc. 2 (2022), pp. 288–300.
+L. Fick et al. “Analog matrix processor for edge AI real-time video analytics”. In:
+ISSCC. Vol. 65. 2022, pp. 260–262.
+J.-H. Yoon et al. “A 40nm 100Kb 118.44 TOPS/W Ternary-weight ComputeinMemory RRAM Macro with Voltage-sensing Read and Write Veriﬁcation for
+reliable multi-bit RRAM operation”. In: CICC. 2021, pp. 1–2.
+P. Narayanan et al. “Fully On-Chip MAC at 14 nm Enabled by Accurate Row-Wise
+Programming of PCM-Based Weights and Parallel Vector-Transport in DurationFormat”. In: IEEE Trans. Electr. Dev. 68.12 (2021), pp. 6629–6636.
+R. Khaddam-Aljameh et al. “HERMES-core—A 1.59-TOPS/mm 2 PCM on 14-nm
+CMOS in-memory compute core using 300-ps/LSB linearized CCO-based ADCs”.
+In: IEEE J. Solid State Circ. 57.4 (2022), pp. 1027–1038.
+J. Devlin et al. “BERT: Pre-training of deep bidirectional transformers for language
+understanding”. In: arXiv preprint arXiv:1810.04805 (2018).
+A. Vaswani et al. “Attention is All you Need”. In: Adv. Neur. Inf. Proc. Sys. 2017,
+pp. 5998–6008.
+R. Child et al. “Generating long sequences with sparse transformers”. In:
+arXiv:1904.10509 (2019).
+S. Jain et al. “A Heterogeneous and Programmable Compute-In-Memory Accelerator
+Architecture for Analog-AI using Dense 2D Mesh”. In: IEEE Trans. VLSI Systems
+31.1 (2023), pp. 114–127.
+P. Narayanan et al. “Toward on-chip acceleration of the backpropagation algorithm
+using nonvolatile memory”. In: IBM J. Res. Dev. 61.4/5 (2017), 11:1–11:11.
+M. J. Rasch et al. “Hardware-aware training for large-scale and diverse deep
+learning inference workloads using in-memory computing-based accelerators”. In:
+arXiv:2302.08469 (2023).
+S. Ambrogio et al. “An Analog-AI Chip for Energy-Efﬁcient Speech Recognition
+and Transcription”. In: Nature (2023). to appear.
+V. Chan et al. “Yield Methodology and Learning in Phase Change Memory
+(PCM) technology for Analog Computing: Topic/category: YE: Yield Enhancement/Learning, YM: Yield Methodologies”. In: ASMC. 2022, pp. 1–4.
+M. Le Gallo et al. “A 64-core mixed-signal in-memory compute chip based on
+phase-change memory for deep neural network inference”. In: Nature Electronics
+(2023). to appear.
+A. Agrawal et al. “9.1 A 7nm 4-Core AI Chip with 25.6TFLOPS Hybrid FP8
+Training, 102.4TOPS INT4 Inference and Workload-Aware Throttling”. In: ISSCC.
+Vol. 64. 2021, pp. 144–146.
+H. Jia et al. “Scalable and programmable neural network inference accelerator based
+on in-memory computing”. In: IEEE J. Solid-State Circ. 57.1 (2021), pp. 198–211.
+
+Authorized licensed use limited to: INDIAN INSTITUTE OF TECHNOLOGY GUWAHATI. Downloaded on October 06,2026 at 19:05:18 UTC from IEEE Xplore. Restrictions apply.

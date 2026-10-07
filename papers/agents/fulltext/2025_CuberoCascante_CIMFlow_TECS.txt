@@ -1,0 +1,2018 @@
+# CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory Deep Learning Accelerators
+# id: W4413633179 | key: 2025_CuberoCascante_CIMFlow_TECS | TECS 2025 | card: ../cards/2025_CuberoCascante_CIMFlow_TECS.md
+
+
+=== page 1 ===
+CIMFlow: Modelling Dataflow in Cross-Layer
+Compute-in-Memory Deep Learning Accelerators
+JOSÉ CUBERO-CASCANTE, Institute for Communication Technologies and Embedded Systems, RWTH
+Aachen University, Aachen, Germany
+LUCAS TONINI ROSENBERG SCHNEIDER, Institute for Communication Technologies and Embedded Systems, RWTH Aachen University, Aachen, Germany
+REBECCA PELKE, Institute for Communication Technologies and Embedded Systems, RWTH Aachen
+University, Aachen, Germany
+ARUNKUMAR VAIDYANATHAN, Institute for Communication Technologies and Embedded Systems, RWTH Aachen University, Aachen, Germany
+RAINER LEUPERS, Institute for Communication Technologies and Embedded Systems, RWTH Aachen
+University, Aachen, Germany
+JAN MORITZ JOSEPH, Institute for Communication Technologies and Embedded Systems, RWTH
+Aachen University, Aachen, Germany
+Traditional Deep Learning Accelerators (DLAs) rely on off-chip memory to store large weight tensors, leading
+to high bandwidth demands and energy consumption. Compute-in-Memory (CIM) accelerators mitigate this
+by integrating high-density, non-volatile memory arrays, enabling a fully weight-stationary (FWS) dataflow.
+Multi-core CIM systems further enhance efficiency with cross-layer inference, where intermediate tensors
+stay on-chip, and cores operate in a pipeline. Despite diverse architecture proposals, no existing tool models
+the dataflow, memory access patterns and timing behaviour of multi-core CIM accelerators. We introduce
+CIMFlow, a modelling framework for cross-layer CIM architectures. Our flexible Hardware Architecture
+Model includes CIM and digital cores and leverages the buffets storage idiom for distributed token-based flow
+control. An Array-OL-based Workload Model captures CNNs’ multidimensional dependencies and applies
+hardware-aware transformations. These models are transformed into a timed cyclo-static dataflow graph
+for simulation. CIMFlow delivers latency, energy and traces for core and buffer utilisation. Our case studies
+on state-of-the-art CNNs show that cross-layer inference reduces latency by up to 52×. We also reveal that
+neglecting memory access delays results in throughput overestimations of up to 308%. To our knowledge,
+This work was funded by Germany’s Federal Ministry of Research, Technology and Space (BMFTR) in the project NEUROTEC
+II (Project Nos. 16ME0398K, 16ME0399).
+Authors’ Contact Information: José Cubero-Cascante, Institute for Communication Technologies and Embedded Systems,
+RWTH Aachen University, Aachen, Germany; e-mail: cubero@ice.rwth-aachen.de; Lucas Tonini Rosenberg Schneider,
+Institute for Communication Technologies and Embedded Systems, RWTH Aachen University, Aachen, Germany; e-mail:
+schneider@ice.rwth-aachen.de; Rebecca Pelke, Institute for Communication Technologies and Embedded Systems, RWTH
+Aachen University, Aachen, Germany; e-mail: pelke@ice.rwth-aachen.de; Arunkumar Vaidyanathan, Institute for Communication Technologies and Embedded Systems, RWTH Aachen University, Aachen, Germany; e-mail: vaidyanathan@ice.rwthaachen.de; Rainer Leupers, Institute for Communication Technologies and Embedded Systems, RWTH Aachen University,
+Aachen, Germany; e-mail: leupers@ice.rwth-aachen.de; Jan Moritz Joseph, Institute for Communication Technologies and
+Embedded Systems, RWTH Aachen University, Aachen, Germany; e-mail: joseph@ice.rwth-aachen.de.
+
+This work is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+International License.
+© 2025 Copyright held by the owner/author(s).
+ACM 1539-9087/2025/09-ART103
+https://doi.org/10.1145/3760780
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 2 ===
+103:2
+
+J. Cubero-Cascante et al.
+
+CIMFlow is the first tool focused on FWS cross-layer execution in CIM architectures that explicitly models
+data movement costs. It serves as a powerful cost model for design space exploration in next-generation CIM
+accelerators.
+CCS Concepts: • Computing methodologies → Modeling methodologies; • Computer systems organization → Multicore architectures; • Hardware → Emerging architectures;
+Additional Key Words and Phrases: Compute-in-memory, cross-layer, dataflow simulation
+ACM Reference Format:
+José Cubero-Cascante, Lucas Tonini Rosenberg Schneider, Rebecca Pelke, Arunkumar Vaidyanathan, Rainer
+Leupers, and Jan Moritz Joseph. 2025. CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory
+Deep Learning Accelerators. ACM Trans. Embedd. Comput. Syst. 24, 5s, Article 103 (September 2025), 22 pages.
+https://doi.org/10.1145/3760780
+
+1
+
+Introduction
+
+Deep Learning (DL) applications have driven important advancements across different domains,
+such as computer vision and natural language processing. Modern Deep Neural Networks (DNNs)
+contain several hidden layers and have grown exponentially in scale and complexity over the years.
+They incorporate thousands of parameters and perform millions of operations during inference. As
+a result, DNNs demand extensive resources for both arithmetic operations and data movement.
+To address this computational challenge, specialised Deep Learning Accelerators (DLAs) have
+been developed in recent years [10, 16]. Conventional digital DLA architectures utilise synaptic
+arrays arranged in a single core and process one layer at a time [27]. These systems rely on off-chip
+memory to store all filter weights, inputs, outputs, and intermediate feature maps, thereby limiting
+their throughput to the available memory bandwidth. This limitation is known as the Von-Neumman
+bottleneck or memory wall [26].
+Compute-in-Memory (CIM)-based accelerators are a promising solution to overcome the
+memory wall. On-chip CIM-cores, equipped with non-volatile memory arrays, are used as storage
+and computation units [11]. Demonstrator chips achieving low power massively parallel matrixvector multiplication (MVM) operations have been built using arrays of Resistive Random
+Access Memory (RRAM) [34] and Phase Change Memory (PCM) [20]. These devices can
+provide enough memory density to store all the weights of a small to medium DNN model onchip [26]. This way, a fully-weight-stationary (FWS) dataflow is possible, drastically reducing
+the bandwidth and storage requirements for off-chip memories. Following these principles, several
+architectures have been proposed, where multiple CIM-cores, on-chip buffers and interconnect are
+integrated in a single chip [4, 15, 20, 31].
+CIM DLAs with FWS dataflows can also take advantage of cross-layer inference, a scheduling
+technique where the results from one layer are forwarded to the next before finishing its computation. Instead of processing the workload layer-by-layer, cross-layer inference schedules the
+operations in a way that allows multiple layers to be processed concurrently [28]. This approach
+creates a pipeline where different parts of the DNN are executed concurrently, significantly increasing the temporal utilisation of the processing elements and the throughput of the accelerator [28].
+This concept is illustrated in Figure 1.
+With cross-layer inference, feature maps are kept in on-chip buffers shared by producer and
+consumer cores, further reducing the burden on the off-chip memory. However, cross-layer inference
+also increases the complexity of the data orchestration between the different stages of this pipeline,
+which is still an open problem in the literature.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 3 ===
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+
+103:3
+
+L3
+
+L1
+L0
+
+L3
+
+L0
+
+L1
+
+L2
+
+L2
+
+L3
+
+L1
+
+L2
+
+L0
+
+(a)
+
+(b)
+
+t
+
+(c)
+
+t
+
+Fig. 1. Layer-by-layer vs cross-layer inference. (a) Simple DNN with four layers. (b) Layer-by-layer schedule
+for a traditional single-core accelerator. (c) Cross-layer schedule for a FWS CIM platform.
+
+Previous CIM-based accelerator proposals have recognised the importance of cross-layer inference [4, 15, 31]. However, a comprehensive model capable of representing and quantifying the
+various data orchestration aspects of cross-layer inference for CIM DLAs has not been introduced.
+Most design-space exploration (DSE) tools for DLAs were initially developed for digital accelerators and lack support for cross-layer inference [25, 27] or provide only limited functionality in
+this area [32]. CLSA-CIM [28] is a scheduling tool designed explicitly for cross-layer scheduling
+on FWS CIM architectures, but it does not consider the costs of data movement or orchestration
+strategies.
+This work aims to fill this gap by introducing CIMFlow, a framework for modelling and simulating
+the dataflow in CIM-based DLAs. Our main contributions are:
+— An Array-OL-based Workload Model for DNNs that expresses data dependencies and inherent
+parallelism. This multidimensional representation is useful for performing hardware-aware
+transformations such as splitting kernel weight tensors to fit within the CIM-Core dimensions
+and creating tensor slices for cross-layer execution.
+— A powerful Execution Model for cross-layer inference on multi-core CIM accelerators. This
+extendable model uses a Timed Cyclo-Static Dataflow (TCSDF) graph to describe the
+dataflow between compute and storage units in the target hardware platform.
+— Through case studies with the CIMFlow framework on state-of-the-art (SOTA) DNN
+workloads, we demonstrate that neglecting data transfer costs can lead to throughput overestimations of up to 308%.
+The remainder of this article is structured as follows. Section 2 provides a summary of related
+works. We present the foundational concepts for our work in Section 3. An overview of CIMFlow in
+Section 4 is followed by a detailed description of our Hardware Architecture, Workload and Execution models in Sections 5, 6, and 7, respectively. In Section 8, we present case studies demonstrating
+the capabilities of CIMFlow. Concluding remarks are summarised in Section 9.
+2
+2.1
+
+Related Work
+CIM-based DLAs
+
+The potential benefits of CIM for the acceleration of DNN workloads has resulted in numerous
+architecture proposals [2, 4, 31] and demonstrator chips [15, 20, 34].
+ISAAC [31] presents multi-core CIM architectures and demonstrates the importance of cross-layer
+inference, which the authors refer to as pipelining. They employ weight duplication as a strategy to
+balance the pipeline and increase the temporal utilisation of the CIM processing elements (PEs).
+ISAAC employs a hierarchical interconnect where several tiles are connected using an on-chip
+concentrated mesh. In each tile, a group of CIM cores, digital cores and buffers are connected with a
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 4 ===
+103:4
+
+J. Cubero-Cascante et al.
+
+shared bus. PUMA [4] proposes an architecture based on a hierarchical interconnect, where shared
+memory buffers are present in each tile. The architecture is accompanied by a custom simulator
+that includes functionality, timing, and power models. RAELLA [2] is a more recent architecture
+proposal that also leverages a hierarchical interconnect. An energy model for RAELLA is available
+in the CIMLoop [3] open-source project.
+[15] presents a different CIM accelerator architecture that incorporates a 2D mesh to connect multiple PEs and digital cores. This work also provides a custom simulator to evaluate the performance
+and energy efficiency of the accelerator.
+Despite their suitability for FWS cross-layer data flows, these works do not provide tools to
+model cross-layer inference. Furthermore, the rationale behind the design of complex hierarchical
+network topologies and their dimensions is often unexplained. To address these gaps, CIMFlow
+provides a modelling tool for characterising dataflow patterns in multi-core CIM platforms. Our
+hardware abstraction model, presented in Section 5, is designed to be generic, allowing for reuse
+and fine-tuning across multiple target platforms.
+2.2 Cost Models and DSE Tools for CIM DLAs
+Several cost models and DSE tools for DLAs have been presented in recent years [3, 25, 27, 30, 32].
+Timeloop [27] is a well-established DSE exploration tool that integrates an analytical execution
+model and a mapper that explores the loop orders, tiling and parallelisation options for a given
+DNN layer. It targets digital single-core layer-by-layer digital accelerators. The Timeloop execution
+model works based on loop-nest analysis and generates action counts for each component in the
+hardware architecture. The technology library automation tool Accelergy [35] produces energy
+statistics based on the action counts. Accelergy is basically a wrapper, providing a single interface
+to established energy estimation tools, including CACTI [23] and NeuroSim [30].
+The latest version of the Timeloop/Accelergy framework, called CiMLoop [3], extends the capabilities of the original framework to support CIM accelerators. More specifically, it allows modelling
+data-value-dependent energy consumption, a key feature for CIM accelerators. Its architecture
+description provides enough flexibility to model the different kinds of CIM accelerators, both at
+circuit and architecture levels.
+However, the major limitation of the Timeloop/Accelergy framework is that it does not support
+cross-layer inference. This is a major drawback when considering the FWS mapping commonly
+found in CIM accelerators, as the temporal utilisation of the PEs will be substantially lower when
+inference happens in a layer-by-layer fashion.
+Another DSE tool that has been used in the context of DLA is ZigZag [25]. ZigZag follows the
+same principles as Timeloop. It uses a custom representation of the architecture, composed of
+an array of multiply-accumulate (MAC) units and a memory hierarchy. The workload is also
+represented as a set of independent loop nests, which are then mapped one-by-one to the hardware
+architecture.
+Stream [32] uses ZigZag as a cost model to schedule whole workload graphs instead of analyzing
+each layer individually, allowing it to explore cross-layer scheduling possibilities. To do so requires
+the user to specify the granularity to use when scheduling each layer. The scheduler in Stream
+uses a genetic algorithm to explore the design space, which is particularly useful for multicore
+digital accelerators, where the number of possible mappings is large. However, CIM DLAs typically employ large high-density 2D arrays for computation, and so the mapping space is more
+reduced [26].
+CLSA-CIM [28] is a scheduler specifically designed for CIM architectures based on RRAM. It
+introduces a novel cross-layer scheduling approach compatible with FWS systems. In their case
+studies, the combined benefits of cross-layer execution and weight duplication are quantified. This
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 5 ===
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+
+103:5
+
+tool predicts latency in compute cycles based on the number of PEs but it only considers MVM
+operations and disregards the cost of data movements.
+With CIMFow, we introduce novel execution and cost models specially tailored for CIM Crosslayer platforms. Instead of loop-based representations, we propose an Array-OL-based workload
+representation that enables hardware-aware transformations, including tiling for cross-layer execution. Moreover, our models support operations such as pooling, addition and concatenation in
+addition to MVMs. We employ the weight duplication algorithm from CLSA-CIM [28] and leverage
+Accelergy [35] to create energy reference tables (ERTs). Reference energy values for CIM-cores
+are taken from the open-source energy model for RAELLA [2], available at [1].
+3
+
+Background
+
+This section introduces key concepts that lay the foundation for the models in CIMFlow. We start
+by describing the major operations in DNNs in Section 3.1. Two models for describing parallel
+applications, Array-OL, and TCSDF, follow in Sections 3.2 and 3.3, respectively. The buffet storage
+idiom, which enables efficient data sharing in multi-core systems, is described in Section 3.4.
+3.1
+
+Operations in DNNs
+
+DNNs are composed of multiple layers arranged in a directed network [21]. In serial architectures,
+layers form a single sequential chain, whereas in residual networks, fork and join nodes create and
+merge multiple computational paths. The input and output of each layer are multidimensionalal
+arrays known as tensors. Beyond 2D convolutions, which are discussed in the next section, SOTA
+DNNs commonly incorporate layers such as dense (fully connected), addition, concatenation,
+max/average pooling, and reshape.
+3.1.1 Grouped 2D Convolutions. The multi-channel 2D convolution is one of the most common
+layers present in modern DNNs [21]. In these layers, a filter tensor 𝐹 of shape (𝐾𝑂 , 𝐾𝐼 , 𝐾𝐻 , 𝐾𝑊 ) is
+convolved with an input tensor 𝐼 of shape (𝑁 , 𝐾𝐼 , 𝐼𝐻 , 𝐼𝑊 ) to produce an output tensor of shape 𝑂
+(𝐵, 𝑂𝑐 , 𝑂ℎ , 𝑂𝑤 ). In some networks, groups are used to create disjoint sets from the input and output
+tensors and reduce the number of MAC operations [19]. Equation (1) shows a general equation
+for a grouped multi-channel 2D convolution. The convolution dimensions are detailed in Table 1.
+Pointwise layers are obtained by setting 𝐺 = 𝐾𝐻 = 𝐾𝑊 = 1, while depthwise layers are obtained
+by setting 𝐾𝐼 = 𝐾𝑂 = 1.
+𝐾
+
+𝑘
+𝑂
+
+⌊ 𝐾 𝑜/𝐺 +1⌋ 𝐺𝐼 −1 𝐾 −1 𝐾 −1
+
+𝑂[𝑏, 𝑘𝑜 , 𝑜ℎ , 𝑜𝑤 ] =
+
+𝐻
+
+𝐾
+
+𝑖𝑐 =⌊ 𝐾 𝑘𝑜/𝐺 ⌋ 𝐺𝐼
+𝑂
+
+3.2
+
+𝑊
+
+∑ ∑ 𝐼 [𝑏, 𝑖𝑐 , (𝑜ℎ 𝑆𝐻 +𝑓ℎ −𝑃𝐻 ), (𝑜𝑤 𝑆𝑊 +𝑓𝑤 −𝑃𝑊 )]⋅ 𝐹 [𝑘𝑜 , 𝑖𝑐 , 𝑓ℎ , 𝑓𝑤 ].
+
+∑
+
+𝑓ℎ =0 𝑓𝑤 =0
+
+(1)
+
+Array-OL
+
+Array-OL is a specification language for multidimensional intensive Digital Signal Processing
+(DSP) applications [14]. The applications are represented as a graph of tasks that operate on
+multidimensional arrays. The language presents semantics to express data access patterns and
+inter-task dependencies.
+In Array-OL, data-parallel computations are specified using repetition tasks, which define how a
+basic operation is repeatedly applied across an input-output space. In each repetition, a sub-array of
+the input is processed to produce a sub-array of the output. These sub-arrays, called patterns, are regions with a fixed shape, regular spacing, and consistent placement, which are specified using tilers.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 6 ===
+103:6
+
+J. Cubero-Cascante et al.
+Table 1. Dimensions in a Grouped 2D Convolution
+
+Symbol
+
+𝐵
+𝐺
+𝐾𝐼
+𝐾𝑂
+𝐾𝐻
+𝐾𝑊
+
+Definition
+Batch size
+Number of groups
+Input channels
+Output channels
+Kernel height
+Kernel width
+
+Symbol
+
+𝑂𝐻
+𝑂𝑊
+𝑆𝐻
+𝑆𝑊
+𝑃𝐻
+𝑃𝑊
+
+Definition
+Output height
+Output width
+Stride height
+Stride width
+Padding height
+Padding width
+
+Fig. 2. Example of a repetition task with 2D input-output arrays in Array-OL.
+
+A tiler must be assigned to each input and output array of a task. It defines the coordinates e(p, r)
+of each element in the pattern as:
+e(p, r) = o + F ⋅ p + P ⋅ r,
+
+(2)
+
+where:
+— p ∈ [0 ∶ s𝑝𝑎𝑡𝑡𝑒𝑟𝑛 ] is the pattern index,
+— r ∈ [0 ∶ s𝑟𝑒𝑝𝑒𝑡𝑖𝑡𝑖𝑜𝑛 ] is the repetition index,
+— o is the origin vector representing the start position of the pattern,
+— F is the fitting matrix that defines the regular spacing between elements in the pattern,
+— P is the paving matrix that defines the regular spacing between repetitions.
+An example of a repetition task with a 2D input-output space is illustrated in Figure 2. This task
+consumes an input array of shape 𝑠𝑎𝑟𝑟𝑎𝑦0 = (6, 8) and produces an output array of shape 𝑠𝑎𝑟𝑟𝑎𝑦1 =
+(3, 2). It executes six repetitions, structured along two dimensions, defined by 𝑠𝑟𝑒𝑝𝑒𝑡𝑖𝑡𝑖𝑜𝑛 = (2, 3).
+In each repetition, the task requires a pattern of shape 𝑠𝑝𝑎𝑡𝑡𝑒𝑟𝑛0 = (3, 4) from the input array to
+generate 𝑠𝑝𝑎𝑡𝑡𝑒𝑟𝑛1 = (1, 1) output elements.
+Figure 3 provides a visualisation of the access pattern, defined by the input tiler of the repetition
+task in Figure 2. Each diagram represents one repetition r. The input array is shown in grey, and
+the elements in the pattern, whose coordinates are defined by Equation (2), are shown in blue.
+In this example, the fitting matrix F is the identity matrix which leads to a dense pattern with a
+rectangular shape and a size of 𝑠𝑝𝑎𝑡𝑡𝑒𝑟𝑛0 = (3, 4). The origin, shown in orange, is at coordinate (0, 0).
+The paving matrix P defines a vertical stride of 3 and a horizontal stride of 2 between repetitions.
+Together, repetition tasks and tilers formalise cyclic multidimensional access patterns, such as the
+sliding windows in 2D convolution operations [8]. Being a specification language, Array-OL only
+represents execution patterns and data dependencies and does not impose an execution strategy.
+However, Array-OL applications can be transformed in order to accommodate hardware constraints
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 7 ===
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+
+103:7
+
+Fig. 3. Visualisation of the access pattern for the input tiler in the repetition task in Figure 2.
+
+such as timing, mapping and memory optimization [13]. These Array-OL transformations, similar
+to loop transformations, alter the structure of the application without modifying the intended
+functionality. For all these reasons, we deem Array-OL as an ideal modelling tool for representing
+DNNs workloads.
+3.3
+
+Timed Cyclo-Static Dataflow
+
+Synchronous Dataflow (SDF) [22] is a model of computation where a set of nodes, called actors,
+exchange data tokens with constant consumption and production rates. Each actor consumes and
+produces a constant number of tokens per firing. This predictability allows for static analysis and
+optimisation, making SDF suitable for modelling real-time signal processing applications [9]. The
+tokens represent the atomic pieces of data transmitted between actors. Heterogeneous data token
+types can coexist in a single dataflow graph, with each communication channel generally associated
+with a single type of data token [9].
+This work employs the cyclo-static extension that replaces the constant production and consumption rates with finite ordered lists [7]. CSDF graphs retain SDF’s analysability while enabling
+the modelling of periodic execution phases. Window-based algorithms, where the number of consumed/produced tokens varies cyclically depending on the position of the window, also benefit
+from the added expressiveness of CSDF [17].
+Additionally, we annotate each actor with a firing time to model the delays of hardware computational units [6]. The formal definition of the resulting TCSDF is given in Definition 3.1.
+Definition 3.1. A Timed Cyclo-Static Dataflow (TCSDF) graph is defined by the tuple
+(𝐴, 𝐸, 𝑡, ℎ, 𝑃, 𝐶), where:
+— 𝐴 is the set of actors, computational units that fire when sufficient input tokens are available.
+— 𝐸 ⊆ 𝐴 × 𝐴 is the set of directed edges (channels), with src(𝑒) and snk(𝑒) denoting the source
+and sink actors of 𝑒.
+— 𝑡 ∶ 𝐴 → ℕ gives the time required for one complete firing of 𝑎.
+— ℎ ∶ 𝐸 → ℕ gives the initial tokens on each channel.
+— 𝑃 ∶ 𝐸 → ℕ∗ maps each channel to a cyclic sequence 𝑃(𝑒) = [𝑝1 (𝑒), … , 𝑝𝑘 (𝑒)] of production
+rates for src(𝑒).
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 8 ===
+103:8
+
+J. Cubero-Cascante et al.
+1
+[2, 4]
+
+B
+
+2
+3
+
+⬤
+
+A
+
+D
+1
+
+1
+
+4
+
+[1, 3]
+
+C
+1
+
+1
+⬤
+
+Fig. 4. Example of a cyclo-static dataflow graph.
+
+— 𝐶 ∶ 𝐸 → ℕ∗ maps each channel to a cyclic sequence 𝐶(𝑒) = [𝑐1 (𝑒), … , 𝑐𝑘 (𝑒)] of consumption
+rates for snk(𝑒).
+An example of a Cyclo-Static SDF (CSDF) graph with actors A, B, C, and D is shown in
+Figure 4. The production and consumption rates appear next to the start and end of each channel.
+Black dots represent initial tokens on a channel, i.e., the presence of data at initialisation time.
+In this example, actor A can fire at any time as it has no incoming channels, producing two
+or four tokens alternately in each firing. Actor B can fire at initialisation time, as there is one
+initial token on its single incoming channel. Actor C will fire for the first time after actor A
+has fired once. Actor D will fire for the first time once actor B has fired twice and actor C has
+fired once.
+3.4
+
+The Buffets Storage Idiom
+
+The Buffets storage idiom [29] provides efficient and composable data channels suitable for domainspecific accelerators. This principle has been used in modern single core [10] and multi-core [12]
+DLAs.
+A buffet is effectively a circular buffer with head and tail pointers defining a current active
+window. The available capacity of the buffet is managed using a credit system. Buffets can be used
+to connect a pair of producer and consumer nodes with four well-defined interfaces:
+— Read: used by the consumer to read values at specific indices within the current window,
+— Update: used by the consumer to modify data in-place,
+— Fill: used by the producer to push data into the buffet,
+— Shrink: used by the consumer to remove values from the buffet to effectively shrink the
+active window and release credits.
+Fills and shrinks update the the tail and head pointers, respectively. For reads and updates,
+indexes relative to the head pointer are used, meaning the element at the head is always at index
+zero. Additionally, buffets provide read/write synchronisation. While reading an index, it can be
+marked for update, which blocks any further reads to that index until it is updated. This stalling
+also occurs when reading an index outside the active window. This prevents Read After Write
+(RAW) data hazards, making buffets easier to manage than standard scratchpad buffers. The ability
+to read and update values in place makes them a more flexible alternative than conventional FIFO
+buffers [18].
+4
+
+Overview of CIMFlow
+
+CIMFlow defines a series of models and transformation steps. The components, inputs and outputs of
+the CIMFlow framework are shown in Figure 5. Workloads are provided as Open Neural Network
+Exchange (ONNX) [5] files, while the architecture description uses YAML. Accelergy is used to
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 9 ===
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+
+Workload
+(ONNX)
+
+1. PARSE
+
+Arch. Desc.
+(YAML)
+
+Workload Model
+(ARRAY-OL)
+
+2. WORKLOAD
+TRANSFORMATIONS
+
+103:9
+
+Execution Model
+(TCSDF Graph)
+3. GENERATE
+TCSDF
+
+4. SIMULATE
+
+ACCELERGY
+ERT
+
+HW Architecture Model
+
+KPIs, Traces
+
+Fig. 5. Overview of CIMFlow processing steps, inputs, outputs, and models.
+
+generate an ERT (Energy Reference Table) based on the hardware description. As a first step, the
+Workload and Hardware Architecture models are created after parsing the input files. The Workload
+Model, described in Section 6, is then used to perform hardware-aware transformations. Afterwards,
+a TCSDF-based Execution Model is generated and simulated to produce Key Performance Indicators
+(KPIs) and traces. The Execution Model is presented in Section 7.
+5
+
+CIMFlow’s Hardware Architecture Model
+
+The Hardware Architecture Model is a collection of compute and storage elements organised
+hierarchically. CIM Processing Elements (PEs) are the elemental engine and can execute only
+MVM operations. Several PEs are arranged into a CIM-Core. Within each core, input and output
+buffets are instantiated. The CIM-Core also includes post-processing logic to compute activation
+functions. The Digital cores handle non-MVM operations, such as addition and pooling.
+Several CIM-Cores, digital cores and on-chip memory are composed into a Tile. The digital core
+supports Single Instruction Multiple Data (SIMD), with a configurable vector size. The shared
+Tile Buffer holds feature maps and intermediate results. Several virtual buffets can be mapped to
+this single Tile Buffer, a concept used in the MTIA chip [12]. The Hardware Architecture Model is
+depicted in Figure 6.
+6
+
+CIMFlow’s Workload Model
+
+In this work, we employ an Array-OL-based workload model. We removed the hierarchical composition of tasks in the original Array-OL specification [8], in favor of a flat graph structure, that
+is, easy to traverse and manipulate. DNN layers are modelled as repetition tasks and input-ouput
+tensors are represented by Array-OL arrays. Array-OL tilers, which we will call ports in this context,
+specify the access patterns between actors and arrays.
+Formally, our Workload Model can be described as:
+
+𝐺 = (𝑇 , 𝐴, 𝑃), where
+6.1
+
+𝑇 = {𝑡1 , 𝑡2 , … , 𝑡|𝑇 | } is the set of tasks,
+𝐴 = {𝑎1 , 𝑎2 , … , 𝑎|𝐴| } is the set of arrays,
+⎨
+⎩𝑃 = {𝑝1 , 𝑝2 , … , 𝑝|𝑃| } is the set of ports.
+⎧
+
+(3)
+
+Representing Grouped 2D Convolutions
+
+The grouped multi-channel 2D convolution operation, as defined in Section 3.1.1 can be represented
+using one Array-OL repetition actor, two ports and two tensors, as shown in Figure 7.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 10 ===
+103:10
+
+J. Cubero-Cascante et al.
+TILE
+
+CHIP
+
+Tile
+Control
+
+Tile buffer
+TILE
+
+Bus
+
+CIM-CORE
+
+CIM-CORE
+
+CIM-CORE
+
+TILE
+
+Router
+
+DIGITAL
+CORE
+
+TILE
+External IO
+
+TILE
+
+CIM-CORE
+Core
+Control
+PE
+
+TILE
+
+Core buffer
+
+PE
+
+Off-chip
+memory
+
+TILE
+
+Router
+
+PE
+
+TILE
+
+TILE
+
+Fig. 6. Hardware architecture model.
+
+MVM Task
+
+Fig. 7. Model of a convolution layer.
+
+Similar expressions can be derived for all other considered layers (dense, max, and average
+pooling) and consolidation nodes (addition, concatenation).
+6.2
+
+Hardware-Aware Workload Transformations
+
+A series of transformations are performed on the Workload Model so that it fits the dimensions
+and execution patterns of the target hardware.
+6.2.1 Weight Duplication. CIMFlow uses the weight duplication algorithm from CLSA-CIM [28].
+This is a greedy iterative algorithm in which the layer with the lowest throughput is selected
+for duplication in each iteration. If the PE budget allows, the selected layer is duplicated and the
+throughput is updated. The process is repeated until there are not enough PEs left to duplicate any
+layer.
+6.2.2 Matrix Splitting. MVM tasks that do not fit into a single CIM-Core are split into sub-tasks.
+Concatenation and addition nodes are inserted as required.
+6.2.3 Vectorisation of Digital Tasks. The vectorisation of digital tasks, such as add and pooling
+layers, is done based on the vector size of the SIMD unit. In this step, the repetition vectors and
+ports of all digital tasks are modified but no new tasks are created.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 11 ===
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+
+103:11
+
+6.2.4 Tensor Slicing. We establish the granularity for each array, called a tensor slice, and an
+execution order for the actors. The tensor slice allows the model to track the produced and consumed
+data without the cost of tracking each pixel individually. Moreover, the tensor slices defined in this
+step set the granularity of the data exchange between tasks for the cross-layer inference execution.
+6.2.5 Mapping. The workload is mapped to the target Hardware platform by assigning each task
+to a core. In the current implementation of CIMFlow, a straightforward mapping is implemented
+where all tasks are mapped to a set of cores within a single tile.
+6.3
+
+Supported Operands
+
+In CIMFlow, MVM-based NN layers, namely 2D convolutions (including grouped, depth-wise, and
+pointwise) and dense, are mapped to are mapped to CIM cores. The im2col transformation [33] is
+used to convert these to MVM operations. Activation and batch normalisation operations are fused
+to the convolution layers.
+Additionally, the tool supports arithmetic layers such addition, average and max pooling and
+tensor transformation layers including reshape, resize, and flatten. This is a key distinctive feature
+of CIMFlow, compared to most SOTA tools [3, 27, 28], which only consider MVMs to compute
+latency and energy.
+7
+
+CIMFlow’s Execution Model
+
+Although possible, a direct simulation of the Workload Model is impractical as it requires tracking
+the status of each multidimensional array over time. Instead, we reduce the complexity of the
+simulation by transforming the Array-OL Workload Model into a TCSDF graph. In the following,
+we describe three versions of the Execution Model, increasing the level of detail progressively.
+7.1
+
+Model with Unbounded Buffets
+
+The simplest model uses abstract unbounded buffers. Each repetition task from the Workload Model
+is converted into an SDF actor producing and consuming 𝐾𝑝 and 𝐾𝑐 tokens, respectively. 𝐾𝑝 and
+𝐾𝑐 are scalars derived from the 𝑠𝑝𝑎𝑡𝑡𝑒𝑟𝑛 attribute of the Workload Model. The firing time 𝑡, the delay
+between the instant the tokens become available on their input edge and the instant they produce
+new tokens, represents the computation time. This delay is different for each type of task and
+is calculated based on the parameters of the CIM PEs and the SIMD and pooling units from the
+Hardware Architecture Model.
+The unbounded buffet between two communicating tasks is modelled with three SDF actors.
+These actors encapsulate the logic of the entire data production and consumption patterns with
+two lists of rates:
+— [Kw ] specifies the number of iterations from the producer that need to be executed to
+produce the next tensor slice completely.
+— [Kr ] specifies the amount of iterations from the consumer that can be executed given the
+number of completely produced slices.
+These lists ensure that data is correctly managed and transferred between different stages of the
+computation. Figure 8 shows an example of a model of two tasks connected through an unbounded
+buffet.
+The model with unbounded buffets conveys the data dependency in the arrays [Kw ] and [Kr ]
+and can be used to simulate the best-case scenario activation pattern of the tasks. However, this
+model does not impose any bounds on the storage capacity of the buffet elements.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 12 ===
+103:12
+
+J. Cubero-Cascante et al.
+Task
+
+Buffet
+Kp
+
+Kp
+
+[Kw]
+
+Task
+[Kr]
+
+Kc Kc
+
+conv0
+
+conv1
+
+Fig. 8. Application-aware execution model for a section of the two-layer network.
+[Kf]
+
+slices
+
+Task
+
+[Ks]
+
+Task
+
+⬤
+
+Kp
+
+Kp
+
+[Kw]
+
+[Kr]
+
+Kc
+
+conv0
+
+Kc
+conv1
+
+⬤
+
+Buffet
+
+⬤
+
+Fig. 9. Memory-aware execution model for a section of the two-layer network.
+
+7.2
+
+Model with Single Bounded Buffets
+
+The second model incorporates memory allocation by defining a bounded buffet between each pair
+of communicating tasks.
+The bounded buffet model for two communicating tasks can be seen in Figure 9. Two nodes are
+introduced, each associated with a lists of rates:
+— [Kf ] specifies the amount of iterations from the producer that can be executed given the
+slices filled in the buffet.
+— [Ks ] specifies the number of iterations from the consumer that need to be executed before
+the last slice can be shrunk.
+Together, the rates [Kr ], [Kw ], [Kf ] and [Ks ] are able to statically model all the read , update,
+fill, and shrink operations of the inter-task buffets.
+7.3
+
+Model with Hierarchical Bounded Buffets
+
+In the third and most detailed model, hierarchical buffets are considered. A notion of hierarchy
+is achieved by instantiating multiple levels of virtual buffets in sequence. Each level may have a
+different granularity of tensor slice. The new list of rates for each level can be calculated from the
+original ones by considering the size and shape of the tensor slices in each level.
+The same example from Figure 9 is expanded in Figure 10 to include two levels of buffets, which
+represent the core buffets and the shared tile buffet. The [Sw ], [Sr ], [Sf ] and [Ss ] lists have the
+same semantics as the ones presented earlier, but now in the context of the shared buffet between
+the cores’ buffets. 𝑆𝑝 and 𝑆𝑐 are analogous to the core’s 𝐾𝑝 and 𝐾𝑐 and represent the size of the
+produced and consumed tensor slices on the shared buffet.
+This model can help to specify important design parameters, such as the minimum buffer sizes
+for different memory levels. It can be used to explore memory allocation strategies and their impact
+on the system’s performance.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 13 ===
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+[Sf]
+
+slices
+
+Task
+buffet
+
+Task
+
+103:13
+[Ss]
+
+⬤
+
+⬤
+
+Kp
+
+Kp
+
+[Kw]
+
+Sp
+
+Sp
+
+[Sw]
+
+[Sr]
+
+Sc
+
+conv0
+
+[Kf]
+
+Shared
+buffet
+
+slices_0
+⬤
+
+(a) Producer side of the hierarchical memory-aware model.
+[Sf]
+
+slices
+
+[Ss]
+
+Task
+buffet
+
+⬤
+
+Task
+⬤
+
+Sp
+
+[Sw]
+
+[Sr]
+
+Sc
+
+Sc
+
+[Kr]
+
+Kc
+
+Kc
+conv1
+
+Shared
+buffet
+
+slices_1
+
+[Ks]
+
+⬤
+
+(b) Consumer side of the hierarchical memory-aware model.
+Fig. 10. Memory-aware execution model with two hierarchical levels of buffets.
+
+7.4
+
+Execution Model Generation
+
+This section explains the steps to derive an Execution Model instance from a Workload Model
+instance. First, the execution order and the tensor memory layout are fixed using the functions
+𝐺𝑒𝑡𝑅𝑒𝑝𝑒𝑡𝑖𝑡𝑖𝑜𝑛 and 𝐺𝑒𝑡𝑆𝑙𝑖𝑐𝑒𝑠, respectively. 𝐺𝑒𝑡𝑅𝑒𝑝𝑒𝑡𝑖𝑡𝑖𝑜𝑛, shown in Equation (4), maps an integer
+iteration value 𝑖 ∈ ℕ to a repetition index 𝑟 ∈ ℕ4 of task 𝑡 ∈ 𝑇, therefore establishing the execution
+order for that task.
+
+𝐺𝑒𝑡𝑅𝑒𝑝𝑒𝑡𝑖𝑡𝑖𝑜𝑛𝑠 ∶ 𝑇 × ℕ → ℕ4 .
+
+(4)
+
+The granularity of the tensor’s data is defined by the 𝐺𝑒𝑡𝑆𝑙𝑖𝑐𝑒𝑠 function, shown in Equation (5).
+This function maps a port 𝑝 ∈ 𝑃 and a repetition index 𝑟 ∈ ℕ4 to a set of slices from the tensor
+𝑎 ∈ 𝐴. This set represents the data slices that are accessed by task 𝑡 during the execution of repetition
+𝑟, which are computed using Equation (2).
+
+𝐺𝑒𝑡𝑆𝑙𝑖𝑐𝑒𝑠 ∶ 𝐴 × 𝑃 × ℕ4 → 𝒫(ℕ), where 𝒫(ℕ) is the power set of ℕ.
+
+(5)
+
+As a second step, the producer-side rates (𝐾𝑝 , Kw , and Kf ) and consumer-side rates (𝐾𝑐 , Ks , and
+Kr ) for each tensor 𝑎 ∈ 𝐴 in the workload graph 𝐺 = (𝑇 , 𝑃, 𝐴) are calculated using Algorithm 1.
+The scalars 𝐾𝑐 and 𝐾𝑝 , which model the consumption and production rates of the compute cores
+per port are obtained by multiplying the elements of the pattern shape (𝑠𝑝𝑎𝑡𝑡𝑒𝑟𝑛 ). These steps appear
+in Lines 3–4 and 10–11 in Algorithm 1.
+The computation of the cyclo-static rates starts with the function AnalyseIterations, defined
+in lines 17 to 35. This function computes the following vectors for each port in the graph:
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 14 ===
+103:14
+
+J. Cubero-Cascante et al.
+
+ALGORITHM 1: Simulation parameters for producers and consumers of a tensor.
+Data: The Workload Model 𝐺 = (𝑇 , 𝐴, 𝑃) and one tensor 𝑎 ∈ 𝐴.
+Result: The lists 𝐾𝑤𝑡 , 𝐾𝑓𝑡 , 𝐾𝑟𝑡 , 𝐾𝑠𝑡 , and the scalars 𝐾𝑝𝑡 , 𝐾𝑐𝑡 for each task producing or consuming 𝑎.
+1 begin
+2
+for 𝑡 ∈ 𝑃𝑟𝑜𝑑𝑢𝑐𝑒𝑟𝑠(𝐺, 𝑎) do
+3
+𝑝 ← 𝑃𝑜𝑟𝑡(𝐺, 𝑎, 𝑡)
+4
+𝐾𝑝𝑡 ← ∏ 𝑠𝑝𝑎𝑡𝑡𝑒𝑟𝑛 (𝑝)
+5
+𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑, 𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒 ← AnalyseIterations(t, a, p)
+6
+𝐾𝑤𝑡 ← difference between consecutive elements of 𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑
+7
+𝐾𝑓𝑡 ← difference between consecutive elements of 𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒
+8
+end
+9
+for 𝑡 ∈ 𝐶𝑜𝑛𝑠𝑢𝑚𝑒𝑟𝑠(𝐺, 𝑎) do
+10
+𝑝 ← 𝑃𝑜𝑟𝑡(𝐺, 𝑡, 𝑎)
+11
+𝐾𝑐𝑡 ← ∏ 𝑠𝑝𝑎𝑡𝑡𝑒𝑟𝑛 (𝑝)
+12
+𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑, 𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒 ← AnalyseIterations(t, a, p)
+13
+𝐾𝑠𝑡 ← difference between consecutive elements of 𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑
+14
+𝐾𝑟𝑡 ← difference between consecutive elements of 𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒
+15
+end
+16 end
+Function AnalyseIterations(𝑡, 𝑎, 𝑝):
+// Initialize the results
+18
+𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑 ← [−1, ...]
+19
+𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒 ← [−1, ...]
+20
+𝑢𝑠𝑒𝑑 ← [0, ...]
+21
+𝑚𝑖𝑛𝑆𝑙𝑖𝑐𝑒𝑠 ← 1
+// Holds slice with the greatest ID encountered yet
+22
+𝑐𝑢𝑟𝑟𝑒𝑛𝑡𝑆𝑙𝑖𝑐𝑒 ← 0
+23
+for 𝑖 ← 0 to 𝑇 𝑜𝑡𝑎𝑙𝑅𝑒𝑝𝑒𝑡𝑖𝑡𝑖𝑜𝑛𝑠(𝑡) do
+24
+𝑟 ← 𝐺𝑒𝑡𝑅𝑒𝑝𝑒𝑡𝑖𝑡𝑖𝑜𝑛(𝑡, 𝑖)
+25
+𝑠𝑙𝑖𝑐𝑒𝑠 ← 𝐺𝑒𝑡𝑆𝑙𝑖𝑐𝑒𝑠(𝑎, 𝑟, 𝑝)
+26
+for 𝑠 ∈ 𝑠𝑙𝑖𝑐𝑒𝑠 do
+27
+𝑢𝑠𝑒𝑑[𝑠] ← 1
+28
+𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑[𝑠] ← 𝑖
+29
+end
+30
+𝑐𝑢𝑟𝑟𝑒𝑛𝑡𝑆𝑙𝑖𝑐𝑒 ← max(𝑐𝑢𝑟𝑟𝑒𝑛𝑡𝑆𝑙𝑖𝑐𝑒, max(𝑠𝑙𝑖𝑐𝑒𝑠))
+31
+𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒[𝑐𝑢𝑟𝑟𝑒𝑛𝑡𝑆𝑙𝑖𝑐𝑒] ← 𝑖
+32
+𝑐𝑜𝑛𝑐𝑢𝑟𝑟𝑒𝑛𝑡𝑆𝑙𝑖𝑐𝑒𝑠 ← 𝑐𝑢𝑟𝑟𝑒𝑛𝑡𝑆𝑙𝑖𝑐𝑒 − min(𝑠𝑙𝑖𝑐𝑒𝑠) + 1
+33
+𝑚𝑖𝑛𝑆𝑙𝑖𝑐𝑒𝑠 ← max(𝑚𝑖𝑛𝑆𝑙𝑖𝑐𝑒𝑠, 𝑐𝑜𝑛𝑐𝑢𝑟𝑟𝑒𝑛𝑡𝑆𝑙𝑖𝑐𝑒𝑠)
+34
+end
+35
+return 𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑, 𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒
+
+17
+
+— 𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑: a list with the last iteration that need to be executed using each slice. For example,
+if 𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑[𝑠1 ] = 𝑖1 , then the slice 𝑠1 is no longer accessed after iteration 𝑖1 .
+— 𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒: a list with the last iteration that can be executed using each slice. For example,
+when the slice 𝑠2 is available, the task can execute until the iteration 𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒[𝑠2 ] = 𝑖2 .
+— 𝑢𝑠𝑒𝑑: a binary list that indicates which slices the task uses. For example, if 𝑢𝑠𝑒𝑑[𝑠3 ] = 1, then
+the slice 𝑠3 is used by the task.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 15 ===
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+
+103:15
+
+Table 2. Considered DNN workloads
+Workload
+
+Weights Min. Buffer Max. Buffer
+Spatial Base Throughput
+#CIM-Cores #PEs
+[MiB]
+[KiB]
+[KiB]
+Util. [%]
+[GMAC/S]
+
+VGG19
+VGG16
+AlexNet
+ResNet101
+ResNet50
+ResNet18
+TinyYOLOv3
+MobileNetv2
+MobileNetv3
+
+137.00
+131.94
+58.13
+42.38
+24.32
+11.14
+8.44
+3.31
+5.20
+
+282.63
+247.63
+56.63
+1,227.13
+632.13
+125.13
+623.56
+295.89
+816.59
+
+16,178.98
+14,904.98
+859.73
+24,406.98
+16,076.98
+3,505.48
+8,259.05
+9,186.11
+5,453.87
+
+66
+58
+25
+134
+66
+31
+18
+76
+101
+
+608
+580
+269
+337
+167
+85
+55
+205
+268
+
+90.13
+90.99
+86.44
+50.31
+58.26
+52.41
+61.35
+6.46
+7.76
+
+130.80
+110.42
+148.22
+102.58
+68.38
+64.03
+14.22
+4.86
+3.15
+
+— 𝑚𝑖𝑛𝑆𝑙𝑖𝑐𝑒𝑠: the minimum number of slices that must be available at a time so that the task can
+execute. Allocating less slices leads to a system deadlock.
+For producer ports, the delta between adjacent elements of 𝑟𝑒𝑞𝑢𝑖𝑟𝑒𝑑 defines the writting rates
+𝐾𝑤 (Line 6), and the delta between adjacent elements of 𝑎𝑣𝑎𝑖𝑙𝑎𝑏𝑙𝑒 defines the fill rates 𝐾𝑓 (Line 7).
+Analogous computations are done for the consumer ports in Lines 13 and 14, to calculate 𝐾𝑠 and
+𝐾𝑟 , respectively.
+8
+
+Evaluation
+
+This section showcases CIMFlow’s capabilities for quantifying and optimising the computational
+efficiency of multi-core CIM systems with cross-layer execution. Similar to previous architecture
+proposals [2, 4, 20, 31] and modelling tools [3, 28], CIMFlow focuses on MVM-centric applications
+that can profit from a FWS dataflow.
+To evaluate our tool, we use the workloads in Table 2. These workloads vary in the type of
+layers and network topology. VGG19, VGG16, and AlexNet are sequential networks containing only
+convolutional, dense and pooling layers. The ResNet and MobileNet variations contain residual
+connections, which appear as fork/join nodes in the topology. MobileNetv2 and MobileNetv3
+contain a significant number of depth-wise convolutions, which suffer from low utilisation in
+weight stationary mappings [24].
+The workloads in Table 2 are ordered by the total weight memory. The Min. Buffer column shows
+the minimum inter-layer buffet memory that must be allocated for cross-layer inference and was
+calculated with the function AnalyseIterations from Algorithm 1. The sum of all inter-layer
+buffers is shown in the column Max. Buffer.
+8.1
+
+Validation Against CLSA-CIM
+
+CIMFlow follows the cross-layer scheduling and weight duplication approach from CLSA-CIM [28],
+which reports execution latency as the number of CIM-Core cycles in the generated schedule.
+CLSA-CIM does not consider non-MVM layers, such as add, concatenation, and reshape, and
+disregards the effect of data movements.
+To compare the latency estimations from CIMFlow and CLSA-CIM, all features not available in
+CLSA-CIM must be turned off. We set all inter-layer buffet sizes to their maximum value, as shown
+Table 2, and all memory access times to zero. The execution delay of the digital SIMD and pooling
+units is also set to zero. Serial, i.e., layer-by-layer, execution is achieved by setting the tensor slicing
+granularity (see 6.2.4) to match the full size of the corresponding inter-layer tensors.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 16 ===
+103:16
+
+J. Cubero-Cascante et al.
+MAPE=0.77% 1.75
+1.50
+
+Cross-layer
+
+1e5
+
+1.25
+1.5
+
+1.00
+0.75
+
+1.0
+
+0.50
+0.25
+
+0.5
+0
+
+4
+16
+32
+Additional PE count
+CIMFlow
+VGG19
+CLSA-CIM
+VGG16
+
+0.00
+
+Spatial
+utilization
+
+600
+
+MAPE=3.07%
+
+500
+Required PEs
+
+Latency [MVM cycles]
+
+2.0
+
+Serial
+
+400
+
+60
+
+300
+
+40
+
+200
+
+20
+
+100
+0
+
+4
+16
+32
+Additional PE count
+ResNet101
+TinyYOLOv3
+ResNet50
+
+(a) Latency results for serial and cross-layer execution with
+CLSA-CIM and CIMFlow.
+
+80
+Utilization [%]
+
+1e5
+
+0
+
+9 6 t 1 0 8 3 2 3
+G1 G1 Ne 10 t5 t1 Ov etv etv
+VG VG AlexsNet esNeesNeyYOL ileN ileN
+Re R R Tin Mob Mob
+
+(b) PE requirement and utilisation rates
+for all workloads.
+
+Fig. 11. Workload summary and validation results against CLSA-CIM.
+Table 3. Hardware Parameters
+CIM Modules
+Property
+
+Value
+
+PE size
+512x512
+MVM latency [ns] 800
+PEs per core
+16
+Cores per tile
+Workload-dependent
+Tiles in system
+1
+
+Digital Modules
+Property
+
+Value
+
+Tech. node [nm]
+32
+SIMD lanes
+16
+Core mem. size [KiB] 2
+Tile mem. size [KiB]
+300
+Main mem. size [KiB] 8,192
+
+Property
+
+Value
+
+SIMD/Pool Latency [ns] 1
+Pool window
+3x3
+Core mem. time [ns]
+0.52
+Tile mem. time [ns]
+2.02
+Main mem. time [ns]
+5.44
+
+We compute the latency of five validation workloads using both tools, sweeping over the number
+of extra PEs for weight duplication. The results are presented in Figure 11(a), where latency is given
+in MVM cycles. Under the mentioned constraints, CIMFlow simulations accurately reproduce the
+results from CLSA-CIM. The MAPE is 0.77% for serial execution and 3.07% for cross-layer execution.
+8.2 Reference HW Platform
+For the following case studies, we calibrate CIMFlow using the parameters listed in Table 3. We take
+the PE size and MVM latency from RAELLA [2]. A CIM-Core contains 16 PEs. Our reference system
+has one single tile, with one tile memory, one digital core and a variable number of CIM-Cores.
+The number of CIM-Cores is adjusted so that all weights can be accomodated in the tile. A main
+memory 8 MiB is considered. We used CACTI [23] to obtain access times for all memories in the
+system. The digital core operates at 1GHz and has one SIMD unit with 16 lanes and one pooling
+unit with a 3x3 input window.
+The last four columns in Table 2 result from mapping each workload to this hardware platform.
+The spatial utilisation shows the percentage of crossbar cells that are mapped to filter weights
+and is plotted in Figure 11(b). In FWS CIM systems, more weights result in more PEs and a higher
+peak throughput. Bigger networks tend to have bigger weight matrices, leading to higher spatial
+utilisation. The base throughput in the Table 2 corresponds to the serial execution and will be used
+as a normalisation factor for the throughput gains in the following case studies.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 17 ===
+Norm. Throughput
+
+Norm. Throughput
+
+Norm. Throughput
+
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+
+VGG19
+
+40
+30
+20
+10
+0
+
+ResNet101
+
+30
+
+AlexNet
+20
+15
+10
+5
+0
+
+ResNet50
+
+20
+
+20
+
+10
+
+10
+
+10
+
+0
+
+0
+
+TinyYOLOv3
+
+40
+20
+0
+
+16
+
+32 48
+Extra PEs
+no_dm
+
+64
+
+40
+30
+20
+10
+0
+
+ResNet18
+
+30
+
+30
+
+20
+
+0
+
+VGG16
+
+40
+30
+20
+10
+0
+
+103:17
+
+0
+
+MobileNetv2
+
+MobileNetv3
+
+15
+10
+5
+0
+
+buff_max
+
+16
+
+32 48
+Extra PEs
+buff_min
+
+64
+
+0
+
+0
+
+xlayer
+
+16
+
+32 48
+Extra PEs
+serial
+
+64
+
+Fig. 12. Normalised throughput for cross-layer and serial execution against weight duplication PEs.
+
+8.3
+
+Case Study I - Re-evaluating Weight Duplication for FWS CIM Systems
+
+Previous work [2, 28, 31] proposed duplicating certain weight filters to improve system throughput.
+CIMFlow uses the weight duplication algorithm from CLSA-CIM [28]. This algorithm is greedy:
+while there are PEs left, the layer with the lowest throughput is duplicated.
+In this experiment, we sweep the extra PE budget from 0 to 64 and quantify the throughput gain,
+normalised against the baseline from Table 2. The results are plotted in Figure 12, where orange
+and blue colours are used for serial and cross-layer results, respectively. It is important to note that
+the additional PEs are given in absolute numbers and do not have a homogeneous impact on the
+total available PEs. For instance, for the smaller networks TinyYOLOv3 and ResNet18, adding 64
+extra PEs almost doubles the total available PEs. Three simulation variants are presented regarding
+how the data movements are modelled:
+— no_dm: all memory delays are set to zero, effectively turning off the effect of data movements,
+— buff_min: memory delays are on, and inter-layer buffet allocation is set to the minimum,
+— buff_max: memory delays are on, and inter-layer buffet allocation is set to the maximum.
+When disregarding data movements (no_dm), a steep throughput gain is observed for most
+workloads. This contrasts with the more moderate increase observed when data movements are
+taken into account. Moreover, the throughput gain from data movements appears to be saturating.
+This phenomenon is particularly notable for AlexNet, which shows almost no gain after adding
+32 extra PEs. The reason for this is the limited bandwidth between PEs and the tile buffet. For the
+evaluated workloads, neglecting data movements when estimating the maximum throughput gain
+from weight duplication leads to overestimations of up to 308%.
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 18 ===
+103:18
+
+J. Cubero-Cascante et al.
+
+gemm00
+flatten00
+avgpool00
+add07
+conv19
+conv18
+add06
+conv17
+conv16
+conv15
+add05
+conv14
+conv13
+add04
+conv12
+conv11
+conv10
+add03
+conv09
+conv08
+add02
+conv07
+conv06
+conv05
+add01
+conv04
+conv03
+add00
+conv02
+conv01
+maxpool00
+conv00
+
+conv12
+conv11
+conv10
+concat00
+resize00
+conv09
+conv08
+conv07
+conv06
+maxpool05
+conv05
+maxpool04
+conv04
+maxpool03
+conv03
+maxpool02
+conv02
+maxpool01
+conv01
+maxpool00
+conv00
+0.5
+
+1.0
+
+1.5
+
+2.0
+Cycles
+
+2.5
+
+3.0
+
+(a) ResNet18 with 16 extra PEs.
+
+3.5
+
+4.0
+1e6
+
+0.2
+
+0.4
+
+0.6
+Cycles
+
+0.8
+
+1.0
+
+1e7
+
+(b) TinyYOLOv3 with 16 extra PEs.
+
+Fig. 13. Core activation patterns for two workloads.
+
+Another interesting observation can be drawn from the gain delta between the simulations with
+minimum (buff_min) and maximum (buff_max) buffer allocation. For the sequential networks,
+VGG16 and VGG19, only a small difference is observed. The networks with residual connections,
+including all ResNet and MobileNet variations, show a significantly larger delta. In fact, for these
+networks, the buffer allocation has a much more notable effect on throughput than weight duplication. This implies that the PEs in the residual networks are often stalled, waiting for data when the
+minimum buffer allocation is used.
+With a maximum throughput gain of 52× for the buff_max mode, TinyYolov3 exhibits the highest
+overall throughput gain. At the same time, there is virtually no gain from buffer allocation. This
+pattern suggests an imbalance in the throughput of the layers in the processing pipeline.
+Looking at the core activation plots in Figure 13 helps us to understand the gain trends better.
+For ResNet18, displayed in Figure 13(a), we observe a sparse execution pattern in all layers. The
+gaps in execution result from time spent waiting for data to be transferred between cores. For
+TinyYOLOv3, shown in Figure 13(b), it is clear that the first layer (conv00) dominates the execution
+time, constraining the overall throughput.
+Key Learning 1: In cross-layer FWS systems, weight duplication can aid in balancing throughput
+in the processing pipeline, but it is constrained by the increased demand for data buffering and
+interconnect bandwidth.
+8.4
+
+Case Study II - Optimal Inter-Layer Buffer Allocation
+
+In Case Study I, we showed the achievable throughput using minimum and maximum buffer allocation. However, since the memory required for storing all complete intermediate tensors is extremely
+high, allocating the maximum buffer, shown in Table 2, is unrealistic. In this section, we demonstrate
+how CIMFlow makes it possible to quantify the impact of buffer allocation on system throughput.
+We employ a feedback-based iterative algorithm, where the memory allocation for intermediate
+tensors is increased gradually and selectively. In each iteration, CIMFlow runs with slightly larger
+buffers for each tensor and the tensor that shows the most significant improvement is selected.
+This process is repeated until the performance matches the results achieved with the maximum
+buffer allocation.
+We apply this selective increase method to three representative workloads. The evolution in
+throughput gain against the total allocated memory is presented in Figure 14. The maximum
+throughput and required buffer sizes are summarised in Table 4. The selective increase approach
+reaches the maximum throughput with only a small fraction of the maximum buffer memory. The
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 19 ===
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+
+Norm. Throughput
+
+AlexNet
+
+ResNet18
+
+MobileNetv2
+
+25
+
+12
+10
+
+20
+
+30
+
+15
+
+20
+
+10
+
+8
+
+103:19
+
+10
+
+57
+58
+140
+160
+Allocated Memory [KiB]
+Allocated Memory [KiB]
+Extra PEs:
+16
+32
+
+64
+
+300
+310
+Allocated Memory [KiB]
+
+Fig. 14. Throughput gain vs allocated memory.
+
+Allocated memory [KiB]
+
+6
+4
+2
+
+12
+10
+8
+6
+4
+
+input_0
+conv00_out
+maxpool00_out
+conv01_out
+conv02_out
+add00_out
+conv03_out
+conv04_out
+add01_out
+conv05_out
+conv06_out
+conv07_out
+add02_out
+conv08_out
+conv09_out
+add03_out
+conv10_out
+conv11_out
+conv12_out
+add04_out
+conv13_out
+conv14_out
+add05_out
+conv15_out
+conv16_out
+conv17_out
+add06_out
+conv18_out
+conv19_out
+add07_out
+avgpool00_out
+flatten00_out
+gemm00_out
+
+0
+
+gemm02_out
+
+gemm01_out
+
+gemm00_out
+
+reshape00_out
+
+conv04_out
+
+maxpool02_out
+
+conv03_out
+
+conv02_out
+
+conv01_out
+
+maxpool01_out
+
+maxpool00_out
+
+2
+input_0
+
+0
+
+Initial
+Increase
+
+14
+
+Initial
+Increase
+
+8
+
+conv00_out
+
+Allocated memory [KiB]
+
+10
+
+(a) AlexNet with 32 extra PEs.
+
+(b) ResNet18 with 32 extra PEs.
+
+Fig. 15. Buffer allocation detail. Minimum allocation is shown in blue, and additional memory is in orange.
+Table 4. Optimal Buffer Allocation
+Workload
+
+Extra
+PEs
+
+AlexNet
+AlexNet
+AlexNet
+ResNet18
+ResNet18
+ResNet18
+MobileNetv2
+MobileNetv2
+MobileNetv2
+
+16
+32
+64
+16
+32
+64
+16
+32
+64
+
+Min. Buffer
+
+Max. Buffer
+
+Increment
+
+Alloc. Memory
+[KiB]
+
+Throughput
+[TMAC/s]
+
+Alloc. Memory
+[KiB]
+
+Throughput
+[TMAC/s]
+
+Buffer Incr.
+[%]
+
+Throughput Incr.
+[%]
+
+56.63
+56.63
+56.63
+125.13
+125.13
+125.13
+295.89
+295.89
+295.89
+
+1.20
+1.34
+1.56
+0.47
+0.63
+0.89
+0.04
+0.07
+0.10
+
+58.60
+58.60
+57.95
+160.79
+157.29
+164.29
+318.20
+308.58
+315.58
+
+1.34
+1.83
+1.96
+0.87
+1.16
+1.67
+0.09
+0.12
+0.18
+
+3.48
+3.48
+2.32
+28.49
+25.70
+31.29
+7.54
+4.29
+6.65
+
+12.10
+36.41
+25.64
+84.36
+83.26
+88.04
+120.10
+68.89
+89.55
+
+highest gain is observed in MobileNetv2, where increasing the inter-layer memory buffer by 7.54%
+provides a 120.1% increase in throughput.
+Using CIMFlow as a cost model, we can identify the specific tensors in the workload where
+additional buffering is beneficial. Figure 15 provides an overview of the minimum buffer sizes
+(shown in blue) and the additionally allocated memory (orange). For AlexNet, only the two first
+tensors were enlarged. This additional buffer helps mitigate the high cost of reading the input
+tensor from the main memory.
+In the case of ResNet18, most of the extra memory is allocated to the fork points of the residual
+connections. These fork points are the critical bottlenecks in the pipeline, and allocating additional
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 20 ===
+103:20
+
+J. Cubero-Cascante et al.
+
+memory helps mitigate data stalls. A few extra slices are allocated to the convolution layers
+immediately following the fork points.
+Key Learning 2: Increasing the memory allocated for inter-layer buffers is particularly beneficial
+for residual networks, as it helps to mitigate the bottlenecks caused by the fork/join nodes.
+8.5
+
+Future Work
+
+8.5.1 Non-FWS CIM Dataflows. In this article, we focused on FWS systems, which have two
+major constraints. First, the MVMs in the workload must involve one constant operand so that costly
+re-writing operations are avoided [26]. Second, the FWS platform must have enough PEs to fit all
+weights in the workload. Small to medium CNN, as the ones used in our case studies, fit well within
+this constraint. However, in other novel neural networks, particularly transformers, the MVMs
+often involve two dynamic operands. We plan to extend our tool to accept the reprogramming of
+PEs, enabling dynamic operands and time-multiplexed mappings.
+8.5.2 Extended Mapping for Multi-tile Platforms. The case studies presented in this work assume
+a single-tile platform. However, mapping large networks across multiple hierarchical levels, such
+as tiles, cores, and PEs, is an open research challenge. CIMFlow provides modular and extensible
+models that will be highly valuable for exploring novel partitioning algorithms and mapping
+strategies for multi-tile platforms.
+8.5.3 Detailed HW Models. One of the strengths of TCSDF is its modularity and extendability.
+These properties allow subsequent transformations in order to capture relevant details of the HW
+platform [6]. The authors in [6] present interesting modelling primitives, including communication
+via shared memories and TDMA based routers. We plan to integrate some of these patterns in our
+execution model, enabling the comparison of alternative interconnect topologies.
+9
+
+Conclusion
+
+In this work, we introduced CIMFlow, a modelling and simulation framework tailored for
+multi-core cross-layer CIM systems and MVM-centric workloads. Our novel models enable the
+characterisation of dataflow in FWS CIM DLAs, providing insights into performance bottlenecks
+and buffer utilisation.
+In our cases studies we revisited weight duplication as a strategy to increase the thoughput of CIM
+systems, and showed how this technique can provide throughput gains as high as 52×. Additionally,
+we show that neglecting data transfer costs results in overly optimistic throughput estimates, with
+overestimations reaching up to 308%. Using CIMFlow, we presented a simple strategy to optimise
+buffer allocation so that structural unbalances in the workload graph are compensated.
+CIMFlow serves as a powerful cost model for architecture exploration, allowing designers to
+fine-tune memory hierarchies based on real application demands. By providing an extensible
+simulation infrastructure, CIMFlow lays the groundwork for further research into optimising CIM
+architectures for deep learning workloads.
+References
+[1] Tanner Andrulis. 2025. CiMLoop (Timeloop+Accelergy v4) - RAELLA Architecture Description. Retrieved Jan 27, 2025
+from https://github.com/mit-emze/cimloop/tree/main/workspace/models/arch/1_macro/raella_isca_2023
+[2] Tanner Andrulis, Joel S. Emer, and Vivienne Sze. 2023. RAELLA: Reforming the arithmetic for efficient, low-resolution,
+and low-loss analog PIM: No retraining required!. In Proceedings of the 50th Annual International Symposium on
+Computer Architecture (Orlando, FL, USA) (ISCA ’23). Association for Computing Machinery, New York, NY, USA,
+Article 27, 16 pages. DOI:https://doi.org/10.1145/3579371.3589062
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 21 ===
+CIMFlow: Modelling Dataflow in Cross-Layer Compute-in-Memory DLAs
+
+103:21
+
+[3] Tanner Andrulis, Joel S. Emer, and Vivienne Sze. 2024. CiMLoop: A flexible, accurate, and fast compute-in-memory
+modeling tool. In Proceedings of the 2024 IEEE International Symposium on Performance Analysis of Systems and Software
+(ISPASS). 10–23. DOI:https://doi.org/10.1109/ISPASS61541.2024.00012
+[4] Aayush Ankit, Izzat El Hajj, Sai Rahul Chalamalasetti, Geoffrey Ndu, Martin Foltin, R. Stanley Williams, Paolo Faraboschi, Wen-mei W Hwu, John Paul Strachan, and Kaushik Roy, and Dejan S. Milojicic. 2019. PUMA: A programmable
+ultra-efficient memristor-based accelerator for machine learning inference. In Proceedings of the 24th International
+Conference on Architectural Support for Programming Languages and Operating Systems (Providence, RI, USA) (ASPLOS
+’19). Association for Computing Machinery, New York, NY, USA, 715–731. DOI:https://doi.org/10.1145/3297858.3304049
+[5] Junjie Bai, Fang Lu, Ke Zhang, et al. 2019. ONNX: Open Neural Network Exchange. Retrieved from https://github.com/
+onnx/onnx
+[6] Imed E. Bennour and Jemai Abderrazek. 2016. Timed-SDF patterns for applications throughput analysis. In Proceedings
+of the 2016 11th International Design & Test Symposium (IDT). 187–192. DOI:https://doi.org/10.1109/IDT.2016.7843038
+[7] G. Bilsen, M. Engels, R. Lauwereins, and J. Peperstraete. 1996. Cycle-static dataflow. IEEE Transactions on Signal
+Processing 44, 2 (1996), 397–408. DOI:https://doi.org/10.1109/78.485935
+[8] Pierre Boulet. 2008. Formal Semantics of Array-OL, a Domain Specific Language for Intensive Multidimensional Signal
+Processing. Research Report RR-6467. INRIA. 33 pages. Retrieved from https://inria.hal.science/inria-00261178
+[9] Jeronimo Castrillon, Karol Desnos, Andrés Goens, and Christian Menard. 2022. Dataflow Models of Computation for
+Programming Heterogeneous Multicores. Springer Nature Singapore, Singapore, 1–40. DOI:https://doi.org/10.1007/978981-15-6401-7_45-2
+[10] Yu-Hsin Chen, Tushar Krishna, Joel S. Emer, and Vivienne Sze. 2017. Eyeriss: An energy-efficient reconfigurable
+accelerator for deep convolutional neural networks. IEEE Journal of Solid-State Circuits 52, 1 (2017), 127–138. DOI:https:
+//doi.org/10.1109/JSSC.2016.2616357
+[11] José Cubero-Cascante, Arunkumar Vaidyanathan, Rebecca Pelke, Lorenzo Pfeifer, Rainer Leupers, and Jan Moritz
+Joseph. 2024. A calibratable model for fast energy estimation of MVM operations on RRAM crossbars. In Proceedings of
+the 2024 IEEE 6th International Conference on AI Circuits and Systems (AICAS). 537–538. DOI:https://doi.org/10.1109/
+AICAS59952.2024.10595858
+[12] Amin Firoozshahian, Joel Coburn, Roman Levenstein, Rakesh Nattoji, Ashwin Kamath, Olivia Wu, Gurdeepak Grewal,
+Harish Aepala, Bhasker Jakka, Bob Dreyer, et al. 2023. MTIA: First generation silicon targeting meta’s recommendation
+systems. In Proceedings of the 50th Annual International Symposium on Computer Architecture (Orlando, FL, USA) (ISCA
+’23). Association for Computing Machinery, New York, NY, USA, Article 80, 13 pages. DOI:https://doi.org/10.1145/
+3579371.3589348
+[13] Calin Glitia and Pierre Boulet. 2008. High level loop transformations for systematic signal processing embedded
+applications. In Proceedings of the Embedded Computer Systems: Architectures, Modeling, and Simulation, Mladen
+Bereković, Nikitas Dimopoulos, and Stephan Wong (Eds.). Springer Berlin Heidelberg, Berlin, Heidelberg, 187–196.
+DOI:https://doi.org/10.1007/978-3-540-70550-5_21
+[14] Calin Glitia, Philippe Dumont, and Pierre Boulet. 2010. Array-OL with delays, a domain specific specification language
+for multidimensional intensive signal processing. Multidimensional Systems and Signal Processing 21, 2 (01 Jun 2010),
+105–131. DOI:https://doi.org/10.1007/s11045-009-0085-4
+[15] Shubham Jain, Hsinyu Tsai, Ching-Tzu Chen, Ramachandran Muralidhar, Irem Boybat, Martin M. Frank, Stanisław
+Woźniak, Milos Stanisavljevic, Praneet Adusumilli, Pritish Narayanan, et al. 2023. A heterogeneous and programmable
+compute-in-memory accelerator architecture for analog-AI using dense 2-D mesh. IEEE Transactions on Very Large
+Scale Integration (VLSI) Systems 31, 1 (2023), 114–127. DOI:https://doi.org/10.1109/TVLSI.2022.3221390
+[16] Norman P. Jouppi, Cliff Young, Nishant Patil, David Patterson, Gaurav Agrawal, Raminder Bajwa, Sarah Bates, Suresh
+Bhatia, Nan Boden, Al Borchers, et al. 2017. In-datacenter performance analysis of a tensor processing unit. In
+Proceedings of the 44th Annual International Symposium on Computer Architecture (Toronto, ON, Canada) (ISCA ’17).
+Association for Computing Machinery, New York, NY, USA, 1–12. DOI:https://doi.org/10.1145/3079856.3080246
+[17] J. Keinert, C. Haubelt, and J. Teich. 2006. Modeling and analysis of windowed synchronous algorithms. In Proceedings
+of the 2006 IEEE International Conference on Acoustics Speech and Signal Processing Proceedings, Vol. 3. III–III. DOI:https:
+//doi.org/10.1109/ICASSP.2006.1660798
+[18] T. Krishna, H. Kwon, A. Parashar, M. Pellauer, and A. Samajdar. 2020. Data Orchestration in Deep Learning Accelerators.
+Morgan & Claypool Publishers. Retrieved from https://books.google.de/books?id=Xmf5DwAAQBAJ
+[19] Alex Krizhevsky, Ilya Sutskever, and Geoffrey E. Hinton. 2017. ImageNet classification with deep convolutional neural
+networks. Communications of the ACM 60, 6 (May 2017), 84–90. DOI:https://doi.org/10.1145/3065386
+[20] Manuel Le Gallo, Riduan Khaddam-Aljameh, Milos Stanisavljevic, Athanasios Vasilopoulos, Benedikt Kersting, Martino
+Dazzi, Geethan Karunaratne, Matthias Brändli, Abhairaj Singh, Silvia M. Müller, et al. 2023. A 64-core mixed-signal
+in-memory compute chip based on phase-change memory for deep neural network inference. Nature Electronics 6, 9
+(01 Sep 2023), 680–693. DOI:https://doi.org/10.1038/s41928-023-01010-1
+
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.
+
+=== page 22 ===
+103:22
+
+J. Cubero-Cascante et al.
+
+[21] Yann LeCun, Yoshua Bengio, and Geoffrey Hinton. 2015. Deep learning. Nature 521, 7553 (01 May 2015), 436–444.
+DOI:https://doi.org/10.1038/nature14539
+[22] Edward Ashford Lee and David G. Messerschmitt. 1987. Static scheduling of synchronous data flow programs for digital
+signal processing. IEEE Transactions on Computers C-36, 1 (1987), 24–35. DOI:https://doi.org/10.1109/TC.1987.5009446
+[23] Sheng Li, Ke Chen, Jung Ho Ahn, Jay B. Brockman, and Norman P. Jouppi. 2011. CACTI-P: Architecture-level
+modeling for SRAM-based structures with advanced leakage reduction techniques. In Proceedings of the 2011 IEEE/ACM
+International Conference on Computer-Aided Design (ICCAD). 694–701. DOI:https://doi.org/10.1109/ICCAD.2011.6105405
+[24] Yun-Chen Lo and Ren-Shuo Liu. 2025. Morphable CIM: Improving Operation Intensity and Depthwise Capability for
+SRAM-CIM Architecture. IEEE Press, 1–6. DOI:https://doi.org/10.1109/DAC56929.2023.10247750
+[25] Linyan Mei, Pouya Houshmand, Vikram Jain, Sebastian Giraldo, and Marian Verhelst. 2021. ZigZag: Enlarging joint
+architecture-mapping design space exploration for DNN accelerators. IEEE Transactions on Computers 70, 8 (2021),
+1160–1174. DOI:https://doi.org/10.1109/TC.2021.3059962
+[26] Fan-husan Meng and Wei D. Lu. 2024. Compute-in-memory technologies for deep learning acceleration. IEEE Nanotechnology Magazine 18, 1 (2024), 44–52. DOI:https://doi.org/10.1109/MNANO.2023.3340321
+[27] Angshuman Parashar, Priyanka Raina, Yakun Sophia Shao, Yu-Hsin Chen, Victor A. Ying, Anurag Mukkara, Rangharajan
+Venkatesan, Brucek Khailany, Stephen W. Keckler, and Joel Emer. 2019. Timeloop: A systematic approach to DNN
+accelerator evaluation. In Proceedings of the 2019 IEEE International Symposium on Performance Analysis of Systems and
+Software (ISPASS). 304–315. DOI:https://doi.org/10.1109/ISPASS.2019.00042
+[28] Rebecca Pelke, José Cubero-Cascante, Nils Bosbach, Felix Staudigl, Rainer Leupers, and Jan Moritz Joseph. 2024.
+CLSA-CIM: A cross-layer scheduling approach for computing-in-memory architectures. In Proceedings of the 2024
+Design, Automation & Test in Europe Conference & Exhibition (DATE). 1–6. DOI:https://doi.org/10.23919/DATE58400.
+2024.10546668
+[29] Michael Pellauer, Yakun Sophia Shao, Jason Clemons, Neal Crago, Kartik Hegde, Rangharajan Venkatesan, Stephen W.
+Keckler, Christopher W. Fletcher, and Joel Emer. 2019. Buffets: An efficient and composable storage idiom for explicit
+decoupled data orchestration. In Proceedings of the 24th International Conference on Architectural Support for Programming Languages and Operating Systems (Providence, RI, USA) (ASPLOS ’19). Association for Computing Machinery,
+New York, NY, USA, 137–151. DOI:https://doi.org/10.1145/3297858.3304025
+[30] Xiaochen Peng, Shanshi Huang, Yandong Luo, Xiaoyu Sun, and Shimeng Yu. 2019. DNN+NeuroSim: An end-to-end
+benchmarking framework for compute-in-memory accelerators with versatile device technologies. In Proceedings of
+the 2019 IEEE International Electron Devices Meeting (IEDM). 32.5.1–32.5.4. DOI:https://doi.org/10.1109/IEDM19573.
+2019.8993491
+[31] Ali Shafiee, Anirban Nag, Naveen Muralimanohar, Rajeev Balasubramonian, John Paul Strachan, Miao Hu, R. Stanley
+Williams, and Vivek Srikumar. 2016. ISAAC: A convolutional neural network accelerator with in-situ analog arithmetic
+in crossbars. In Proceedings of the 2016 ACM/IEEE 43rd Annual International Symposium on Computer Architecture
+(ISCA). 14–26. DOI:https://doi.org/10.1109/ISCA.2016.12
+[32] Arne Symons, Linyan Mei, Steven Colleman, Pouya Houshmand, Sebastian Karl, and Marian Verhelst. 2024. Stream:
+Design space exploration of layer-fused DNNs on heterogeneous dataflow accelerators. IEEE Transactions on Computers
+74, 1 (2024), 237–249. DOI:https://doi.org/10.1109/TC.2024.3477938
+[33] Aravind Vasudevan, Andrew Anderson, and David Gregg. 2017. Parallel multi channel convolution using general
+matrix multiplication . In Proceedings of the 2017 IEEE 28th International Conference on Application-specific Systems,
+Architectures and Processors (ASAP). IEEE Computer Society, Los Alamitos, CA, USA, 19–24. DOI:https://doi.org/10.
+1109/ASAP.2017.7995254
+[34] Weier Wan, Rajkumar Kubendran, Clemens Schaefer, Sukru Burc Eryilmaz, Wenqiang Zhang, Dabin Wu, Stephen
+Deiss, Priyanka Raina, He Qian, Bin Gao, et al. 2022. A compute-in-memory chip based on resistive random-access
+memory. Nature 608, 7923 (01 Aug 2022), 504–512. DOI:https://doi.org/10.1038/s41586-022-04992-8
+[35] Yannan Nellie Wu, Joel S. Emer, and Vivienne Sze. 2019. Accelergy: An architecture-level energy estimation methodology
+for accelerator designs. In Proceedings of the 2019 IEEE/ACM International Conference on Computer-Aided Design (ICCAD).
+1–8. DOI:https://doi.org/10.1109/ICCAD45719.2019.8942149
+
+Received 5 August 2025; revised 5 August 2025; accepted 7 August 2025
+
+ACM Trans. Embedd. Comput. Syst., Vol. 24, No. 5s, Article 103. Publication date: September 2025.

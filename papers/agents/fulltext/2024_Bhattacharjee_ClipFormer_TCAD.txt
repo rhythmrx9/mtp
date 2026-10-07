@@ -1,0 +1,1268 @@
+# ClipFormer : Key–Value Clipping of Transformers on Memristive Crossbars for Write Noise Mitigation
+# id: W4401070622 | key: 2024_Bhattacharjee_ClipFormer_TCAD | TCAD 2024 | card: ../cards/2024_Bhattacharjee_ClipFormer_TCAD.md
+
+
+=== page 1 ===
+1
+
+ClipFormer: Key-Value Clipping of Transformers
+on Memristive Crossbars for Write Noise Mitigation
+
+arXiv:2402.02586v1 [cs.LG] 4 Feb 2024
+
+Abhiroop Bhattacharjee, Abhishek Moitra, and Priyadarshini Panda
+{abhiroop.bhattacharjee, abhishek.moitra, priya.panda}@yale.edu
+Department of Electrical Engineering, Yale University, USA
+
+Abstract—Transformers have revolutionized various real-world
+applications from natural language processing to computer vision. However, traditional von-Neumann computing paradigm
+faces memory and bandwidth limitations in accelerating transformers owing to their massive model sizes. To this end, Inmemory Computing (IMC) crossbars based on Non-volatile
+Memories (NVMs), due to their ability to perform highly parallelized Matrix-Vector-Multiplications (MVMs) with high energyefficiencies, have emerged as a promising solution for accelerating
+transformers. However, analog MVM operations in crossbars
+introduce non-idealities, such as stochastic read & write noise,
+which affect the inference accuracy of the deployed transformers.
+Specifically, we find pre-trained Vision Transformers (ViTs) to
+be vulnerable on crossbars due to the impact of write noise
+on the dynamically-generated Key (K) and Value (V ) matrices
+in the attention layers, an effect not accounted for in prior
+studies. We, thus, propose ClipFormer, a transformation on the
+K and V matrices during inference, to boost the non-ideal
+accuracies of pre-trained ViT models. ClipFormer requires no
+additional hardware and training overhead and is amenable
+to transformers deployed on any memristive crossbar platform.
+Our experiments on Imagenet-1k dataset using pre-trained DeiTS transformers, subjected to standard training and variationaware-training, show > 10 − 40% higher non-ideal accuracies at
+the high write noise regime by applying ClipFormer.
+Index Terms—Vision Transformer, In-Memory Computing,
+Memristive Crossbar, Write Noise, Key-Value Transformation
+
+I. I NTRODUCTION
+Transformers have demonstrated remarkable feats in a
+broad array of real-world applications, from natural language
+processing to image recognition, largely due to their selfattention mechanism, making them ubiquitous [1], [2]. However, typical von-Neumann AI accelerators, such as GPUs
+and TPUs, have limited on-chip memory and bandwidth
+available for storing and communicating transformer’s weights
+and activations numbering in billions [3], [4], for MatrixVector-Multiplications (MVMs). Consequently, accelerating
+transformers using such von-Neumann computing paradigms
+poses challenges in terms of huge memory access to and from
+the off-chip DRAM [5].
+In response to these challenges, In-memory Computing
+(IMC) based on Non-volatile-Memory (NVM) crossbars has
+emerged as a viable computing paradigm for accelerating
+MVMs in transformers, mitigating the ‘memory-wall’ bottleneck faced by traditional von-Neumann accelerators [5].
+Specifically, IMC crossbars built upon emerging NVM devices, such as Resistive Random-access-Memories (RRAMs),
+Phase Change Memories (PCMs), and Ferroelectric Field-
+
+effect Transistors (FeFETs), have been extensively researched
+for enabling compact, energy-efficient, and highly parallelized
+inference of AI workloads on hardware [6]. Recent works
+[7]–[10] have proposed compact, energy-efficient and lowlatency implementations of transformers on IMC architectures
+using efficiency-driven hardware optimizations and architectural modifications. However, memristive crossbar-based IMC
+platforms are susceptible to several non-idealities due to
+their analog mode of MVM operations [11]–[14]. These nonidealities primarily arise from the NVM devices (such as
+stochastic read and write noise), resulting in inaccurate MVMs
+in the crossbars and thereby, reduced inference accuracy for AI
+workloads [11], [13], [15]. Unless it is ensured that transformers yield a reasonably high inference accuracy on non-ideal
+crossbars, all approaches to drive higher energy-efficiencies
+and throughput on IMC platforms become inconsequential.
+This work is dedicated to investigating the implications of
+non-idealities, specifically the stochastic write noise of NVM
+devices, on the inference accuracy of Vision Transformer (ViT)
+models on crossbars. Fig. 1(a) presents a radar chart that compares a ViT model inferred on analog RRAM crossbars against
+digital SRAM-based IMC arrays [14] (devoid of read and
+write non-idealities). Clearly, RRAM crossbars lead to more
+hardware-efficient implementation of MVMs in transformers
+with ∼ 5.1× reduction in total attention area and ∼ 2.3×
+reduction in total attention energy. It is however important
+to note that unlike convolutional neural networks (CNNs),
+transformers are highly vulnerable to the impact of NVM write
+noise during inference due to periodic MVM operations with
+input-specific dynamically-generated operands (Key (K) and
+Value (V ) matrices) in the attention layers. Thus, as seen in
+Fig. 1(a) & (b), across low and high write noise regimes, ViTs
+on NVM crossbars suffer from significant accuracy losses.
+We, therefore, propose a transformation called ClipFormer
+applied during inference on the K & V matrices, to boost
+the accuracy of pre-trained ViT models on crossbars. The effectiveness of the ClipFormer transformation is demonstrated
+across diverse write noise regimes in improved Signal-toNoise Ratios (SNRs) for the deployed ViT models on the
+RRAM crossbars. Importantly, the ClipFormer transformation
+is hardware-agnostic and can be applied uniformly to ViT
+models deployed on any type or size of memristive crossbararrays.
+Recent works on crossbar variation-aware-training (VAT)
+[16] of transformers, aimed at enhancing their non-ideal accuracies during inference, have not accounted for write noise
+
+=== page 2 ===
+2
+
+Ideal
+Parameter
+
+3.6% ↑
+
+H/W IMC noisesimulator
+
+2
+
+VAT
+S/W ViT model
+(Pytorch)
+
+41.5% ↑
+
+Standard ViT
+
+1
+
+ClipFormer ViT
+
+H/W IMC noisesimulator
+
+CF
+
+Low write noise High write noise
+(γ=3)
+(γ=5)
+Acc. loss
+(%) at γ=3
+
+1
+
+Software baseline accuracy
+
+Ideal
+Parameter
+
+Non-ideal Imagenet-1k
+accuracy (%)
+
+(c)
+
+ViT model: DeiT-S
+
+85
+75
+65
+55
+45
+35
+25
+15
+
+Non-ideal
+Parameter
+
+SRAM (1 bit/cell)
+RRAM (2 bits/cell)
+
+(b)
+
+Non-ideal
+Parameter
+
+Attn. area
+(x 10 mm2)
+
+Acc. loss
+(%) at γ=5
+
+Attn.
+energy (µJ)
+
+(a)
+
+Inference
+S/W ViT model
+(Pytorch)
+
+2
+
+Non-ideal
+accuracy
+
+CF = ClipFormer
+
+In summary, the key contributions of our work are as
+follows:
+To the best of our knowledge, this work for the first time
+examines the vulnerability of pre-trained ViTs on nonideal crossbars against write noise. We propose a transformation technique called ClipFormer that is applied on the
+K & V matrices during inference to improve the SNRs
+of pre-trained transformer models, and hence boost their
+non-ideal accuracies on crossbars.
+• For crossbar-realistic inference evaluation of ViTs, we
+propose a Python-based IMC evaluation framework called
+ViT-X. We find that ClipFormer has no additional hardware and training overhead and is amenable to transformers deployed on any memristive crossbar platform.
+• We carry out experiments on ViT-X with pre-trained
+DeiT-S [18] and LV-ViT-S [19] models using the
+Imagenet-1k dataset [20]. We find that ClipFormer leads
+to > 40% increase in non-ideal accuracies for standard
+pre-trained DeiT-S models in the high write noise regime.
+Combining Clipformer with prior variation aware training
+techniques further boosts the accuracy by > 10% in the
+high write noise regime.
+•
+
+MLP
+
+PROJECTION
+
+LAYER NORMALIZATION
+
+V
+
+CONCATENATION
+
+Softmax 𝒮(QKT)
+
+K
+
+Matmul 𝒮(QKT)V
+
+I
+
+Q
+
+Matmul QKT
+
+in the K & V matrices [15], [17]. As shown in Fig. 1(c-top),
+we find that VAT incurs huge training complexity if used for
+fine-tuning ViTs for multiple epochs. This is due to the bottleneck of NVM noise-integration on-the-fly by an IMC noisesimulator to the dynamically-generated K & V matrices for
+each input. Contrarily, ClipFormer is an inference-only lowcost solution (see Fig. 1(c-bottom)) facilitating pre-processing
+or transformation of the K & V matrices to improve the nonideal accuracy of standard ViT models without going through
+multiple epochs of VAT.
+
+LAYER NORMALIZATION
+
+Fig. 1: (a) Radar-chart for a ViT model (DeiT-S) comparing MVMs implemented on RRAM-based IMC crossbars against
+digital SRAM IMC arrays of size 64×64. (b) Non-ideal accuracy of the ViT model (DeiT-S) with and without ClipFormer.
+Note, the non-ideal accuracies or accuracy losses are shown across low and high write noise regimes characterized by γ. Refer
+to Section III for hardware-related details. (c) Pictorial depiction of the overhead of VAT against inference-only ClipFormer
+method for improving robustness of ViT models against IMC write noise. (Top) In VAT, we go through Step-(1) and Step-(2)
+iteratively till training convergence. Here, Step-(1) denotes NVM noise-integration and Step-(2) denotes an epoch of VAT.
+(Bottom) In ClipFormer, we go through Step-(1) and Step-(2) only once. Here, Step-(1) denotes NVM noise-integration and
+Step-(2) denotes inference with non-ideal parameters. Note, ClipFormer does not involve any training or fine-tuning.
+
+Attention
+ViT Encoder
+Fig. 2: Encoder architecture of a Vision transformer.
+
+II. BACKGROUND
+A. Vision Transformers (ViTs)
+A ViT [18], [19], [21] model partitions an image into
+multiple patches, termed as tokens. The number of tokens,
+denoted as t, is determined based on the selected patch size.
+Each token undergoes embedding into a d-dimensional feature
+space. Consequently, the input I fed into an encoder takes
+the form of a t × d dimensional vector. The ViT model
+encompasses multiple encoders. Fig. 2 illustrates the structure
+of a ViT encoder. Within each encoder, the input I with
+dimensions t × d is subject to MVM operations with weights
+WQ , WK , and WV , leading to the generation of the Query
+(Q), Key (K), and Value (V ) matrices [18], [19], [21], each
+being t × d dimensional. Leveraging multi-head self-attention
+(MHSA) based encoders, ViTs capture proximal relationships
+between Query and Key values. Thus, the Q, K, and V
+
+=== page 3 ===
+3
+
+matrices are subdivided into smaller singular heads denoted
+as (Qi , Ki , Vi ), where i signifies an MHSA head.
+The attention mechanism, expressed by eq. 1, is computed
+through MVM between Qi and KiT , followed by a Softmax
+operation, and finally, a MVM with Vi . Subsequently, the
+attention outputs are concatenated, resulting in a t × d output
+attention matrix. The information is then projected into a
+higher-dimensional feature space through projection and MLP
+layers. Each encoder yields a t × d vector, which is therefrom
+forwarded to the subsequent encoder.
+Qi K T
+(1)
+Attention(Qi , Ki , Vi ) = Sof tmax( √ i )Vi
+d
+For the sake of brevity, throughout the remainder of this
+paper, we shall employ the notation QK T to represent Qi KiT ,
+S(QK T ) to represent S(Qi KiT ), and S(QK T )V to represent
+the Attention(Qi , Ki , Vi ) in eq. 1.
+
+TABLE I: Table showing crossbar-related parameters [12],
+[14], [23] used in our hardware evaluation framework. Here,
+ER & EW denote the read & write energies, respectively, of
+an RRAM crossbar. Axbar denotes the cumulative area of an
+RRAM crossbar along with its associated peripherals (ADCs,
+accumulators, write-drivers, etc.).
+
+Parameters
+NVM Device
+CMOS technology node
+ON/OFF ratio
+GM IN , GM AX
+Crossbar size
+Data Precision
+ADC resolution
+Bits/cell (bC )
+ER , EW & Axbar
+σR & σW
+Write noise factor (γ)
+
+Values
+RRAM
+32 nm
+100
+0.1 µS, 10.0 µS
+64×64
+8-bits
+6-bits
+2
+25 pJ, 118 pJ & 0.03 mm2
+0.05 & 0.1
+{3, 4, 5}
+
+B. Memristive crossbars and their non-idealities
+Memristive crossbars consist of 2D arrays of NVM devices.
+Interfacing the crossbars are peripherals, such as Digitalto-Analog Converters (DACs), Analog-to-Digital Converters
+(ADCs) and a programming circuit [14]. During inference,
+the NVM devices at the cross-points are programmed to
+conductances, ranging between GM IN and GM AX . To emulate MVM operations in neural networks, the activations
+are input as analog voltages (Vi ) to each crossbar-row using DACs. These voltages interact with the synaptic device
+conductances (Gij ), as shown in Fig. 3, resulting in the
+generation of a current (following Ohm’s Law) [5], [22].
+Consequently,
+based
+on
+Kirchoff’s
+current
+law,
+the
+V1
+net output current sensed by
+ADCs at each column j is the
+G11
+G12
+sum of currents passing through
+V2
+each device, which is expressed
+as Ij(ideal) = Σi Gij ∗ Vi .
+G22
+G21
+In practice, the analog nature of
+computation
+is prone to hardware
+I1
+I2
+noise, such as NVM device variaFig. 3: A 2×2 memristive
+tions [11], [12], [17] affecting the
+crossbar array.
+synaptic conductances (Gij ). If
+G′ij denotes the non-ideal synaptic conductance, then the non-ideal current at each column
+j can be expressed as Ij(non−ideal) = Σi G′ij ∗ Vi , thereby
+leading to inaccurate MVM operations. As a result, AI workloads deployed on memristive crossbars experience accuracy
+degradation.
+III. V I T-X E VALUATION F RAMEWORK
+For a crossbar-realistic inference evaluation of pre-trained
+ViT models, we use a framework fully written in Python called
+ViT-X. As shown in Fig. 4, ViT-X helps in emulating MVMs
+inside encoders of ViT models using non-ideal crossbars.
+Those operations which are susceptible to only read noise
+(R) are highlighted in maroon colour while, the S(QK T )
+& S(QK T )V operations impacted by both write & read
+
+noise (W+R) are highlighted in blue. In step- 1 , for every
+encoder of the ViT model, we map WQ , WK , WV , K &
+V as well as the weight matrices of the Projection & MLP
+layers as conductances (G) in range [GM IN , GM AX ] (refer
+to details in the Appendix for the mapping of ViT parameters
+as conductances).
+In step- 2 , we partition these matrices into multiple NVM
+crossbars of size 64×64 [13], [22]. Note, we use 8-bit input
+voltages and conductances in the crossbars during inference.
+All the relevant crossbar parameters used in this work are
+listed in Table I. On a hardware-level, bit-slicing [14] is used
+to realize 8-bit conductances (bG = 8) using the 2-bit RRAM
+devices, while bit-serialization [14] is employed to encode
+the 8-bit inputs to the crossbars into a bit-stream processed
+over 8 crossbar read cycles. Additionally, based on the total
+number of crossbars #xbars (which directly determines the
+associated number of digital peripherals like ADCs, writedrivers, accumulators, etc.), the Energy-Area estimator tool
+in ViT-X can estimate the total attention area and energy
+per inference using the areas and energies of the hardware
+components designed in [14].
+In step- 3 , we integrate the impact of NVM device noise
+on the mapped conductances G in the crossbars. Since, WQ ,
+WK , WV and the weights of the Projection & MLP layers
+(all denoted as W ’s inside the maroon box) are stationary
+across the inference of all inputs, they need to be programmed
+onto the crossbars once and hence, are only susceptible to
+stochastic read noise from the NVM devices modelled as ñR =
+2
+N (0, σR
+) [11]. The noisy conductance G′ , under read noise
+is given as:
+G′ = G ∗ (1 + ñR )
+(2)
+However, for the QK T and S(QK T )V operations, the
+dynamically-generated K & V matrices (see blue box) need
+to be written onto the crossbars for every input. Hence, the
+stochastic write noise is added to the conductances of the K
+& V matrices during inference, in addition to read noise. The
+relative impact of write noise is higher than that of read noise
+
+=== page 4 ===
+4
+
+Fig. 4: Pictorial representation of the ViT-X framework for pre-trained ViT models. This framework evaluates non-ideal accuracy
+of ViT models and also estimates the hardware area & energy expended by the attention layers. Various hardware parameters
+input to the framework are listed in Table I. If ClipFormer transformation (see Algorithm 1) is to be integrated with ViT-X,
+it is done after the second stage before non-ideality integration as shown.
+[12], [24]. The noisy conductance G′ under write noise [12],
+[25] is given as G′ = G + ñW , where the write noise ñW is
+modelled as:
+p
+2
+ñW = γ ∗ (G − GM IN ) ∗ (GM AX − GM IN ) ∗ N (0, σW
+)
+(3)
+Here, γ denotes the write noise factor of the NVM device and
+the impact of write noise increases with increase in the value
+of γ. Note, for a standard CNN inference on weight-stationary
+IMC crossbars, the impact of write noise is not included as
+all the model weights are pre-programmed onto the crossbars
+and remain stationary for all inputs throughout inference. For
+our analyses, we assume the write noise factor for the RRAM
+devices to be γ = {3, 4, 5}. Also for the RRAM device, we
+have RM IN = 100kΩ with a high ON/OFF ratio of 100 [23],
+whereby the impact of parasitic non-idealities due to crossbar
+interconnects is negligible [25]. Note, apart from the MVM
+operations, other operations such as Layernorm, GELU and
+Softmax are computed in the digital domain and are hence,
+unimpaired by crossbar non-idealities.
+IV. ClipFormer T RANSFORMATION
+Algorithm 1 ClipFormer Transformation on the K & V
+matrices vulnerable to NVM write noise
+1: For G ϵ [GM IN , GM AX ],
+2: I Assign G = G − α ∗ GM IN ; α ≥ 1
+3:
+Set G = max{G, GM IN }
+▷ Since, G ≮ GM IN
+4: II Assign G = min{G, β ∗ GM AX }; 0 < β ≤ 1
+To combat the vulnerability of ViT models on non-ideal
+crossbars (see Fig. 1) during inference, we propose the ClipFormer transformation. ClipFormer, applied during inference,
+stems from the fact that the higher synaptic conductances
+
+are susceptible to larger write noise than the lower synaptic
+conductances (see eq. 3). ClipFormer, essentially, enforces an
+increased proportion of lower conductances in the crossbars to
+reduce the impact of write noise on the dynamically-mapped
+K & V matrices. The ClipFormer transformation on the
+synaptic conductances (G) constituting the K & V matrices
+in the attention blocks occurs in two stages as described
+in Algorithm 1. For inference evaluations using our ViT-X
+framework, ClipFormer can be integrated between step- 2
+& step- 3 in Fig. 4 before integrating non-idealities.
+Fig. 5 plots histograms showing the distributions of the
+K & V matrices in the first attention block of a pre-trained
+Deit-S model (without including crossbar noise). We find that
+the transformation ClipFormer (α = 1 & β = 1) constricts
+the distribution of K & V towards zero. Note, applying
+β = 1 implies skipping the stage II of the transformation,
+since ∀ G, G ≤ GM AX . With α = 1 & β = 0.25, the
+transformation becomes more rigorous and the distributions
+of the K & V matrices are further constricted and clipped
+at values satisfying G = 0.25 ∗ GM AX . The rationale behind
+choosing β = 0.25 is explained in Section VI-D.
+For the DeiT-S model, we calculate the Signal-to-Noise
+Ratio (SNR) at the end of every attention block (i.e. after the
+S(QK T )V operation) for understanding the impact of crossbar non-idealities (simulated using ViT-X), and thereby the
+ClipFormer transformations to improve the noise-resiliency.
+Assuming X = S(QK T )V , the SNR for each attention block
+in an encoder is expressed as follows:
+SN R = 10 ∗ log10 (
+
+(||Xideal ||2 )2
+) dB
+(||Xideal − Xnon−ideal ||2 )2
+
+(4)
+
+Here, Xideal denotes X in absence of crossbar non-idealities,
+while Xnon−ideal denotes X in presence of crossbar non-
+
+=== page 5 ===
+5
+
+K values
+
+V values
+No transformation
+
+α = 1, β = 0.25
+Frequency
+
+α = 1, β = 0.25
+Frequency
+
+α = 1, β = 1
+Frequency
+
+Frequency
+
+α = 1, β = 1
+
+K values
+
+V values
+
+Post ClipFormer transformation
+
+Fig. 5: Histograms showing the distributions of the K & V matrices in the first attention block of the pre-trained Deit-S model
+(without including crossbar noise) before and after ClipFormer transformations.
+
+SNR (dB)
+
+<SNR> (dB)
+
+7
+6
+5
+4
+3
+2
+1
+0
+
+7
+6
+5
+4
+3
+2
+1
+0
+
+1 2 3 4 5 6 7 8 9 10 11 12
+Encoder index
+
+3
+4
+5
+Write noise factor (γ)
+
+Fig. 6: (Left) Plots of SNR (taking γ = 4) across 12 attention
+blocks in the DeiT-S model. (Right) Plots of < SN R >
+against write noise factor (γ) for the DeiT-S model.
+idealities. Higher the SNR, greater the immunity of the deployed ViT model to hardware noise.
+Fig. 6(left) plots the SNR across the 12 attention blocks in
+the DeiT-S. Here, we use γ = 4 to simulate the write noise
+during inference. ClipFormer clearly boosts the SNR of the
+DeiT-S models on an average (∼ 1.5 − 1.9 dB increase) as
+the proportion of the low conductance synapses is increased
+on mapping the K & V matrices onto the non-ideal crossbars.
+Fig. 6(right) plots the SNR averaged across all the 12 attention
+blocks (< SN R >) against different write noise factors (γ).
+For the higher device write noise regimes (γ = 4 & γ = 5), on
+increasing the rigor of transformation, i.e. from (α = 1, β = 1)
+to (α = 1, β = 0.25), there is a steady increase in < SN R >
+(∼ 0.62 − 1.98 dB), implying that the impact of write noise
+gets compensated. However, for the lower write noise regime
+(γ = 3), a very rigorous transformation (α = 1, β = 0.25)
+leads to a low < SN R > (even ∼ 0.74 dB lower than
+the untransformed model). Hence, at the low write noise
+regimes, skipping the stage II of ClipFormer transformation
+is prudent. Note that we do not require any additional
+hardware or training overhead to facilitate ClipFormer
+transformation on the K & V matrices during crossbarmapping.
+V. E XPERIMENTS
+Experimental setup: We infer the following pre-trained
+ViT models- DeiT-S [18] and LV-ViT-S, on the Imagenet1k dataset [20] with the ViT-X framework using the crossbar
+parameters listed in Table I. We also evaluate a token-pruned
+
+DeiT-S model to show how pruning is impacted by crossbar
+non-idealities. Note, the dynamically token-pruned version of
+the DeiT-S model is trained using the methodology proposed
+in [26] and referred to as Sparse DeiT-S in the experiments.
+All the models are trained using Pytorch with Nvidia-V100
+GPU backend.
+Baselines: For all the pre-trained ViT models, we have
+two versions- one subjected to standard training and the
+other subjected to Variation-aware-Training (VAT). In VAT,
+we fine-tune a standard-trained ViT model for one epoch in
+Pytorch on the Imagenet-1k dataset by injecting crossbar noise
+in the manner shown in Fig. 1(c-top). We inject only read noise
+(eq. 2) into WQ , WK , WV and the weights of the Projection &
+MLP layers, and write noise (eq. 3 with γ = 2 [16], [27]) along
+with read noise into the K & V matrices, taking σR and σW
+values from Table I. Note, VAT is not compatible with large
+write noise (γ > 2) being injected into the input-specific K
+& V matrices as it leads to convergence issues. We apply the
+ClipFormer transformation to the standard trained and VATtrained baseline models and evaluate the effectiveness of our
+transformation strategy.
+VI. R ESULTS AND D ISCUSSION
+A. Overall impact of ClipFormer across all baselines
+Table II presents a holistic overview of the inference performance of the different ViT models on non-ideal crossbars across different write noise regimes, with and without
+ClipFormer transformations. Overall, across different noise
+regimes, standard pre-trained models suffer huge accuracy
+losses of ∼ 6.5 − 57.2% compared to software baseline.
+ClipFormer boosts the accuracies of the standard pre-trained
+models by ∼ 3 − 5% at low γ and ∼ 23 − 44% at high γ.
+For the DeiT-S model fine-tuned with VAT, the accuracy
+loss from the software baseline is lower compared to standard
+DeiT-S (∼ 3.1 − 21.6%). ClipFormer boosts the accuracy of
+VAT trained DeiT-S consistently across all γ notably increasing the accuracy by 12% for γ = 5. Similar trends occur for
+the Sparse DeiT-S and the LV-ViT-S models. ClipFormer on
+the VAT-trained Sparse DeiT-S and LV-ViT-S models further
+boosts their accuracies by ∼ 1.6 − 12.4% implying that our
+transformation can be used as a plug-in with prior or any future
+non-ideality mitigation strategies.
+
+=== page 6 ===
+Best
+Pre-trained
+Non-ideal
+Best
+Software
+ClipFormer
+ViT Model
+γ
+accuracy (%)
+(α, β )
+accuracy (%)
+(Training mode)
+accuracy (%)
+DeiT-S
+3
+71.06
+74.64
+(2,1)
+79.76
+(standard)
+4
+54.82
+68.81
+(2,1)
+5
+22.59
+64.05
+(2,0.25)
+DeiT-S
+3
+76.04
+76.76
+(1,1)
+79.16
+(with VAT)
+4
+71.24
+74.8
+(2,1)
+5
+57.50
+69.21
+(2,0.25)
+Sparse DeiT-S
+3
+67.59
+72.61
+(2,1)
+78.56
+(standard)
+4
+47.91
+64.93
+(2,1)
+5
+16.54
+60.91
+(2,0.25)
+Sparse DeiT-S
+3
+74.78
+75.36
+(2,1)
+78.08
+(with VAT)
+4
+69.67
+73.45
+(2,1)
+5
+55.8
+68.1
+(2,0.25)
+LV-ViT-S
+3
+70.28
+72.97
+(2,1)
+76.82
+(standard)
+4
+60.88
+67.95
+(2,0.25)
+5
+41.52
+64.63
+(2,0.25)
+LV-ViT-S
+3
+74.16
+75.78
+(2,1)
+76.19
+(with VAT)
+4
+72.81
+74.2
+(2,1)
+5
+67.8
+72.14
+(2,0.25)
+
+TABLE III: Table showing comparison of VAT and ClipFormer transformation across γ = 4 & γ = 5 for a Sparse
+DeiT-S model.
+Standard & VAT-trained & VAT-trained &
+Inferred with Inferred w/o
+Inferred with
+ClipFormer
+ClipFormer
+ClipFormer
+Non-ideal
+γ=4
+64.93
+69.67
+73.45
+accuracy (%) γ = 5
+60.91
+55.8
+68.1
+Training complexity
+Nil
+5×
+5×
+
+Another observation to note from Table II is that the Sparse
+ViTs (token-pruned) are more vulnerable to crossbar nonidealities than their unpruned counterparts, specifically in the
+higher write noise regimes. The accuracy gap still persists
+after applying ClipFormer during inference. This is because
+with reduced tokens, the pruned model has a reduced size of
+the K & V matrices which reduces the number of synapses
+post mapping onto crossbars [28]. However, the remainder
+of tokens in the pruned model are crucial for the model’s
+performance. Thus, any crossbar non-ideality interfering them
+impacts the model’s hardware accuracy drastically.
+Next, we highlight the advantage of ClipFormer as being a
+training-less strategy. In Fig. 7, we show that VAT training per
+epoch is 5× more expensive than standard training per epoch
+due to the noise-integration by the H/W IMC noise-simulator
+that can slow down the overall training (see Fig. 1(c)). In
+Table III, we compare the accuracy and training complexity
+of a standard trained Sparse DeiT-S baseline inferred with
+ClipFormer to that of a VAT-trained DeiT-S baseline inferred
+with and without ClipFormer. We find that VAT-trained model
+inferred without ClipFormer, although has improved non-ideal
+accuracy on crossbars, has a higher complexity of noise-aware
+training and still incurs accuracy loss with respect to the
+software baseline accuracy for higher γ. Performing multiple
+
+90
+70
+50
+30
+10
+
+3
+
+4
+
+Write noise factor (γ)
+
+Untransformed
+ClipFormer (α = 1, β = 0.25)
+ClipFormer (α = 2, β = 0.25)
+
+5
+
+ClipFormer (α = 1, β = 1)
+ClipFormer (α = 2, β = 1)
+
+Fig. 8: Ablation study for non-ideal accuracy against γ for a
+standard DeiT-S model inferred with and without ClipFormer
+for different (α, β) combinations.
+
+epochs of VAT on the ViT models simply adds overhead in
+terms of training time, while not further bridging the gap
+between the non-ideal and the software baseline accuracies.
+Contrarily, ClipFormer
+25000
+is an inference-only
+Model: Sparse DeiT-S
+transformation which
+20000
+significantly
+boosts
+15000
+5x ↑
+the non-ideal accuracy,
+10000
+specifically in the
+5000
+higher write noise
+regimes by ∼ 17−45%,
+0
+without incurring any
+Standard
+VAT
+training
+Fig. 7: Plot comparing the training additional
+costs.
+The
+best
+time per epoch (on Nvidia-V100
+combination
+is
+a
+GPU) for standard and VAT-trained
+one-epoch
+VAT-trained
+Sparse DeiT-S models.
+model inferred using
+ClipFormer with the
+best inference accuracies across all γ, at minimal training
+overhead.
+
+Training time/epoch (s)
+
+TABLE II: A holistic overview of inference performance on
+ViT-X of different ViT models across different write noise
+regimes characterized by γ, with and without ClipFormer
+transformation. We report the best non-ideal accuracies obtained using ClipFormer along with the corresponding (α, β)
+combinations.
+
+Accuracy (%)
+
+6
+
+B. Ablations using ClipFormer with different (α, β)
+We carry out ablation study by heuristically varying the
+(α, β) values during the inference of the ViT models with
+ClipFormer to find the best possible combinations as listed
+in Table II. For α > 2 and β < 0.25, the transformation
+becomes too rigorous to preserve the non-ideal accuracies
+across all ViT models & write noise regimes compared to
+their untransformed counterparts and hence, are not included
+in the ablation study. From Fig. 8, we find for a standardtrained DeiT-S model that when the write noise factor is very
+high (γ = 5), a very rigorous ClipFormer transformation
+(α = 2 & β = 0.25) yields the best non-ideal accuracy.
+Contrarily for γ = 3, (α = 2 & β = 1) is the ideal
+combination for high non-ideal accuracy. Additionally, we find
+that the accuracy trend across the different write noise factors
+in Fig. 8 is identical to the < SN R > trend in Fig. 6(right),
+showing the positive correlation between < SN R > and the
+non-ideal inference accuracy of the Clipformer ViT models on
+crossbars. Similar trends are also obtained for the other ViT
+models (data not shown for brevity).
+
+=== page 7 ===
+γ =4
+
+Accuracy (%)
+
+70
+60
+
+10
+
+50
+
+8
+
+40
+
+6
+
+30
+LV-ViT-S
+No Transformation
+
+DeiT-S
+
+350
+300
+
++11.71
+
++4.34
+
+80
+60
+
+250
+
+40
+
+200
+
+20
+
+150
+100
+
+0
+
+% Accuracy at γ = 5
+
+80
+
+Total Attn. area (mm2)
+
+12
+
++4.34
+
++11.71
+
+DeiT-S
+LV-ViT-S
+ClipFormer (β = 0.25)
+
+Fig. 10: Plot showing reduction in total attention energy (left)
+& area (right) for VAT-trained DeiT-S & LV-ViT models as
+a by-product of ClipFormer (β = 0.25), alongside accuracy
+improvements at γ = 5 (shown in red).
+
+γ =3
+
+Previous works have demonstrated the effectiveness of using
+NVM devices with higher ON/OFF ratios to reduce read
+variations during inference of deep neural networks [14], [29]–
+[31]. However, the impact of write noise (modelled using
+eq. 3) on the ViT parameters (W ) mapped
+√ on the crossbars
+2
+given by ∆WW = γ × N (0, σW
+) × wM AX × W (refer
+to the deduction of eq. 9 in the Appendix) is independent of the impact of ON/OFF ratio of the NVM devices.
+This is validated in
+78
+Fig. 9, where the
+76
+non-ideal
+inference
+74
+accuracies
+of
+the
+72
+Sparse DeiT-S model
+70
+remain
+unchanged
+68
+upon
+varying
+the
+No transform
+ClipFormer
+66
+ON/OFF
+ratio
+of
+25
+50
+100
+the RRAM devices
+ON/OFF ratio
+from 25 to 100 by
+Fig. 9: Plot showing the non-ideal changing the value
+accuracies (with & without Clip- of GM AX at a fixed
+Former transformation) of VAT- GM IN = 0.1µS. Note
+trained Sparse DeiT-S model for that while the read
+different device ON/OFF ratios at noise does decrease
+γ = 3 & γ = 4.
+upon increasing the
+ON/OFF ratios (refer
+to eq. 8 in the Appendix), its impact on the K & V matrices
+is negligibly small compared to the write noise. Consequently,
+unless there is an NVM device with a very small value of
+γ, the impact of write noise during ViT inference cannot be
+mitigated by simply using devices with high ON/OFF ratios.
+This further underscores the necessity of our generalized
+ClipFormer transformation that can mitigate write noise
+across any type of memristive crossbars, without requiring
+any specialized circuit-level or device-level modifications.
+
+14
+
+% Accuracy at γ = 5
+
+C. Can the device ON/OFF ratio help mitigate write noise?
+
+Total Attn. energy (µJ)
+
+7
+
+D. ClipFormer leading to hardware-efficiency
+As shown in Table I, the RRAM device encodes 2 bits/cell
+in a crossbar. Thus, four RRAM-based crossbars (with associated peripherals like ADCs) will be utilized to emulate an
+array with 8-bit conductances via bit-slicing [14]. However, for
+the K & V matrices, ClipFormer with β = 0.25 essentially
+reduces the maximum value of conductance encoded in the
+crossbar-arrays from GM AX to GM AX /4, whereby we require
+only 6-bits to encode all the conductances corresponding to the
+K & V matrices. Consequently with bit-slicing, three RRAMbased crossbars (with associated peripherals) can emulate an
+array with 6-bit conductances, thereby bringing in reduction
+in number of crossbars. Thus, we observe an interesting byproduct of ClipFormer, whereby we have area & energy
+savings for the attention layers during inference. Using the
+ViT-X framework, a ∼ 7 − 8% reduction in the total attention
+area and energy is seen in Fig. 10 by applying ClipFormer
+(β = 0.25) for the VAT-trained DeiT-S (12 encoders) and LVViT-S (16 encoders) models. Alongside, we have ∼ 11.71%
+(∼ 4.34%) accuracy improvement for the DeiT-S (LV-ViT-S)
+model at γ = 5.
+
+VII. C ONCLUSION
+This work shows the vulnerability of transformers to crossbar write noise affecting the dynamically-generated Key &
+Value matrices during inference. We propose Key-Value transformations, called ClipFormer, that mitigates write noise and
+improves the SNR of transformers on crossbars. ClipFormer
+is amenable to all transformers deployed on any memristive
+crossbar platform, without adding any additional hardware
+or training overhead. For pre-trained ViTs fine-tuned using
+VAT, ClipFormer further boosts their inference accuracies by
+∼ 5 − 13% in the high write noise regime, while achieving a
+∼ 7 − 8% reduction in the total attention area & energy.
+A PPENDIX
+Let us assume W ϵ [0, wM AX ] to be the ViT parameters to be mapped on memristive crossbars as conductances
+G ϵ [GM IN , GM AX ]. Hence, the transformation of W to G
+is defined as:
+G=
+
+W × (GM AX − GM IN )
++ GM IN
+wM AX
+
+(5)
+
+In presence of hardware-noise, let the non-ideal conductances be denoted as G′ . Hence, the transformation of the
+non-ideal conductances back to non-ideal weights W ′ is given
+as:
+W′ =
+
+(G′ − GM IN )
+× wM AX
+(GM AX − GM IN )
+
+(6)
+
+If ñ = G′ − G denotes the hardware-noise in the conductances and ∆W = W ′ − W is the perturbation in ViT
+parameters W due to hardware-noise, then using eq. 5 & 6,
+∆W can be written as:
+∆W =
+
+ñ × wM AX
+(GM AX − GM IN )
+
+(7)
+
+Considering the impact of read noise (R) on G, defined
+using eq. 2, eq. 7 can be written as:
+∆WR =
+
+2
+N (0, σR
+)
+× G × wM AX
+(GM AX − GM IN )
+
+Using eq. 5 in the above equation, we have:
+2
+∆WR = N (0, σR
+) × [W +
+
+wM AX
+]
+M AX
+(G
+GM IN ) − 1
+
+(8)
+
+=== page 8 ===
+8
+
+M AX
+Clearly, as NVM device ON/OFF ratio (i.e., G
+GM IN ) increases, the impact of read noise on the ViT parameters
+(∆WR ) decreases.
+Again, considering the impact of write noise (W) on G,
+defined using eq. 3, eq. 7 can be written as:
+
+∆WW = √
+
+2
+p
+γ × N (0, σW
+)
+× G − GM IN × wM AX
+GM AX − GM IN
+
+Using eq. 5 in the above equation, we have:
+p
+2
+∆WW = γ × N (0, σW
+) × wM AX × W
+
+(9)
+
+Here, we find the impact of write noise on the ViT parameters (∆WW ) to be independent of the NVM device ON/OFF
+ratio.
+ACKNOWLEDGEMENT
+This work was supported in part by CoCoSys, a JUMP2.0
+center sponsored by DARPA and SRC, the National Science Foundation (CAREER Award, Grant #2312366, Grant
+#2318152), TII (Abu Dhabi), and the DoE MMICC center
+SEA-CROGS (Award #DE-SC0023198).
+R EFERENCES
+[1] K. Han, Y. Wang, H. Chen, X. Chen, J. Guo, Z. Liu, Y. Tang, A. Xiao,
+C. Xu, Y. Xu et al., “A survey on vision transformer,” IEEE transactions
+on pattern analysis and machine intelligence, vol. 45, no. 1, pp. 87–110,
+2022.
+[2] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez,
+Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in
+neural information processing systems, vol. 30, 2017.
+[3] N. P. Jouppi, C. Young, N. Patil, D. Patterson, G. Agrawal, R. Bajwa,
+S. Bates, S. Bhatia, N. Boden, A. Borchers et al., “In-datacenter
+performance analysis of a tensor processing unit,” in Proceedings of the
+44th annual international symposium on computer architecture, 2017,
+pp. 1–12.
+[4] L. Bernstein, A. Sludds, R. Hamerly, V. Sze, J. Emer, and D. Englund,
+“Freely scalable and reconfigurable optical hardware for deep learning,”
+Scientific reports, vol. 11, no. 1, p. 3144, 2021.
+[5] N. Verma, H. Jia, H. Valavi, Y. Tang, M. Ozatay, L.-Y. Chen, B. Zhang,
+and P. Deaville, “In-memory computing: Advances and prospects,” IEEE
+Solid-State Circuits Magazine, vol. 11, no. 3, pp. 43–55, 2019.
+[6] I. Chakraborty, A. Jaiswal, A. Saha, S. Gupta, and K. Roy, “Pathways to
+efficient neuromorphic computing with non-volatile memory technologies,” Applied Physics Reviews, vol. 7, no. 2, 2020.
+[7] X. Yang, B. Yan, H. Li, and Y. Chen, “Retransformer: Reram-based
+processing-in-memory architecture for transformer acceleration,” in
+Proceedings of the 39th International Conference on Computer-Aided
+Design, 2020, pp. 1–9.
+[8] S. Sridharan, J. R. Stevens, K. Roy, and A. Raghunathan, “X-former:
+In-memory acceleration of transformers,” IEEE Transactions on Very
+Large Scale Integration (VLSI) Systems, 2023.
+[9] F. Liu, W. Zhao, Z. He, Z. Wang, Y. Zhao, Y. Chen, and L. Jiang, “Bittransformer: Transforming bit-level sparsity into higher preformance in
+reram-based accelerator,” in 2021 IEEE/ACM International Conference
+On Computer Aided Design (ICCAD). IEEE, 2021, pp. 1–9.
+[10] A. F. Laguna, M. M. Sharifi, A. Kazemi, X. Yin, M. Niemier, and
+X. S. Hu, “Hardware-software co-design of an in-memory transformer
+network accelerator,” Frontiers in Electronics, vol. 3, p. 847069, 2022.
+[11] X. Sun and S. Yu, “Impact of non-ideal characteristics of resistive
+synaptic devices on implementing convolutional neural networks,” IEEE
+Journal on Emerging and Selected Topics in Circuits and Systems, vol. 9,
+no. 3, pp. 570–579, 2019.
+[12] S. Agarwal, S. J. Plimpton, D. R. Hughart, A. H. Hsia, I. Richter,
+J. A. Cox, C. D. James, and M. J. Marinella, “Resistive memory device
+requirements for a neural algorithm accelerator,” in 2016 International
+Joint Conference on Neural Networks (IJCNN). IEEE, 2016, pp. 929–
+938.
+
+[13] A. Bhattacharjee, L. Bhatnagar, Y. Kim, and P. Panda, “Neat: Nonlinearity aware training for accurate, energy-efficient, and robust implementation of neural networks on 1t-1r crossbars,” IEEE Transactions
+on Computer-Aided Design of Integrated Circuits and Systems, vol. 41,
+no. 8, pp. 2625–2637, 2021.
+[14] X. Peng, S. Huang, H. Jiang, A. Lu, and S. Yu, “Dnn+ neurosim
+v2. 0: An end-to-end benchmarking framework for compute-in-memory
+accelerators for on-chip training,” IEEE Transactions on ComputerAided Design of Integrated Circuits and Systems, vol. 40, no. 11, pp.
+2306–2319, 2020.
+[15] K. Spoon, H. Tsai, A. Chen, M. J. Rasch, S. Ambrogio, C. Mackin,
+A. Fasoli, A. M. Friz, P. Narayanan, M. Stanisavljevic et al., “Toward
+software-equivalent accuracy on transformer-based deep neural networks
+with analog memory devices,” Frontiers in Computational Neuroscience,
+vol. 15, p. 675741, 2021.
+[16] B. Liu, H. Li, Y. Chen, X. Li, Q. Wu, and T. Huang, “Vortex: Variationaware training for memristor x-bar,” in Proceedings of the 52nd Annual
+Design Automation Conference, 2015, pp. 1–6.
+[17] M. J. Rasch, C. Mackin, M. Le Gallo, A. Chen, A. Fasoli, F. Odermatt,
+N. Li, S. Nandakumar, P. Narayanan, H. Tsai et al., “Hardware-aware
+training for large-scale and diverse deep learning inference workloads
+using in-memory computing-based accelerators,” Nature Communications, vol. 14, no. 1, p. 5282, 2023.
+[18] H. Touvron, M. Cord, M. Douze, F. Massa, A. Sablayrolles, and
+H. Jégou, “Training data-efficient image transformers & distillation
+through attention,” in International conference on machine learning.
+PMLR, 2021, pp. 10 347–10 357.
+[19] Z.-H. Jiang, Q. Hou, L. Yuan, D. Zhou, Y. Shi, X. Jin, A. Wang,
+and J. Feng, “All tokens matter: Token labeling for training better vision transformers,” Advances in neural information processing systems,
+vol. 34, pp. 18 590–18 602, 2021.
+[20] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, “Imagenet:
+A large-scale hierarchical image database,” in 2009 IEEE conference on
+computer vision and pattern recognition. Ieee, 2009, pp. 248–255.
+[21] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai,
+T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly et al.,
+“An image is worth 16x16 words: Transformers for image recognition
+at scale,” arXiv preprint arXiv:2010.11929, 2020.
+[22] S. Jain, A. Sengupta, K. Roy, and A. Raghunathan, “Rxnn: A framework
+for evaluating deep neural networks on resistive crossbars,” IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems,
+vol. 40, no. 2, pp. 326–338, 2020.
+[23] F. Zahoor, T. Z. Azni Zulkifli, and F. A. Khanday, “Resistive random
+access memory (rram): an overview of materials, switching mechanism,
+performance, multilevel cell (mlc) storage, modeling, and applications,”
+Nanoscale research letters, vol. 15, pp. 1–26, 2020.
+[24] S. Nandakumar, M. Le Gallo, I. Boybat, B. Rajendran, A. Sebastian,
+and E. Eleftheriou, “A phase-change memory model for neuromorphic
+computing,” Journal of Applied Physics, vol. 124, no. 15, 2018.
+[25] S. Roy, S. Sridharan, S. Jain, and A. Raghunathan, “Txsim: Modeling
+training of deep neural networks on resistive crossbar systems,” IEEE
+Transactions on Very Large Scale Integration (VLSI) Systems, vol. 29,
+no. 4, pp. 730–738, 2021.
+[26] Y. Rao, W. Zhao, B. Liu, J. Lu, J. Zhou, and C.-J. Hsieh, “Dynamicvit: Efficient vision transformers with dynamic token sparsification,”
+Advances in neural information processing systems, vol. 34, pp. 13 937–
+13 949, 2021.
+[27] G. Krishnan, L. Yang, J. Sun, J. Hazra, X. Du, M. Liehr, Z. Li,
+K. Beckmann, R. V. Joshi, N. C. Cady et al., “Exploring model
+stability of deep neural networks for reliable rram-based in-memory
+acceleration,” IEEE Transactions on Computers, vol. 71, no. 11, pp.
+2740–2752, 2022.
+[28] A. Bhattacharjee, L. Bhatnagar, and P. Panda, “Examining and mitigating
+the impact of crossbar non-idealities for accurate implementation of
+sparse deep neural networks,” in 2022 Design, Automation & Test in
+Europe Conference & Exhibition (DATE). IEEE, 2022, pp. 1119–1122.
+[29] I. Chakraborty, M. F. Ali, D. E. Kim, A. Ankit, and K. Roy, “Geniex:
+A generalized approach to emulating non-ideality in memristive xbars
+using neural networks,” in 2020 57th ACM/IEEE Design Automation
+Conference (DAC). IEEE, 2020, pp. 1–6.
+[30] A. Bhattacharjee, A. Moitra, Y. Kim, Y. Venkatesha, and P. Panda,
+“Examining the role and limits of batchnorm optimization to mitigate
+diverse hardware-noise in in-memory computing,” in Proceedings of the
+Great Lakes Symposium on VLSI 2023, ser. GLSVLSI ’23. New York,
+NY, USA: Association for Computing Machinery, 2023, p. 619–624.
+[31] K. A. Aabrar, S. G. Kirtania, F.-X. Liang, J. Gomez, M. San Jose,
+Y. Luo, H. Ye, S. Dutta, P. G. Ravikumar, P. V. Ravindran et al., “Beol-
+
+=== page 9 ===
+9
+
+compatible superlattice fefet analog synapse with improved linearity and
+symmetry of weight update,” IEEE Transactions on Electron Devices,
+vol. 69, no. 4, pp. 2094–2100, 2022.
+
+Abhiroop Bhattacharjee is pursuing his Ph.D. in
+the Intelligent Computing Lab at Yale University.
+His research interests lie in the area of algorithmhardware co-design of process in-memory architectures for deep learning & neuromorphic applications.
+His research works have been published in reputed
+journals and conferences such as IEEE TCAD,
+IEEE JETCAS, ACM TODAES, ACM TECS, DAC,
+DATE, ISLPED and GLSVLSI. He received the Best
+Paper Award in the 2022 ISLPED conference.
+
+Abhishek Moitra is pursuing his Ph.D. in the
+Intelligent Computing Lab at Yale. His research
+works have been published in reputed journals such
+as IEEE TCAS-1, IEEE TCAD, IEEE TETCI, and
+conferences such as DAC, DATE, ISLPED and
+GLSVLSI. His research interests involve hardwarealgorithm co-design and co-exploration for designing robust and energy-efficient hardware architectures for deep learning tasks.
+
+Priyadarshini Panda obtained her Ph.D. from Purdue University, USA, in 2019. She joined Yale
+University, USA, as an assistant professor in the
+Electrical Engineering department in August, 2019.
+She received the B.E. degree in Electrical and Electronics Engineering and M.Sc. degree in Physics
+from B.I.T.S. Pilani, India, in 2013. During her Ph.D.
+internship at Intel Labs, she developed large scale
+spiking neural network algorithms for benchmarking
+the Loihi chip. She is the recipient of the 2019 Amazon Research Award, 2022 Google Research Scholar
+Award, 2022 DARPA Riser Award, 2022 ISLPED Best Paper Award, 2023
+DARPA Young Faculty Award and 2023 NSF CAREER Award. Her research
+interests lie in Neuromorphic Computing, Spiking Neural Networks, EnergyEfficient Hardware Accelerators, and Compute In-Memory Processing.

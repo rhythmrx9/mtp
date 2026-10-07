@@ -1,0 +1,856 @@
+# GENIEx: A Generalized Approach to Emulating Non-Ideality in Memristive Xbars using Neural Networks
+# id: W3011221635 | key: 2020_Chakraborty_GENIEx_DAC | DAC 2020 | card: ../cards/2020_Chakraborty_GENIEx_DAC.md
+
+
+=== page 1 ===
+GENIEx: A Generalized Approach to Emulating Non-Ideality in
+Memristive Xbars using Neural Networks
+Indranil Chakraborty, Mustafa Fayez Ali, Dong Eun Kim, Aayush Ankit and Kaushik Roy
+ichakra@purdue.edu
+School of Electrical and Computer Engineering, Purdue University
+West Lafayette, Indiana
+
+arXiv:2003.06902v1 [cs.ET] 15 Mar 2020
+
+ABSTRACT
+Memristive crossbars have been extensively explored for deep learning accelerators due to their high on-chip storage density and efficient Matrix Vector Multiplication (MVM) compared to digital
+CMOS. However, their analog nature of computing poses significant
+issues due to various non-idealities such as: parasitic resistances,
+non-linear I-V characteristics of the memristor device etc. The nonidealities can have a detrimental impact on the functionality i.e.
+computational accuracy of crossbars. Past works have explored
+modeling the non-idealities using analytical techniques. However,
+several non-idealities have data dependent behavior. This can not
+be captured using analytical (non data-dependent) models thereby,
+limiting their suitability in predicting application accuracy.
+To address this, we propose a Generalized Approach to Emulating Non-Ideality in Memristive Crossbars using Neural Networks
+(GENIEx), which accurately captures the data-dependent nature
+of non-idealities. First, we perform extensive HSPICE simulations
+of crossbars with different voltage and conductance combinations.
+Based on the obtained data, we train a neural network to learn the
+transfer characteristics of the non-ideal crossbar. Next, we build a
+functional simulator which includes key architectural facets such as
+tiling, and bit-slicing to analyze the impact of non-idealities on the
+classification accuracy of large-scale neural networks. We show that
+GENIEx achieves low root mean square errors (RMSE) of 0.25 and
+0.7 for low and high voltages, respectively, compared to HSPICE.
+Additionally, the GENIEx errors are 7× and 12.8× better than an
+analytical model which can only capture the linear non-idealities.
+Further, using the functional simulator and GENIEx, we demonstrate that an analytical model can overestimate the degradation
+in classification accuracy by ≥ 10% on CIFAR-100 and 3.7% on
+ImageNet datasets compared to GENIEx.
+
+1
+
+INTRODUCTION
+
+The pervasiveness of deep learning in a wide-variety of applications
+such as object detection, language processing etc. has been a major
+force behind the recent success of Artificial Intelligence (AI). Consequently, there has been a growing interest in developing specialized
+accelerators to improve the efficiency of deep learning. Such accelerators include Google TPU [1], Microsoft BrainWave [2], and Nvidia
+V100. One key aspect driving these accelerators is moving computations closer to the memory, which has brought forth the paradigm
+of in-memory computing. Despite the breakthroughs in custom
+
+Accepted in DAC’20, July 2020, San Francisco, USA
+© 2020 Association for Computing Machinery.
+ACM ISBN 978-x-xxxx-xxxx-x/YY/MM. . . $15.00
+
+hardware, the storage and computation requirements of Deep Neural Networks (DNNs) have been increasing at a much faster rate
+than the efficiency improvements in digital CMOS hardware [3].
+To this effect, researchers have explored Non Volatile Memory
+(NVM) [4, 5] based crossbar architectures to achieve higher on-chip
+storage density and efficient MVMs in the analog domain [6, 7].
+NVM devices can store multiple states per device, and crossbars built with these devices can be integrated on chip leading
+to high storage density [4]. Second, the voltage-driven nature of
+these two-terminal devices enables crossbar-like arrangement to
+perform MVMs, at significantly higher efficiency compared to digital CMOS [8]. Despite the multifold promises of NVM technologies,
+the analog nature of computing in crossbars poses several challenges due to the device and circuit non-idealities such as: parasitic
+resistance, non-linearity from access transistors, and I-V characteristics of the NVM device. Parasitic resistances lead to undesirable
+IR-drops in the metal lines of the crossbar. On the other hand, the
+non-linearity leads to inaccurate multiplications at the cross-points.
+As a result, non-idealities can have an adverse effect on the MVM
+arithmetic. This gets exacerbated further due to the device variations. Eventually, the inaccuracies in the MVM arithmetic can
+accumulate over the multiple layers of a neural network, causing
+significant accuracy degradation [9].
+To address this accuracy degradation, there have been efforts
+towards exploring techniques to model non-idealities and subsequently mitigating them [9–11]. The efficacy of these mitigation
+techniques strongly depend upon the modelling [9, 10, 12] approach
+to exhaustively capture the sources of the non-idealities and retraining of the neural network weights. The non-idealities in crossbars
+can be broadly categorized into non-data dependent or linear (for
+eg. parasitic resistances), and data-dependent or non-linear types
+(for eg. access transistors and device I-V characteristics). While the
+current analytical techniques can model the non-data dependent
+aspects [9, 10, 12], they fail to capture the data dependent nonidealities. Data-dependent non-idealities can have a pronounced
+effect on the crossbar outputs, particularly at higher operating voltages (discussed in Section 3). Thus, it is important to move away
+from approximate analytical models to data-based models in order
+to truly capture all the non-idealities. In this work, we present GENIEx, a neural network based modelling approach that provides
+an accurate as well as generalized representation of the non-ideal
+behavior of crossbars. The key contributions of this work are:
+• Analyze the sources of non-ideality in crossbars through
+extensive SPICE simulations (Section 3).
+• Propose GENIEx, a generalized approach for modelling nonidealities in crossbars using neural networks (Section 4).
+
+=== page 2 ===
+Accepted in DAC’20, July 2020, San Francisco, USA
+
+Indranil Chakraborty, Mustafa Fayez Ali, Dong Eun Kim, Aayush Ankit and Kaushik Roy
+
+Table 1: Related work comparison
+Architecture
+model of MVM
+
+GENIEx
+CxDNN [9]
+CrossSim [19]
+NeuroSim [17]
+AMS [18]
+
+✔
+✗
+✔
+✔
+✗
+
+✔
+✔
+✗
+✗
+✔
+
+✔
+✗
+✗
+✗
+✗
+
+• Develop a PyTorch-based functional simulator which models
+the key architectural aspects namely tiling, and bit-slicing
+to evaluate large-scale DNNs using GENIEx (Section 5).
+• Perform detailed analysis of different non-idealities on the
+classification accuracy of DNNs (Section 7).
+To the best of our knowledge, this is the first work proposing
+an end-to-end framework for data-dependent crossbar modeling
+along with a functional simulator considering tiling, and bit-slicing.
+This enables studying the accuracy impacts of device and circuit
+properties at the application level. It is worth noting that due to
+the ability to capture data dependency of crossbar behavior (transfer characteristics), GENIEx can be used to model crossbars from
+both simulations as well as experimental measurements. We believe
+that our proposed approach paves the way for universal modeling of
+practical crossbars with the scope of seamless functional evaluation
+and mitigation. We plan to open-source the framework for further
+research on crossbar hardware.
+
+2
+
+RELATED WORK
+
+Past research have explored modeling crossbar non-idealities and
+subsequently mitigating them [9–11, 13]. Jain et al [9] used matrix
+inversion techniques to model the effects of parasitic resistances
+due to input driver, metal lines etc. Liu et al [13] proposed an approximation technique based on sample input/output behavior. An
+alternative way of capturing effects such as stuck-at-faults [14] or
+device variations [15] is to map the distribution of the variations or
+defects. While the above modelling approaches [9, 13–15] consider
+linear (non-data dependent) non-idealities, GENIEx also captures
+the non-linear (data dependent) non-idealities. Note, there could be
+non-linearity during programming of NVM devices. Sun et al [16]
+propose analytical models to study such non-linearity during programming. However, analyzing the impact of non-linearity on the
+subsequent MVM computations (after programming) requires a
+data-dependent model like GENIEx.
+Researchers have also proposed evaluation frameworks such
+as [9] and NeuroSim [17] to study the impact of these non-idealities
+using analytical models. Other works have explored the impact of
+quantization noise of ADCs for analog computing [18]. However,
+these frameworks do not consider the architectural aspects of MVM
+computations such as tiling and bit-slicing, which have a significant
+implication on classification accuracy (shown in Section 7.2). Our
+work explores a neural network based technique to model the crossbar non-idealities using a functional simulator with detailed MVM
+architecture. Table 1 summarizes our contribution with respect to
+the related work.
+
+3
+
+ANALYSIS OF NVM NON-IDEALITIES
+
+Background: A typical memristive crossbar consists of NVM
+devices arranged in a crossbar fashion as shown in Figure 1. The
+
+V0
+
+G11
+
+G12
+
+G13
+
+... G1N
+
+G21
+
+G22
+
+G23
+
+G2N
+
+BL
+WL
+
+V1
+
+VN
+
+...
+
+Large scale
+DNNs
+
+...
+
+Linear + Non-linear
+non-idealities
+
+...
+
+Related Work
+
+GN1
+
+GN2
+
+GN3
+I2
+
+I1
+
+...GNN
+I3
+
+SL
+Rsource
+Rsink
+Rwire
+IN
+
+Figure 1: A typical non-ideal crosspoint structure with NVM
+devices accompanied by a transistor at every junction of the
+word-lines (WL) and bit-lines (BL).
+two terminals of each NVM device connect to a horizontal word-line
+(WL) and a vertical bit-line (BL). These devices are accompanied
+by access transistors or selectors to avoid the sneak path issues
+during writing [20]. This primitive can be used to compute Matrix
+Vector Multiplications (MVMs) in the analog domain by activating
+all the WLs and sensing all the BLs simultaneously. For example,
+to perform a multiplication between a 1 × N vector and a N × M
+matrix, the vector is encoded as input voltages (Vi ) while the matrix
+is encoded as conductances (G i j ). Consequently, the output current
+in the j th BL (for ideal crossbar) is the sum of currents through each
+Í
+NVM device in the corresponding column: I j = i Vi G i j . Thus, the
+currents from the M columns constitute the output vector of the
+MVM operation. Typically, a crossbar requires peripheral circuits
+such as Digital-to-Analog Converters (DACs) and Analog-to-Digital
+Converters (ADCs) for system-level integration. The DACs convert
+the digital inputs into analog voltages while the ADCs convert the
+analog currents in the BLs to digital outputs. Due to the analog
+nature of computing, several non-idealities can lead to errors in the
+MVM computations. These non-idealities can be classified into two
+kinds - linear and non-linear, as shown in Table 2.
+Table 2: Non-idealities in crossbar
+Linear Non-idealities
+
+Non-linear Non-idealities
+
+Source Resistance (Rsour ce )
+Sink Resistance (Rsink )
+Wire Resistance (Rwir e )
+
+Access devices or selectors
+Device non-linearity
+
+Analysis: Under the influence of non-idealities, the crossbar
+design parameters such as size, ON resistance, conductance ON/OFF
+ratio etc. can have a considerable effect on the magnitude of errors
+in computations. To analyze this effect, we perform SPICE analysis
+of a 64 × 64 crossbar. Herein, the linear non-idealities are modeled
+using parasitic resistances as shown in Figure 1. The access devices
+are based on transistor models from TSMC 65nm technology. The
+device models are adopted from a compact model of a filamentary
+RRAM [21], where the current flowing through the device can be
+expressed as: I (d, V ) = I 0exp( dd )sinh( VV0 ). Here, d is the gap-size
+0
+between the tip of the filament and electrode, I 0 , d 0 and V0 are
+fitting parameters.
+Figure 2 (a) shows a typical plot of ideal current (Iideal ) v/s
+non-ideal current (Inon−ideal ) of a crossbar. Here, we observe that
+different voltage (V ) and conductance (G) conditions which lead to
+similar Iideal can result in a varying range of Inon−ideal outputs,
+causing errors in computations. To quantify the error, we define
+
+=== page 3 ===
+GENIEx: A Generalized Approach to Emulating Non-Ideality in Memristive Xbars using Neural Networks
+
+a)
+
+c)
+
+NF=
+
+4
+
+b)
+
+d)
+
+Figure 2: (a) Output currents from a 64x64 crossbar showing the deviation of (Inon−ideal ) from (Iideal ). (b), (c) and (d)
+shows the box-plot variation of the NF with varying crossbar
+design parameters.
+a)
+
+b)
+
+Figure 3: (a) Output current distribution showing impact of
+non-linearity. (b) Relative error between the cases with and
+without nonlinearity increases with increase in maximum
+supply voltage.
+a non-ideality factor (NF) as the relative error between the Iideal
+non−id e al
+and Inon−ideal . NF is calculated as: Iid e al −I
+. We observe in
+I id e al
+Figures 2 (b) and (c) that lower ON resistances and higher crossbar
+sizes lead to higher NF. This is due to the fact that bigger crossbars
+have longer metal lines leading to higher Rwir e . Moreover, the
+parallel combination of resistances along the columns and rows
+results in a reduced effective resistance of the crossbar in case of
+bigger crossbars as well as low ON resistances. In addition, Figure 2
+(d) shows that lower ON/OFF conductance ratio leads to high NFs.
+This is due to the fact that for a given ON resistance, the average
+resistance in the crossbar is low for lower ON /OF F ratio.
+Next, we analyze the impact of non-linear non-idealities. We
+consider two cases i) only linear non-idealities, ii) both linear and
+non-linear non-idealities. Figures 3 (a) and (b) show the relative
+difference in output currents between the two cases. We observe
+that the output currents in case (i) vary noticeably from case (ii).
+This effect becomes even more prominent for higher supply voltage
+of Vsupply = 0.5V , thereby implying an inherent data dependence
+of Inon−ideal on the V and G. This result underlines the drawbacks
+of analytical models which fail to capture the data-dependent nonidealities. We propose a neural network based modeling technique
+that captures the data-dependent errors in crossbar computations.
+
+Accepted in DAC’20, July 2020, San Francisco, USA
+
+GENIEx - A NEURAL NETWORK BASED
+CROSSBAR MODEL
+
+Neural networks project data to a high dimensional space which enables them to distinguish between different input patterns. We leverage this property of neural networks to propose GENIEx, which
+models the non-ideal behavior of memristive crossbars for different input voltage and conductance combinations. As discussed in
+Section 3, non-idealities in crossbars can lead to a varying range of
+N F for similar Iideal . Using a neural network can help us capture
+the data-dependent nature of such non-ideal behavior.
+NN Formulation: The output current vector of an ideal crossbar
+(Iideal ) represents an MVM operation between V and G. Meanwhile,
+the output current vector from a real crossbar is non-ideal and can
+be expressed as a distorted MVM function: Inon−ideal = f D (V , G).
+Therefore, it represents multiplicative behavior between the input
+variables, V and G. The objective here is to model such non-ideality
+function f D (V , G) being input-dependent and having multiplicative behavior. The intuitive way of modeling f D (V , G) using neural
+networks is to provide V and G as inputs and obtain Inon−ideal as
+output. However, as neural networks perform linear transformations, it is difficult for them to model multiplicative interactions
+between its inputs. To avoid such input multiplications, we propose
+extracting only the distortion information of the real output current
+from f D (V , G). We define a function which represents the ratio of
+Iideal to Inon−ideal : f R (V , G) = I Iid e al . f R (V , G) represents the
+non−id e al
+deviation of the Inon−ideal from Iideal , thus eliminating the need
+to capture multiplicative relationships. For an N × N crossbar, the
+input vector to the neural network is a concatenation of (N × 1)
+voltage vector and (N 2 × 1) flattened conductance vector. The output vector obtained is f R (V , G) which is of size N × 1. Subsequently,
+the Inon−ideal is obtained using Iideal /f R (V , G).
+Dataset: To train GENIEx for predicting the ratio f R (V , G) for
+a set of V and G vectors, we create a dataset covering the exhaustive space of V and G combinations. Crossbar-based accelerators
+commonly use bit-slicing to perform high precision MVM operations [6, 7]. We observed that this leads to high sparsity in V and
+G vectors across the popular deep learning tasks. To exhaustively
+capture the resulting sparse data distributions, we consider various
+degrees of sparsity while generating the training set of V and G. We
+apply the V and G vectors to various crossbars and perform SPICE
+simulations to obtain the corresponding Inon−ideal . The obtained
+Inon−ideal is used to calculate f R (V , G), the prediction labels for the
+dataset. To evaluate the accuracy of GENIEx, we create a separate
+validation set of V , G and expected f R (V , G).
+NN Topology: GENIEx considers a two layer fully-connected
+neural network consisting of an input layer, a hidden layer and an
+output layer. For a N × N crossbar, the size of the neural network
+is given as: (N 2 + N ) × P × N , where P is the number of neurons
+in the hidden layer. The training set mentioned above is used to
+train the neural network by feeding V , G combinations as inputs
+and f R (V , G) as the output.
+Benchmarking: We compare the accuracy of GENIEx against
+HSPICE results and a baseline linear analytical model for the same
+test voltage and conductance combinations. We use the metric
+N F , defined in Section 3, to compare the models with HSPICE
+
+=== page 4 ===
+Accepted in DAC’20, July 2020, San Francisco, USA
+Conductance (G)
+... G1N
+
+BL
+
+G21
+
+G23
+
+...
+
+...
+
+VN
+
+G22
+
+GN1
+
+GN2
+
+GN3
+I2
+
+I1
+
+G2N
+
+SL
+Rsource
+Rsink
+Rwire
+
+...GNN
+I3
+
+IN
+
+Inon-ideal
+Iideal = VxG 𝑭𝑹 (𝑽, 𝑮) =
+
+FR(V,G)predicted
+
+WL
+
+V1
+
+𝑰𝒊𝒅𝒆𝒂𝒍
+𝑰𝒏𝒐𝒏−𝒊𝒅𝒆𝒂𝒍
+
+GENIEx
+
+RMSE (wrt SPICE)
+Analytical
+
+V=0.5
+8.99
+
+GENIEx
+
+V=0.25V
+0.25
+
+V=0.5
+0.7
+
+Figure 5: Comparison of N F for a typical 64x64 crossbar between HSPICE outputs, analytical model and GENIEx.
+results. The baseline analytical model considers only linear nonidealities. We observe, in Figure 5 that even at a low supply voltage
+of Vsupply = 0.25V , GENIEx achieves a Root Mean Square Error
+(RMSE) of 0.25 while estimating the NF with respect to HSPICE.
+This is 7× lower than the baseline analytical model. For higher
+supply voltage of Vsupply = 0.5V , GENIEx achieves a RMSE of
+0.7, which is 12.7× lower than the analytical model. To evaluate
+the impact of non-idealities on large scale DNNs, we develop a
+functional simulator that incorporates GENIEx with detailed MVM
+architecture model.
+
+5
+
+Component
+Iterative-mvm
+Tiling
+Bit-slicing
+GENIEx
+
+Figure 4: Crossbar computation mapped to GENIEx. V and
+G are concatenated to form the input vector for neural network, with output being the ratio f R = Iideal /Inon−ideal .
+V=0.25V
+1.73
+
+Table 3: Functional simulator parameters
+
+𝑰𝒊𝒅𝒆𝒂𝒍
+𝑭𝑹 (𝑽, 𝑮)
+
+G13
+
+𝑰𝒏𝒐𝒏−𝒊𝒅𝒆𝒂𝒍 =
+
+G12
+
+Voltages (V) Conductance (G)
+
+G11
+
+...
+
+Voltages
+(V)
+
+V0
+
+Indranil Chakraborty, Mustafa Fayez Ali, Dong Eun Kim, Aayush Ankit and Kaushik Roy
+
+Hidden Layer
+
+FUNCTIONAL SIMULATOR
+
+Several frameworks such as Ares [22], Distiller [23] etc. have been
+developed using TensorFlow and PyTorch to enable hardwaresoftware codesign studies. However, such frameworks cannot emulate the implications of crossbar-based hardware, because of the
+intrinsic differences in the CMOS-based and Crossbar-based computation models. For CMOS, matrix operations (ops) in a ML model are
+expressed as General Matrix-Matrix Multiplications (GEMMs) that
+use floating/fixed point compute units, whereas Crossbar requires
+matrix ops expressed as Matrix-Vector Multiplications (MVM) that
+use bit-serial compute units [6, 7]. To address this, we design a functional simulator using PyTorch that implements the conv2d (convolution) and linear (fully connected) layers based on the crossbarbased computation (conv2d-mvm, linear-mvm).
+Functional Simulator. As shown in Figure 6, the execution of
+a convolution layer is divided into three phases within the functional simulator: Iterative-mvm, Tiling, and Bit-slicing. Each phase
+depends on parameters that either capture the layer or architecture
+
+Parameters (architecture parameters in italics)
+Input feature size, Kernel size, Input channels,
+Output channels, Padding, Stride
+Crossbar size
+Input bits, Weight bits, Accumulator width
+ADC bits, Stream width, Slice Width
+Crossbar size, Ron , Roff , Rsource , Rsink , Rwire
+
+details pertinent to MVMs. Consequently, we extract the analog
+computing aspect of crossbar hardware and ignore any impact of
+memory and communication. First, Iterative-mvm expresses a convolution as repeated MVMs, where the weights forms the matrix
+and a block of pixels across all input channels form the vector (for
+an iteration). Each iteration produces an output vector which is
+comprised of one pixel from all output channels. Second, Tiling expresses the weight-matrix as a combination of several sub-matrices
+(or tiles) where, each sub-matrix’s size equals the crossbar size.
+A slice of input vector is shared by tiles in a row. Tiles in a column produce partial sums, which are added together to produce a
+slice of the convolution output. Third, Bit-slicing (both input and
+weight bits) expresses the bit-serial nature of crossbar computations [6, 7]. We will refer to a bit-slice (≥ 1 bits) of inputs and
+weights as stream and slice, respectively. Within each step, an input
+stream is applied to a crossbar’s rows to produce ADC outputs.
+Next, the shift-and-add units merge the ADC outputs of different
+weight slices. Eventually, the outputs of successive input streams
+go through shift-and-add units to produce the partial sums for a tile.
+Depending on the simulation mode (ideal or non-ideal), the ADC
+outputs are generated either by actual dot-product computation or
+a forward pass of GENIEx discussed in Section 4. In summary, the
+three phases together provide the projection of a layer’s execution on
+actual crossbar hardware.
+PyTorch Modelling. The weight-matrix and input-vectors are
+modelled as multi-dimensional tensors of shape - (Slices,T r,Tc,
+Xr , Xc), and (Batch Size,Tr, Xr , Streams), respectively. Here, the
+symbols - T , X , r , and c refer to a tile, crossbar, row and column.
+Accordingly, Tr refers to a “tile row" and so on. The tensor operations torch.mul and torch.sum execute the individual crossbar
+operations. Subsequently, reduction across the weight slices (Slices)
+and input streams (Streams) with scalar factors for shift-and-add
+generates the partial products. Subsequently, reduction across T r
+dimension produces the convolution output. Multiple input vectors
+corresponding to different iterations of MVM are implemented as a
+batch of vectors (Batch Size). Table 3 lists the layer and architecture
+parameters supported by the functional simulator.
+
+6
+
+EXPERIMENTAL METHODOLOGY
+
+Crossbar: We simulate memristive crossbars using HSPICE. The
+test vectors for V and G are collected from the dataset (CIFAR-100
+and ImageNet) and the pretrained neural network models (ResNet)
+respectively. Inon−ideal obtained from SPICE simulations is used to
+calculate the non-ideality ratio, f R , described in Section 4. Finally, V ,
+G and f R (V , G) are normalized to the range [0,1] to form the training
+set for GENIEx. To verify the generalization and applicability of
+GENIEx, we generated datasets for crossbar configurations with
+different design parameters such as crossbar size (16, 32, 64), ON
+resistance (50kΩ, 100kΩ, 300kΩ), and conductance ON/OFF ratio
+
+=== page 5 ===
+GENIEx: A Generalized Approach to Emulating Non-Ideality in Memristive Xbars using Neural Networks
+
+⁞
+
+Tile Tile
+
+LN: linear
+
+Tile Tile
+Tile Tile
+
+L1: conv2d-mvm
+
+Tile Tile
+
+⁞
+LN: linear-mvm
+
+Model-mvm.py
+
+Input Vector
+
+Tile Columns (Tc)
+
+01 01 01
+
+00 11 10
+
+Kernel Matrix
+2-bit slice
+01
+
+00
+
+11
+
+01
+
+11 01 11
+2-bit stream
+
+ADC (9-bit)
+
+Shift-Add
+
+Shift-Add
+Output Register (38-bit)
+
+Outputs
+
+1 Iterative MVM
+
+ADC
+
+2 Tiling
+
+3 Bit Slicing
+
+FR(V,G)
+
+Weights
+
+Voltage (V) Conductance (G)
+
+Input
+
+L1: conv2d
+
+Tile Rows (Tr)
+
+Model.py
+
+Accepted in DAC’20, July 2020, San Francisco, USA
+
+4 GENIEx
+
+Figure 6: Logical organization of functional simulator
+(2, 6, 10). The non-ideality parameters are Rsour ce = 500Ω/1000Ω,
+Rsink = 100Ω/500Ω, Rwir e = 2.5Ω per cell. The device parameters
+are d 0 = 0.25nm, V0 = 0.25V , I 0 = 0.1mA [24, 25].
+Functional Simulator: The precisions of different components
+of the functional simulators are as follows: accumulator = 32-bit
+(24 fractional), ADC = 14-bit, inputs and weights = 16-bit (13 fractional), input Streams = 4-bit, weight Slices = 4-bit, unless otherwise
+specified. All networks use fixed-point (FxP) representations.
+DNN: GENIEx has 500 hidden layer neurons and ReLU nonlinearity [26]. We use PyTorch to evaluate large-scale neural networks on the functional simulator using GENIEx. For the CIFAR-100
+dataset, we use the network architecture ResNet-20. For the ImageNet dataset, we considered ResNet-18 on a subset of 7680 test images of the dataset. We report the top-1 accuracies for both datasets.
+The ideal floating point 32-bit (FP) accuracies for CIFAR-100 and
+subset of ImageNet are 69.6% and 76.01% respectively.
+
+a)
+
+c)
+
+CIFAR-100 on ResNet-20
+b)
+
+d)
+
+Figure 7: Impact of non-idealities with crossbar design parameters (a) Crossbar Size, (b) ON resistance, (c) ON/OFF ratio. (d) Comparison between analytical model and GENIEx.
+
+7 RESULTS
+7.1 Impact on Design Parameters
+First, we study the impact of non-idealities on the classification
+accuracy of DNNs under different design considerations of crossbar
+sizes, ON resistances, and conductance ON/OFF ratio. The studies
+are performed on ResNet-20 for CIFAR-100 dataset with the features
+of bit-slicing and bit-streaming using 4-bit Streams and Slices. The
+weights and activations for these networks have been considered
+as 16-bit fixed point representations.
+We observe in Figure 7 (a) that the classification accuracy degrades by 12% for a 64 × 64 crossbar compared to an ideal 16 bit
+fixed-point (Ideal FxP) implementation. However, for lower crossbar sizes like 16 × 16, the degradation is ≤ 1%. This is due to reduced
+effective resistance for higher crossbar sizes, as discussed in Section 3. For higher ON resistances such as 300kΩ, we observe, in
+Figure 7 (b) that the accuracy degradation is 7.6% lower than the
+case with 100k Ω. This is because the parasitic resistances have
+more pronounced effect on crossbars with lower ON resistances,
+resulting in higher accuracy degradation. In 7 (c), we observe that
+for a given ON resistance (100k Ω in this case), lower ON/OFF ratio
+like 2 results in upto 46% degradation in accuracy due to the average
+resistances in the crossbar being low. With higher ON/OFF ratio
+such as 10, the accuracy degradation reduces to 8.6%.
+
+CIFAR-100
+
+ImageNet
+
+Figure 8: Impact of precision of weights and activations on
+classification accuracy under the influence of non-idealities.
+Figure 7 (d) shows that there is a significant difference between
+the accuracies predicted by an analytical model and GENIEx. Further, it also illustrates that an analytical model overestimates the accuracy degradation by 12.34% for supply voltage, Vsupply = 0.25V
+and 11.6% for Vsupply = 0.5V compared to GENIEx. Note that the
+analytical model considers only linear non-idealities (parasitic resistances). It underscores that the device non-linearity which is captured
+by our model can push the behavior of the crossbar towards ideality,
+thus resulting in a lower accuracy degradation.
+
+=== page 6 ===
+Accepted in DAC’20, July 2020, San Francisco, USA
+
+Figure 9: Impact of number of bits/device and bits/stream.
+
+7.2
+
+Impact of Quantization
+
+We study the effect of non-idealities on DNNs with different bitprecision for weights and activations. We consider 3 cases for networks where the weights and activations are 16-bit, 8-bit and 4-bit
+fixed point representations: i) Ideal, ii) Non-idealities estimated by
+analytical model, and iii) Non-idealities estimated by GENIEx. Figure 8 shows that when the weights and activations are represented
+as 16-bit fixed point, the classification accuracy is close to ideal 32bit floating point accuracy. When the precision of the weights and
+activations is reduced to 8-bit, the accuracy degrades by 30.03% for
+CIFAR-100, and 35.29% for ImageNet. For 4-bit case, the accuracy
+is ≃ 0%. Further, the accuracy degradation increases from 12.5% to
+29.6% for CIFAR-100 and 4.54% to 17.67% for ImageNet when the
+bit-precision is reduced from 16-bit to 8-bit. Thus, non-idealities
+have an increased detrimental effect at lower bit-precisions. Note
+that the analytical models overestimate the degradation in accuracy
+by 12.34% and 3.99% for CIFAR-100, and 3.70% and 6.49% for ImageNet compared to GENIEx for 16-bit and 8-bit cases respectively.
+This result shows that due to the constraints on a) the number of
+bits NVM devices can store reliably [4], and b) the DAC precisions
+for efficient MVM [6], bit slicing of weights and inputs are essential
+features to achieve close to full-precision accuracies.
+
+7.3
+
+Impact of Bit Slicing
+
+Finally, we study the impact of different bit-slicing configurations
+for inputs (Streams) and weights (Slices) for 16-bit FxP network on
+the classification accuracy of DNNs in presence of non-idealities.
+Figure 9 shows that using 2-bit or 1-bit Streams and Slices, achieves
+close to ideal FxP accuracy. Increasing the Stream and Slice widths
+to 4-bit results in a 12.48% degradation in accuracy. Note that 1-bit
+Streams and 1-bit Slices result in a slightly lower accuracy. This
+is because the combination of 1-bit Streams and Slices results in
+very high sparsity that makes the crossbar resilient to parasitic
+resistances. In such a case, device non-linearity can lead to nonideality factor, N F to be lower than 0, resulting in lower accuracy.
+Nonetheless, using lower number of bits per slice and stream can
+help achieve close to ideal FxP accuracies. This result provides a
+perspective on architectural design parameters such as the Slice and
+Stream widths in presence of crossbar non-idealities.
+
+8
+
+CONCLUSION
+
+We present GENIEx, a generalized approach to emulating nonideality in memristive crossbars using neural networks. We perform extensive SPICE simulations and subsequently train a neural
+
+Indranil Chakraborty, Mustafa Fayez Ali, Dong Eun Kim, Aayush Ankit and Kaushik Roy
+
+network to learn a generalized behavior of the non-ideal crossbar.
+Finally, we use GENIEx in a functional simulator for evaluating the
+impact of these non-idealities on the image classification performance of large-scale DNNs. We show that GENIEx achieves a low
+RMSE of 0.25 for Vsupply = 0.25V and 0.7 for Vsupply = 0.5V with
+respect to HSPICE, which is 7× and 12.8× lower, respectively, than
+an analytical model. This is due to the ability of GENIEx to model
+both linear and non-linear non-idealities. We further show that
+an analytical model overestimates the degradation in classification
+accuracy by 12.3% on CIFAR-100, and 4% on ImageNet compared
+to GENIEx. We analyze the impact of non-idealities on the crossbar
+design parameters such as crossbar-size, ON resistance, conductance ON/OFF ratio, Stream width, and Slice width. We observe that
+packing lower bits per device as well as using low crossbar sizes
+with higher ON resistances is necessary to minimize the impact of
+non-idealities. The proposed end to end framework for evaluating
+crossbar based architectures on realistic crossbars can pave the way
+for efficient crossbar designs for future machine learning systems.
+
+ACKNOWLEDGEMENTS
+This work was supported in part by the Center for Brain-inspired
+Computing Enabling Autonomous Intelligence (C-BRIC), one of
+six centers in JUMP, a Semiconductor Research Corporation (SRC)
+program sponsored by DARPA, in part by the National Science
+Foundation, in part by Intel, and in part by the Vannevar Bush
+Faculty Fellowship.
+
+REFERENCES
+[1] Norman P Jouppi et al. In-datacenter performance analysis of a tensor processing
+unit. In 2017 ACM/IEEE 44th Annual ISCA, pages 1–12. IEEE, 2017.
+[2] Eric Chung et al. Serving dnns in real time at datacenter scale with project
+brainwave. IEEE Micro, 38(2):8–20, 2018.
+[3] Xiaowei Xu et al. Scaling for edge inference of deep neural networks. Nature
+Electronics, 1(4):216–222, 2018.
+[4] Miao Hu et al. Memristor-based analog computation and neural network classification with a dot product engine. Advanced Materials, 2018.
+[5] Stefano Ambrogio et al. Equivalent-accuracy accelerated neural-network training
+using analogue memory. Nature, 558(7708):60, 2018.
+[6] Ali Shafiee et al. Isaac: A convolutional neural network accelerator with in-situ
+analog arithmetic in crossbars. ACM SIGARCH Computer Architecture News,
+44(3):14–26, 2016.
+[7] Aayush Ankit et al. Puma: A programmable ultra-efficient memristor-based
+accelerator for machine learning inference. In Proceedings of the Twenty-Fourth
+International Conference on Architectural Support for Programming Languages and
+Operating Systems, pages 715–731. ACM, 2019.
+[8] Miao Hu et al. Dot-product engine for neuromorphic computing: programming
+1t1m crossbar to accelerate matrix-vector multiplication. In Design Automation
+Conference (DAC), 2016 53nd ACM/EDAC/IEEE, pages 1–6. IEEE, 2016.
+[9] Shubham Jain and Anand Raghunathan. Cxdnn: Hardware-software compensation methods for deep neural networks on resistive crossbar systems. ACM
+Transactions on Embedded Computing Systems (TECS), 18(6):113, 2019.
+[10] Indranil Chakraborty et al. Technology aware training in memristive neuromorphic systems for nonideal synaptic crossbars. IEEE Transactions on Emerging
+Topics in Computational Intelligence, 2(5):335–344, 2018.
+[11] Amogh Agrawal et al. X-changr: Changing memristive crossbar mapping for
+mitigating line-resistance induced accuracy degradation in deep neural networks.
+arXiv preprint arXiv:1907.00285, 2019.
+[12] YeonJoo Jeong et al. Parasitic effect analysis in memristor-array-based neuromorphic systems. IEEE Transactions on Nanotechnology, 17(1):184–193, 2017.
+[13] Beiye Liu et al. Reduction and ir-drop compensations techniques for reliable neuromorphic computing systems. In Proceedings of the 2014 IEEE/ACM International
+Conference on Computer-Aided Design, pages 63–70. IEEE Press, 2014.
+[14] Chenchen Liu et al. Rescuing memristor-based neuromorphic design with high
+defects. In 2017 54th ACM/EDAC/IEEE Design Automation Conference (DAC),
+pages 1–6. IEEE, 2017.
+[15] Beiye Liu et al. Vortex: variation-aware training for memristor x-bar. In Proceedings of the 52nd Annual Design Automation Conference, page 15. ACM, 2015.
+
+=== page 7 ===
+GENIEx: A Generalized Approach to Emulating Non-Ideality in Memristive Xbars using Neural Networks
+
+[16] Xiaoyu Sun and Shimeng Yu. Impact of non-ideal characteristics of resistive
+synaptic devices on implementing convolutional neural networks. IEEE Journal
+on Emerging and Selected Topics in Circuits and Systems, 9(3):570–579, 2019.
+[17] Pai-Yu Chen et al. Neurosim: A circuit-level macro model for benchmarking
+neuro-inspired architectures in online learning. IEEE Transactions on ComputerAided Design of Integrated Circuits and Systems, 37(12):3067–3080, 2018.
+[18] Angad S Rekhi et al. Analog/mixed-signal hardware error modeling for deep
+learning inference. In Proceedings of the 56th Annual Design Automation Conference 2019, page 81. ACM, 2019.
+[19] S. Agarwal et al. Crosssim. Online.
+[20] Mohammed Affan Zidan et al. Memristor-based memory: The sneak paths
+problem and solutions. Microelectronics Journal, 44(2):176–183, 2013.
+[21] Ximeng Guan et al. A spice compact model of metal oxide resistive switching
+memory with variations. IEEE electron device letters, 33(10):1405–1407, 2012.
+
+Accepted in DAC’20, July 2020, San Francisco, USA
+
+[22] Brandon Reagen et al. Ares: A framework for quantifying the resilience of deep
+neural networks. In 2018 55th ACM/ESDA/IEEE Design Automation Conference
+(DAC), pages 1–6. IEEE, 2018.
+[23] Neta Zmora et al. Neural network distiller, June 2018.
+[24] Cong Xu et al. Modeling and design analysis of 3d vertical resistive memoryâĂŤa
+low cost cross-point architecture. In 2014 19th ASP-DAC, pages 825–830. IEEE,
+2014.
+[25] Shimeng Yu et al. A neuromorphic visual system using rram synaptic devices
+with sub-pj energy and tolerance to variability: Experimental characterization
+and large-scale modeling. In 2012 IEDM, pages 10–4. IEEE, 2012.
+[26] Vinod Nair and Geoffrey E Hinton. Rectified linear units improve restricted
+boltzmann machines. In Proceedings of the 27th ICML, pages 807–814, 2010.

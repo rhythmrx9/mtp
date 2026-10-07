@@ -1,0 +1,654 @@
+# Examining the Role and Limits of Batchnorm Optimization to Mitigate Diverse Hardware-noise in In-memory Computing
+# id: W4378800995 | key: 2023_Bhattacharjee_BatchnormFinetuningIMCNoise_GLSVLSI | GLSVLSI 2023 | card: ../cards/2023_Bhattacharjee_BatchnormFinetuningIMCNoise_GLSVLSI.md
+
+
+=== page 1 ===
+arXiv:2305.18416v1 [cs.LG] 28 May 2023
+
+Examining the Role and Limits of Batchnorm Optimization to
+Mitigate Diverse Hardware-noise in In-memory Computing
+Abhiroop Bhattacharjee
+
+Abhishek Moitra
+
+Youngeun Kim
+
+Yale University
+New Haven, USA
+abhiroop.bhattacharjee@yale.edu
+
+Yale University
+New Haven, USA
+abhishek.moitra@yale.edu
+
+Yale University
+New Haven, USA
+youngeun.kim@yale.edu
+
+Yeshwanth Venkatesha
+
+Priyadarshini Panda
+
+Yale University
+New Haven, USA
+yeshwanth.venkatesha@yale.edu
+
+Yale University
+New Haven, USA
+priya.panda@yale.edu
+
+ABSTRACT
+In-Memory Computing (IMC) platforms such as analog crossbars
+are gaining focus as they facilitate the acceleration of low-precision
+Deep Neural Networks (DNNs) with high area- & compute-efficiencies.
+However, the intrinsic non-idealities in crossbars, which are often non-deterministic and non-linear, degrade the performance of
+the deployed DNNs. In addition to quantization errors, most frequently encountered non-idealities during inference include crossbar circuit-level parasitic resistances and device-level non-idealities
+such as stochastic read noise and temporal drift. In this work, our
+goal is to closely examine the distortions caused by these nonidealities on the dot-product operations in analog crossbars and
+explore the feasibility of a nearly training-less solution via crossbaraware fine-tuning of batchnorm parameters in real-time to mitigate
+the impact of the non-idealities. This enables reduction in hardware
+costs in terms of memory and training energy for IMC noise-aware
+retraining of the DNN weights on crossbars.
+
+KEYWORDS
+In-memory computing, Memristive crossbars, Non-idealities, Batchnorm adaptation, Energy- & memory-efficiencies
+
+1
+
+INTRODUCTION
+
+Deep Neural Networks (DNNs) have found ubiquitous applications in a broad spectrum of tasks ranging from computer vision,
+voice recognition to natural language processing [1]. In the context
+of hardware implementation of DNNs for resource-constrained
+edge platforms, In-Memory Computing (IMC) systems, such as
+analog crossbar-arrays that alleviate the ‘memory-wall’ bottleneck
+of von-Neumann architectures are gaining popularity [21]. Analog crossbars are based on various memristive devices such asResistive Random-access Memories (RRAMs), Phase Change Memories (PCMs), Ferroelectric Field-effect Transistors (FeFETs) that
+are widely researched for compact, energy-efficient and accurate
+inference of low-precision DNNs with high throughput [7].
+Analog IMC platforms are susceptible to various non-idealities
+arising from the device-to-device variations and temporal conductance drift of the memristive devices as well as from the parasitic
+resistances of the metallic interconnects in the crossbar-arrays
+[2, 6, 10, 22]. These non-idealities interfere with the weights of
+a DNN (programmed as conductances of the memristive devices)
+leading to inaccurate dot-product computations, thereby causing a
+
+significant loss in the classification accuracy of the mapped DNNs
+on crossbars. In recent years, several noise models [2, 19, 26] and
+crossbar-realistic DNN accuracy evaluation frameworks (Neurosim
+[17], RxNN [10], GenieX [6], Memtorch [13]) have been proposed
+that are integrated with hardware-aware re-training or fine-tuning
+of GPU-trained DNN weights, to mitigate performance losses during inference due to non-idealities as well as quantization of weights
+and activations. However, this hardware-integrated re-training can
+lead to a huge increase in the overall training cost in terms of GPUhours [16, 17, 20]. Moreover, owing to limited retention capabilities
+of memristive devices such as RRAMs and FeFETs due to temporal
+conductance drift, they need to be periodically re-programmed to
+prevent accuracy degradation during inference [5]. Note, memristive devices entail higher programming energy costs than standard
+SRAM cells. For works that support on-chip training and inference
+using realistic IMC crossbar platforms for forward and backward
+propagation stages, fine-tuning (or re-programming) the weights
+(or memristive conductances) of a pre-trained DNN on hardware
+to mitigate accuracy losses due to noise and quantization effects
+becomes highly compute- & memory-intensive [11, 17, 18]. This is
+due to the requirement to compute & store gradients of weights
+and activations during the backpropagation stage.
+Considering the above challenges, in this work, we pose a realistic question- Given the underlying analog IMC architecture and its
+noise characteristics, is real-time crossbar-aware training of weights
+always necessary to preserve the accuracy of a convolutional DNN inferred on crossbars? Here, we evaluate the scope of a nearly trainingless solution for the pre-trained weights of the convolutional layers to be reused across diverse hardware-noise existing in analog
+IMC inference workloads by adapting the batchnorm parameters.
+We carefully study and quantify the distortion of DNN weights
+on crossbars caused by various types of hardware noise, based
+on which we evaluate the impact of tuning batchnorm parameters (keeping the weights frozen in the convolution layers that
+are mapped onto the crossbars) in mitigating the non-linearities
+induced by the noise. Through this work, we wish to draw the
+attention of the research community towards the fact that it is not
+always worthwhile to explore costly hardware noise-aware weight
+fine-tuning/re-programming solutions for accurate inference of
+DNNs on non-ideal IMC crossbars. Instead, we show that simple
+noise-aware fine-tuning of batchnorm parameters can be a very
+effective and hardware-friendly solution.
+
+=== page 2 ===
+Abhiroop Bhattacharjee, Abhishek Moitra, Youngeun Kim, Yeshwanth Venkatesha, and Priyadarshini Panda
+
+In summary, the key contributions of this work are as follows:
+• This work deals with the implementation of the convolution layers of a pre-trained DNN model using non-ideal
+analog crossbars. We propose that hardware noise-aware
+fine-tuning of batchnorm parameters can mitigate the impact of non-idealities during inference.
+• We perform a holistic evaluation of our proposed approach
+using a framework to capture the impact of different types
+of crossbar non-idealities affecting inference- stochastic
+read noise, temporal drift and parasitic resistances.
+• We consider state-of-the-art VGG16 & ResNet-18 DNNs
+trained using CIFAR10 & TinyImagenet datasets, respectively, for our experiments. We perform ablations with memristive devices (FeFET, PCM and RRAM) to quantify the
+non-linear shift (using Principal Component Analysis) introduced by the crossbar non-idealities on the convolution
+weights. Based on this, we suggest a nearly training-less
+non-ideality mitigation technique to preserve DNN accuracy on hardware.
+• We evaluate the advantages offered by our proposed approach in terms of training energy- & memory-savings on
+hardware that supports both online training and inference.
+
+Memristive devices exhibit device-to-device variations in their
+conductances 𝐺 that constitute the stochastic read noise 𝑛˜ ∝ N (0, 𝜎 2 ),
+where 𝜎 signifies the standard-deviation of noise [22]. The noisy
+conductance 𝐺 ′ can be modelled as:
+𝐺′ = 𝐺 + ˜
+𝑛.
+
+𝐺 ′ = 𝐺0 ∗ (
+
+Analog crossbars consist of 2D arrays of memristive devices interfaced with Digital-to-Analog Converters (DACs), Analog-to-Digital
+Converters (ADCs) and a programming circuit. The synaptic devices are programmed to a particular value of conductance (between
+𝐺 𝑀𝐼 𝑁 and 𝐺 𝑀𝐴𝑋 ) during inference. For emulating Multiply-andAccumulate (MAC) operations in DNNs, the activations are fed
+in as analog voltages 𝑉𝑖 to each row using DACs and weights are
+programmed as synaptic device conductances (𝐺𝑖 𝑗 ) as shown in
+Fig. 1 [3, 10, 21]. For an ideal crossbar array, the voltages interact
+with the device conductances and produce a current (governed
+by Ohm’s Law) during inference. Consequently, by Kirchoff’s current law, the net output current sensed by ADCs at each column
+𝑗 or Bit-line (BL) is the sum of currents through each device, i.e.
+𝐼 𝑗 (𝑖𝑑𝑒𝑎𝑙 ) = Σ𝑖 𝐺𝑖 𝑗 ∗ 𝑉𝑖 .
+Impact of non-idealities:
+In reality, the analog nature of
+the computation leads to various
+hardware noise or non-idealities,
+such as device-level variations
+of the memristors and interconnect parasitic resistances in
+the crossbars [2, 6, 10, 22] (see
+Fig. 1). Consequently, the net
+output current sensed at each
+Figure 1: A 2×2 memristive
+column 𝑗 in a non-ideal scecrossbar with parasitic renario becomes 𝐼 𝑗 (𝑛𝑜𝑛−𝑖𝑑𝑒𝑎𝑙 ) =
+sistive non-idealities annoΣ𝑖 𝐺𝑖′𝑗 ∗ 𝑉𝑖 , which deviates from
+tated. Note, the device conits
+ideal value. This manifests as
+ductances 𝐺𝑖 𝑗 s are susceptible to read and drift noise.
+accuracy degradation for DNNs
+mapped onto analog crossbars. This work deals with three types of
+non-idealities during inference- stochastic read, temporal drift and
+resistive parasitic non-idealities.
+
+𝑇 −𝜈
+) .
+𝑇0
+
+(2)
+
+Here, 𝑇 denotes time elapsed since programming the device to
+conductance 𝐺 0 at time 𝑇0 (𝑇0 is assumed to be 1s) and 𝜈 denotes
+the drift coefficient of the memristive device. Higher the value
+of 𝜈, poorer the retention of the device during inference. Note, in
+our experiments 𝑇 denotes the time since the programming of the
+devices at which the inference accuracy is measured.
+Fig. 1 indicates the various resistive non-idealities, viz. 𝑅𝑑𝑟𝑖𝑣𝑒𝑟 ,
+𝑅𝑤𝑖𝑟𝑒_𝑟𝑜𝑤, 𝑅𝑤𝑖𝑟𝑒_𝑐𝑜𝑙 and 𝑅𝑠𝑒𝑛𝑠𝑒, prevalant in crossbars [3, 10].
+Prior works have modelled the impact of resistive non-idealities by
+using linear algebraic operations and circuit laws to transform the
+ideal memristive conductances to non-ideal conductances [10, 20].
+
+2.2
+2 BACKGROUND
+2.1 Memristive crossbars and non-idealities
+
+(1)
+
+Memristive devices are also susceptible to temporal drift in their
+conductances and with time, their programmed conductance decreases and approaches higher resistance states [22]. The effect of
+temporal drift can be modelled using the equation:
+
+Batch Normalization in DNNs
+
+Today, top-performing deep convolutional neural networks inevitably use batchnorm (BN) layers. The BN layers minimize the
+internal co-variate shifting, which is a common problem while training DNNs, thereby achieving faster convergence and higher performance [9, 23]. Let 𝑋 𝜖 R𝑛×𝑝 denote the input to a BN layer, where
+𝑛 is the batch size and 𝑝 is the feature dimension. Batch normalization involves two statistical components, mean (E[𝑋 𝑗 ]) & variance
+(𝑉 𝑎𝑟 (𝑋 𝑗 )), for standardization of each feature in a mini-batch, and
+thereafter learning a common slope and bias corresponding to each
+mini-batch, using the training data. The BN layer outputs a feature
+𝑗 𝜖 {1, ..., 𝑝} into:
+𝑥 𝑗 − E[𝑋 𝑗 ]
+;
+𝑥 ′ 𝑗 = √︁
+𝑉 𝑎𝑟 (𝑋 𝑗 )
+
+𝑦𝑗 = 𝛾𝑗 𝑥′ 𝑗 + 𝛽𝑗 .
+
+(3)
+
+Here, 𝑥 𝑗 and 𝑦 𝑗 denote the input and output scalars of one neuron
+response in one data sample, 𝑋 𝑗 denotes the 𝑗 𝑡ℎ column of the
+input data and 𝛾 𝑗 and 𝛽 𝑗 refer to the learnable/tunable batchnorm
+parameters. Batch normalization ensures that the input distribution
+across different mini-batches is not altered.
+Batchnorm adaptation & Batchnorm fine-tuning: From
+equation (3), we find that batch normalization involves a linear
+transformation on 𝑥 𝑗 that results in 𝑦 𝑗 . When DNNs are deployed
+on crossbars, 𝑥 𝑗 s are generated as a result of dot-product operations
+along the crossbar columns. The crossbar non-idealities lead to a
+deviation of 𝑥 𝑗 from its ideal value resulting in noisy crossbar activations, which can be corrected by noise-aware BN adaptation. BN
+adaptation updates the average mean & variance in the BN layers.
+Specifically, a number of training image samples are forwarded
+through the DNN, and the moving average & variance of BN layers
+are adapted with respect to non-ideal crossbar activations (while
+keeping all other learnable parameters frozen) [4, 24]. However,
+we will see in this work that if the degree of non-linearity in 𝑥 𝑗
+introduced by the crossbar non-idealities is too large, simple BN
+adaptation can fall short as a non-linearity mitigation strategy. To
+
+=== page 3 ===
+Examining the Role and Limits of Batchnorm Optimization to Mitigate Diverse Hardware-noise in In-memory Computing
+
+Figure 2: An illustration of the implementation of a DNN on a hybrid analog-digital hardware architecture. The convolution layers are
+implemented on analog crossbars, while the BN and FC classifier layers are implemented using digital CMOS technology.
+Table 1: Table showing the properties of the memristive devices.
+Here, 𝐺 denotes the memristive conductance in 𝜇𝑆.
+
+Figure 3: An illustration of our non-ideality integration framework
+to simulate the impact of crossbar non-idealities on DNN weights.
+
+this end, we propose noise-aware fine-tuning of the 𝛾 𝑗 and 𝛽 𝑗 parameters in the BN layers, while keeping all the weights frozen. We
+term this approach as batchnorm fine-tuning.
+
+3
+
+HARDWARE IMPLEMENTATION AND
+METHODOLOGY
+
+As shown in Fig. 2, we consider DNNs implemented on a hybrid
+analog-digital hardware architecture, wherein all the convolutional
+layers are mapped onto analog crossbar-arrays using low-precision
+memristive devices in a weight-stationary manner, and the fullyconnected (FC) classifier layer is implemented using digital CMOS
+technology at full floating-point precision [25]. Note that the BN,
+pooling and activation units are also implemented using digital
+CMOS circuits. Thus, the analog non-idealities only impact the
+weights of convolution layers in the DNNs. In our experiments (Section 4), we keep all the weights (or conductances) in the crossbars
+frozen, and only the batchnorm parameters (𝛽 and 𝛾) are trainable.
+Non-ideality integration framework: In our experiments, we
+simulate the impact of various analog non-idealities on the weights
+of the convolution layers which are deployed on crossbars. Fig. 3
+describes our non-ideality integration framework for the convolution weights. The entire framework is written in Python. It involves
+a Python wrapper that reshapes the 4D convolution weight-tensors
+of each layer of a pre-trained DNN into 2D weight-matrices (𝑊 )
+
+Device
+
+Precision
+(bits)
+
+FeFET [5]
+
+4
+
+PCM-i [15]
+
+4
+
+PCM-ii [15]
+
+4
+
+RRAM [8]
+
+4
+
+𝑅𝑂𝑁 ,
+ON/OFF ratio
+222.22 kΩ,
+100
+250 kΩ,
+40
+125 kΩ,
+80
+50 kΩ,
+10
+
+Drift
+coefficient
+(𝜈)
+
+Read noise
+(𝜎)
+
+0.1
+
+0.05
+
+0.04
+
+𝜎 (G) = 0.03G + 0.13
+
+0.04
+
+𝜎 (G) = 0.03G + 0.13
+
+0.04
+
+0.1
+
+consisting of the ideal weights. Thereafter, the matrices are partitioned into multiple crossbar instances (of a given size), followed
+by the conversion of the ideal weights into synaptic conductances
+programmed in the memristive devices with a particular precision.
+The properties of the different devices used in our experiments
+are specified in Table 1. To the ideal conductances, we include the
+impact of various types of non-idealities (specified in Section 2).
+Here, we model stochastic read and temporal drift noise using equations (1) & (2), respectively. The impact of the resistive parasitic
+non-idealities in the crossbars is modelled using circuit laws and
+linear algebraic operations written in Python [4, 10]. Finally, we
+transform the non-ideal conductances into non-ideal weights which
+are then integrated into the original Pytorch based DNN model for
+inference or crossbar noise-aware fine-tuning of the BN parameters.
+
+4
+
+EXPERIMENTS AND RESULTS
+
+Experimental setup: We use VGG16 and ResNet-18 models pretrained at full-precision with CIFAR10 (test accuracy = 88.62 %)
+and TinyImagenet (test accuracy = 51.80 %) datasets, respectively.
+CIFAR10 has RGB images (50,000 training and 10,000 testing) of
+size 32×32 belonging to 10 classes. TinyImagenet is a more complex
+dataset with RGB images (100,000 training and 10,000 testing) of
+size 64×64 belonging to 200 classes. The DNNs are deployed on
+analog crossbar platforms built using memristive devices specified
+in Table 1. Note, we realize 8-bit weights using the 4-bit memristive
+devices via bit-slicing [17] and the input activations to the crossbars
+are assumed to be 8-bits. Also, the resistive non-idealities in the
+crossbars (see Fig. 1) are as follows: 𝑅𝑑𝑟𝑖𝑣𝑒𝑟 = 1𝑘 Ω, 𝑅𝑤𝑖𝑟𝑒_𝑟𝑜𝑤 =
+5Ω, 𝑅𝑤𝑖𝑟𝑒_𝑐𝑜𝑙 = 10Ω and 𝑅𝑠𝑒𝑛𝑠𝑒 = 1𝑘 Ω [3, 4]. Unless otherwise
+stated, we consider a crossbar size of 64×64 in our experiments.
+
+=== page 4 ===
+Abhiroop Bhattacharjee, Abhishek Moitra, Youngeun Kim, Yeshwanth Venkatesha, and Priyadarshini Panda
+
+4.1
+
+Impact of stochastic read noise
+
+Figure 6: Plot of non-ideal accuracy against PC2 (𝜎 = 0.05 − 0.35) for
+VGG16/CIFAR10 (circles) and ResNet-18/TinyImagenet (squares).
+
+Figure 4: Plot of the distribution of 𝑊𝑁 𝐼 against 𝑊𝑖𝑑𝑒𝑎𝑙 in the- (a)
+CONV-5 layer of the VGG16/CIFAR10 model for 𝜎 = 0.05. (b) CONV-5
+layer of the VGG16/CIFAR10 model for 𝜎 = 0.15. (c) CONV-2 layer
+in the last residual block of the ResNet-18/TinyImagenet model for
+𝜎 = 0.05. (d) CONV-2 layer in the last residual block of the ResNet18/TinyImagenet model for 𝜎 = 0.15.
+
+We map the VGG16 & ResNet-18 DNNs onto FeFET crossbars.
+We vary the read noise of the device from 𝜎 = 0.05 to 𝜎 = 0.35
+and assume all other crossbar non-idealities to be absent. In Fig.
+4(a-d), we plot the distribution of non-ideal weights (𝑊𝑁 𝐼 ) with
+respect to the ideal software weights (𝑊𝑖𝑑𝑒𝑎𝑙 ) in the CONV-5 layer
+of the VGG16 model and the CONV-2 layer in the last residual
+block of the ResNet-18 model, for 𝜎 = 0.05 and 𝜎 = 0.15. We
+visually observe that the distribution assumes the shape of a dumbbell with the degree of non-linear shift (width of the dumb-bell)
+increasing due to rising noise from 𝜎 = 0.05 to 𝜎 = 0.15. To quantify
+the degree of non-linear shift, we perform a Principal Component
+Analysis (PCA) of the two-dimensional distribution between 𝑊𝑁 𝐼
+and 𝑊𝑖𝑑𝑒𝑎𝑙 and compute the proportion of variance due the first
+and the second principal components (PC1 and PC2, respectively).
+Ideally, when 𝑊𝑁 𝐼
+=
+𝑊𝑖𝑑𝑒𝑎𝑙 , 𝑃𝐶1 = 1.0 &
+𝑃𝐶2 = 0.0 which implies
+that the data is distributed
+only along the line 𝑊𝑁 𝐼 =
+𝑊𝑖𝑑𝑒𝑎𝑙 and there is no distribution shift orthogonal
+to it. However, we observe
+𝑃𝐶1 < 1.0 and 𝑃𝐶2 > 0.0
+Figure 5: Plotting PC2 for
+when there is a non-linear
+the CONV-5 layer of the
+shift due to crossbar noise.
+VGG16/CIFAR10 model (blue)
+and the CONV-2 layer in the last
+As shown in Fig. 5, as the
+residual block of the ResNetamount of read noise in18/TinyImagenet model against 𝜎
+creases from 𝜎 = 0.05 to
+varying from 0.05 to 0.35.
+𝜎 = 0.35, the value of PC2
+increases indicating higher non-linear shift in the distribution between 𝑊𝑁 𝐼 and 𝑊𝑖𝑑𝑒𝑎𝑙 .
+Now in Fig. 6, we plot the non-ideal inference accuracy of the
+VGG16/CIFAR10 & ResNet-18/TinyImagenet models with respect
+to the PC2 values for 𝜎 = 0.05 − 0.35 after carrying out crossbaraware batchnorm adaptation (grey curves). For the VGG16/CIFAR10
+
+model at a lower value of read noise 𝜎 = 0.05, the value of PC2 is
+small (𝑃𝐶2 = 6.90𝑒 − 04) and the non-ideal accuracy is preserved at
+87.78 % with batchnorm adaptation. We find that beyond 𝜎 = 0.1
+(𝑃𝐶2 = 2.71𝑒 −03), the non-ideal accuracy cannot be well-preserved
+as the non-linear shift in the distribution between 𝑊𝑁 𝐼 and 𝑊𝑖𝑑𝑒𝑎𝑙
+becomes too large to be compensated by simple batchnorm adaptation. At 𝑃𝐶2 = 6.03𝑒 − 03 for 𝜎 = 0.15, the non-ideal accuracy
+stands at 77.89 % even with batchnorm adaptation. Similar trends
+are also seen for the ResNet-18/TinyImagenet model, where the
+non-ideal accuracy with batchnorm adaptation dramatically decreases at 𝜎 = 0.1 (𝑃𝐶2 = 2.92𝑒 − 03).
+Fine-tuning batchnorm parameters (𝛽 & 𝛾): Since, the BN layers in both VGG16 and ResNet-18 models are implemented in digital
+CMOS technology at full-precision and assumed to be free from nonidealities, it incurs very low overhead for bathcnorm fine-tuning
+on hardware. Hence, we only fine-tune the batchnorm parameters
+(𝛽 & 𝛾) for 5 epochs. Note, batchnorm adaptation is implicit within
+batchnorm fine-tuning. For all experiments, the fine-tuning occurs
+with an initial learning rate is 0.01 that is reduced by 5 times at
+every second epoch. With this approach, we find in Fig. 6 (blue
+curves) that the non-ideal accuracy of the VGG16/CIFAR10 model
+on FeFET-based crossbars can be fairly preserved till 𝑃𝐶2 < 1.0𝑒−02
+(𝜎 = 0.15 − 0.2), beyond which the accuracy begins to dramatically
+decrease as the read noise and hence, the value of PC2 increases.
+Similar trends can be seen for the ResNet-18/TinyImagenet model,
+where the read noise-sensitivity is higher and the non-ideal accuracy can be fairly preserved till 𝜎 = 0.1 (𝑃𝐶2 = 2.92𝑒 − 03).
+Impact of device ON/OFF ratio: We show results for the
+VGG16/CIFAR10 DNN mapped onto PCM-i crossbars (ON/OFF ratio = 40). Fig. 7(a) shows the distribution between 𝑊𝑁 𝐼 and 𝑊𝑖𝑑𝑒𝑎𝑙
+for the CONV-5 layer. The value of PC2 is 9.61𝑒 − 03, and it achieves
+82.0 % accuracy upon BN fine-tuning. However, with simple BN
+adaptation, its accuracy is 79.85 % due to a higher value of PC2. Interestingly, we observe that if the VGG16/CIFAR10 DNN is mapped
+using PCM-ii devices (ON/OFF ratio = 80) as shown in Fig. 7(b), the
+value of PC2 reduces to 3.16𝑒 − 03 and the accuracy upon BN finetuning increases to 86.81 %. The inference accuracy with simple BN
+adaptation drops to 85.44 %. This is because with increased ON/OFF
+ratio, the interval between two programmable device conductance
+levels increases, and thus, the noise-sensitivity of the device reduces
+which manifests as reduction in the value of PC2. Now, let us compare with a VGG16/CIFAR10 DNN mapped onto crossbars based on
+
+=== page 5 ===
+Examining the Role and Limits of Batchnorm Optimization to Mitigate Diverse Hardware-noise in In-memory Computing
+
+Figure 7: (a-c) Plot of the distribution of 𝑊𝑁 𝐼 with respect to that of 𝑊𝑖𝑑𝑒𝑎𝑙 in the CONV-5 layer of the VGG16/CIFAR10 model for mapping
+onto- (a) PCM-i, (b) PCM-ii and (c) RRAM crossbars. (d-f) Plot of the distribution of 𝑊𝑁 𝐼 with respect to that of 𝑊𝑖𝑑𝑒𝑎𝑙 in the CONV-2 layer
+in the last residual block of the ResNet-18/TinyImagenet model for mapping onto- (d) PCM-i, (e) PCM-ii and (f) RRAM crossbars. Note, the
+accuracies annotated are the non-ideal accuracies of the DNNs post noise-aware batchnorm fine-tuning.
+
+Figure 8: (Primary y-axis) Bar plot of inference accuracy versus
+time 𝑇 for- (a) VGG16/CIFAR10 and (b) ResNet-18/TinyImagenet
+models. (Secondary y-axis) Line plot of PC2-proj. versus time 𝑇 for(a) CONV-5 layer of the VGG16/CIFAR10 and (b) CONV-2 layer in
+the last residual block of the ResNet-18/TinyImagenet.
+
+RRAM devices (ON/OFF ratio = 10), as shown in Fig. 7(c). Although
+RRAM (𝜎 = 0.1) has a lower impact of read noise, it also has a very
+limited ON/OFF ratio which makes the device sensitive to noise and
+thus, its 𝑃𝐶2 = 5.59𝑒 − 03 and the accuracy upon BN fine-tuning is
+84.07 %. With simple BN adaptation, the accuracy drops to 80.40
+%. Similar trends can also be seen for the ResNet-18/TinyImagenet
+model when deployed on crossbars based on PCM-i, PCM-ii and
+RRAM devices, as shown in Fig. 7(d-f).
+
+4.2
+
+Impact of temporal drift noise
+
+The inference accuracy on crossbars gradually decreases with time
+𝑇 due to temporal drift of the conductances in the memristive
+
+devices (see Section 2). FeFET devices typically have higher temporal drift coefficients (see Table 1) and so, DNNs deployed on
+FeFET crossbars show lower retention of accuracy. Drift noiseaware BN adaptation can maintain the accuracy of crossbar-mapped
+DNNs till a retention time 𝑇 beyond which the accuracy dramatically decreases [12]. From Fig. 8(a-b), we find the retention time
+for VGG16/CIFAR10 & ResNet-18/TinyImagenet models on FeFET
+crossbars with simple BN adaptation to be ∼ 104 −105𝑠. Beyond that,
+the non-ideal accuracy dramatically decreases and at 𝑇 = 1010𝑠, the
+VGG16 and ResNet-18 models, respectively, suffer a 76.5 % and 26.1
+% drop in accuracy with respect to their initial inference accuracies.
+Fig. 9 shows the histogram of the distribution of
+weights 𝑊𝑖𝑑𝑒𝑎𝑙 (green) and
+𝑊𝑁 𝐼 (blue) at 𝑇 = 105𝑠,
+for the CONV-5 layer of the
+VGG16/CIFAR10 model. We
+find that drift noise results
+in constriction of the range
+of non-ideal weights (or conFigure 9: Histogram plot for the
+ductances) by a factor of
+distribution of𝑊𝑖𝑑𝑒𝑎𝑙 (green) and
+(𝑇 /𝑇0 ) 𝜈 . This is unlike other
+𝑊𝑁 𝐼 (blue) for the CONV-5 layer
+types of crossbar noise, e.g.
+of VGG16/CIFAR10 at 𝑇 = 105𝑠.
+stochastic read noise, where
+the ranges of 𝑊𝑖𝑑𝑒𝑎𝑙 and 𝑊𝑁 𝐼 are similar (see Fig. 4). Thus, in case
+of drift noise at time 𝑇 , we will project the PC2 values for the distribution between 𝑊𝑖𝑑𝑒𝑎𝑙 and 𝑊𝑁 𝐼 by scaling up the measured PC2
+with (𝑇 /𝑇0 ) 𝜈 . We use PC2-proj. to denote this projected value of
+PC2. Fig. 8(a-b) shows that as we increase the value of 𝑇 , the value
+of PC2-proj. increases, due to a higher drift noise. We find that
+beyond ∼ 104 − 105𝑠 (i.e, PC2-proj. > 0.002 for VGG16 and PC2-proj.
+> 0.006 for ResNet-18), the accuracies cannot be preserved using
+simple BN adaptation. With BN fine-tuning, the accuracies can
+be well-preserved at very high values of 𝑇 (or PC2-proj.) and the
+
+=== page 6 ===
+Abhiroop Bhattacharjee, Abhishek Moitra, Youngeun Kim, Yeshwanth Venkatesha, and Priyadarshini Panda
+
+Figure 10: Plot of the distribution of 𝑊𝑁 𝐼 with 𝑊𝑖𝑑𝑒𝑎𝑙 in the CONV-5
+layer of the VGG16/CIFAR10 model for mapping on RRAM-based
+crossbars of size- (a) 64×64 and (b) 128×128, having only resistive parasitic non-idealities. Note, the accuracies annotated are the non-ideal
+accuracies of the DNNs post noise-aware batchnorm fine-tuning.
+
+accuracy losses at 𝑇 = 1010𝑠 are reduced to 5.0 % and 8.0 % for the
+VGG16 and ResNet-18 models, respectively.
+
+4.3
+
+Impact of resistive parasitic non-idealities
+
+We consider the impact of resistive parasitic non-idealities alone on
+the weights of VGG16/CIFAR10 on RRAM crossbars of size 64×64
+and 128×128, without read or drift noise. Prior works [3, 6, 19]
+show that lower the value of 𝑅𝑂𝑁 , greater the impact of resistive
+non-idealities on the DNN weights, leading to significant accuracy
+losses on hardware. From Table 1, RRAM has the lowest value
+of 𝑅𝑂𝑁 and ON/OFF ratio among all the devices and thus, DNN
+weights mapped on RRAM crossbars will be maximally impacted
+by the resistive non-idealities. Also, larger crossbars entail greater
+impact of resistive crossbar non-idealities.
+Fig. 10(a-b) show the distribution between 𝑊𝑁 𝐼 and 𝑊𝑖𝑑𝑒𝑎𝑙 for
+the CONV-5 layer for crossbars of size 64×64 and 128×128, respectively. For 64×64 (128×128) crossbars, the value of PC2 is
+3.07𝑒 − 03 (7.84𝑒 − 03), and the DNN inference accuracy on hardware is reduced to 74.37 % (32.9 %). However, at this regime of PC2
+(𝑃𝐶2 < 1.0𝑒 − 02), most of the inference accuracy can be recovered
+with simple crossbar-aware BN adaptation, and the accuracy is
+increased to 86.31 % (83.03 %). On carrying out BN fine-tuning, the
+inference accuracy is 87.97 % (87.81 %) which has been annotated
+in Fig. 10. This shows that resistive non-idealities, although can
+disrupt a DNN’s performance on crossbars, can be totally mitigated
+with the help of BN fine-tuning, without the need for parasitic
+noise-aware re-training of weights as proposed in [16, 19, 20]. Now,
+let us superimpose the stochastic read noise of 𝜎 = 0.1 for the
+RRAM devices over the resistive parasitic non-idealities. The inference accuracy on hardware is 62.28 % (27.86 %), which on BN
+fine-tuning is raised to 83.22 % (81.59 %).
+
+5
+
+HARDWARE ADVANTAGES
+
+Consider VGG16 and ResNet-18 DNNs with their convolution layers
+deployed on 64×64 analog RRAM crossbars, supporting online training and inference [17]. Note that the BN, pooling & activation units
+as well as the classifier are implemented using digital CMOS circuits
+(see Fig. 2). Since weights are frozen, there is no compute & storage
+requirement for the weight-gradients and weight update (writing
+into the RRAM devices) during training. However, we compute and
+store the activations and their gradients to calculate ∇𝛾 L & ∇𝛽 L
+for updating 𝛾 & 𝛽. Note, ∇𝑥 𝑓 denotes gradient of 𝑓 with respect to
+𝑥 and L is the cross-entropy loss. However, the memory overhead
+(in MB) for storing the weight-gradients is much greater than the
+activation-gradients.
+
+Consequently, there is a
+huge memory-saving by
+not storing the weightgradients during backpropagation. Likewise, since
+the RRAM devices will not
+require re-programming,
+Figure 11: Bar plot showing perwe reduce the training encentage savings in training energy on hardware. Fig. 11
+ergy (mJ) and memory (MB) on
+shows the memory (MB)
+hardware with our proposed apand training energy (mJ)
+proach of crossbar noise-aware
+savings per epoch (assumbatchnorm fine-tuning keeping
+ing batch size = 1). The
+DNN weights frozen.
+baseline is trained where
+all weights and BN parameters are tunable. We obtain ∼ 95% and ∼ 52% memory-savings for
+VGG16/CIFAR10 and ResNet-18/TinyImagenet, respectively. Note,
+we assume 8-bit precision for convolution weights, activations and
+their gradients. We achieve ∼ 8% reduction in training-energy for
+both models, calculated based on the data in [14].
+
+6
+
+CONCLUSION
+
+This work proposes a nearly training-less approach for DNN models
+deployed on memristive crossbars that only optimizes the batchnorm layers in a crossbar-aware manner to preserve the performance of the models in presence of various non-idealities (stochastic read, temporal drift and resistive interconnect parasitics). On
+hardware, our approach is shown to be highly memory-efficient &
+efficient in terms of reducing training energy, as the requirement
+for hardware-aware fine-tuning of model weights is eliminated.
+
+ACKNOWLEDGMENTS
+This work was supported in part by CoCoSys, a JUMP2.0 center sponsored
+by DARPA and SRC, Google Research Scholar Award, the NSF CAREER
+Award, TII (Abu Dhabi), the DARPA AI Exploration (AIE) program, and the
+DoE MMICC center SEA-CROGS (Award #DE-SC0023198).
+
+REFERENCES
+[1] Alzubaidi et al. 2021. Review of deep learning: Concepts, CNN architectures,
+challenges, applications, future directions. Journal of big Data (2021).
+[2] Alessio Antolini et al. 2023. Combined HW/SW Drift and Variability Mitigation
+for PCM-based Analog In-memory Computing for Neural Network Applications.
+IEEE JETCAS (2023).
+[3] Abhiroop Bhattacharjee et al. 2021. NEAT: Non-linearity Aware Training for
+Accurate, Energy-Efficient and Robust Implementation of Neural Networks on
+1T-1R Crossbars. IEEE TCAD (2021).
+[4] Abhiroop Bhattacharjee et al. 2022. Examining the robustness of spiking neural
+networks on non-ideal memristive crossbars. In ISLPED.
+[5] Byun et al. 2022. Recent Advances in Synaptic Nonvolatile Memory Devices and
+Compensating Architectural and Algorithmic Methods Toward Fully Integrated
+Neuromorphic Chips. Advanced Materials Technologies (2022).
+[6] Indranil Chakraborty et al. 2020. Geniex: A generalized approach to emulating
+non-ideality in memristive xbars using neural networks. In ACM/IEEE DAC.
+[7] Indranil Chakraborty et al. 2020. Pathways to efficient neuromorphic computing
+with non-volatile memory technologies. Applied Physics Reviews (2020).
+[8] Basma Hajri et al. 2019. RRAM device models: A comparative analysis with
+experimental validation. IEEE Access (2019).
+[9] Sergey Ioffe and Christian Szegedy. 2015. Batch normalization: Accelerating
+deep network training by reducing internal covariate shift. In ICML. pmlr.
+[10] Shubham Jain et al. 2020. RxNN: A framework for evaluating deep neural
+networks on resistive crossbars. IEEE TCAD (2020).
+[11] Hai Jin et al. 2021. ReHy: A ReRAM-Based Digital/Analog Hybrid PIM Architecture for Accelerating CNN Training. IEEE TPDS (2021).
+[12] Vinay Joshi et al. 2020. Accurate deep neural network inference using computational phase-change memory. Nature communications (2020).
+
+=== page 7 ===
+Examining the Role and Limits of Batchnorm Optimization to Mitigate Diverse Hardware-noise in In-memory Computing
+
+[13] Corey Lammie and Mostafa Rahimi Azghadi. 2020. Memtorch: A simulation
+framework for deep memristive cross-bar architectures. In 2020 ISCAS. IEEE.
+[14] Marinella et al. 2018. Multiscale co-design analysis of energy, latency, area, and
+accuracy of a ReRAM analog neural training accelerator. IEEE JETCAS (2018).
+[15] SR Nandakumar et al. 2018. A phase-change memory model for neuromorphic
+computing. Journal of Applied Physics (2018).
+[16] Shubham Negi et al. 2022. NAX: Co-Designing Neural Network and Hardware
+Architecture for Memristive Xbar based Computing Systems. DAC (2022).
+[17] Peng et al. 2020. DNN+ NeuroSim V2. 0: An end-to-end benchmarking framework
+for compute-in-memory accelerators for on-chip training. IEEE TCAD (2020).
+[18] Malte J Rasch et al. 2021. A flexible and fast PyTorch toolkit for simulating
+training and inference on analog crossbar arrays. In 2021 AICAS. IEEE.
+[19] Malte J Rasch et al. 2023. Hardware-aware training for large-scale and diverse
+deep learning inference workloads using in-memory computing-based accelerators. arXiv:2302.08469 (2023).
+
+[20] Sourjya Roy et al. 2021. TxSim: Modeling training of deep neural networks on
+resistive crossbar systems. IEEE TVLSI (2021).
+[21] Abu Sebastian et al. 2020. Memory devices and applications for in-memory
+computing. Nature nanotechnology (2020).
+[22] Sun et al. 2019. Impact of non-ideal characteristics of resistive synaptic devices
+on implementing convolutional neural networks. IEEE JETCAS (2019).
+[23] Christian Szegedy et al. 2016. Rethinking the inception architecture for computer
+vision. In CVPR.
+[24] Li-Huang Tsai et al. 2020. Robust processing-in-memory neural networks via
+noise-aware normalization. arXiv:2007.03230 (2020).
+[25] Kodai Ueyoshi et al. 2022. DIANA: An end-to-end energy-efficient digital and
+ANAlog hybrid neural network SoC. In 2022 ISSCC. IEEE.
+[26] Fan Zhang and Miao Hu. 2020. Mitigate parasitic resistance in resistive crossbarbased convolutional neural networks. ACM JETC (2020).

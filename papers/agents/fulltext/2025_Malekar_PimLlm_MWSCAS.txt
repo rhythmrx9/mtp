@@ -1,0 +1,832 @@
+# Accelerating 1-Bit Llms Via in-Memory Computing Architectures
+# id: W4416728625 | key: 2025_Malekar_PimLlm_MWSCAS | MWSCAS 2025 | card: ../cards/2025_Malekar_PimLlm_MWSCAS.md
+
+
+=== page 1 ===
+PIM-LLM: A High-Throughput Hybrid PIM
+Architecture for 1-bit LLMs
+Jinendra Malekar, Peyton Chandarana, Md Hasibul Amin, Mohammed E. Elbtity, and Ramtin Zand
+
+arXiv:2504.01994v1 [cs.AR] 31 Mar 2025
+
+Computer Science and Engineering, University of South Carolina, Columbia, SC 29201
+Email: jmalekar@email.sc.edu, psc@email.sc.edu, ma77@email.sc.edu, elbtity@ieee.org, ramtin@cse.sc.edu
+
+Abstract—In this paper, we propose PIM-LLM, a hybrid
+architecture developed to accelerate 1-bit large language models (LLMs). PIM-LLM leverages analog processing-in-memory
+(PIM) architectures and digital systolic arrays to accelerate lowprecision matrix multiplication (MatMul) operations in projection layers and high-precision MatMul operations in attention
+heads of 1-bit LLMs, respectively. Our design achieves up to
+roughly 80× improvement in tokens per second and a 70%
+increase in tokens per joule compared to conventional hardware
+accelerators. Additionally, PIM-LLM outperforms previous PIMbased LLM accelerators, setting a new benchmark with at least
+2× and 5× improvement in GOPS and GOPS/W, respectively.
+Index Terms—In-Memory Computing (IMC), Processing-InMemory (PIM), Large Language Models (LLMs), Transformers,
+Edge AI Accelerator.
+
+I. I NTRODUCTION
+Generative large language models (LLMs) using decoderonly transformers, such as GPT [1], OPT [2], and LLaMA
+[3], have garnered significant attention for their impressive
+performance across diverse tasks, from machine translation
+to code generation [4], [5]. However, this remarkable performance has come with rising computational and energy costs
+[6], [7]. As a result, recent research has focused on reducing
+the energy footprint of LLMs through model compression
+techniques like quantization [8]–[11]. Recently, 1-bit LLMs
+have been introduced that use extreme quantization by employing binary/ternary weights [12], [13]. 1-bit LLMs can achieve
+substantial performance improvements if specific hardware
+architectures and systems are designed to support binary and
+ternary matrix multiplication (MatMul) operations.
+It is essential to recognize that not all MatMul operations
+in 1-bit LLMs can undergo extreme quantization due to the
+resulting decrease in accuracy. Specifically, MatMul operations
+in the attention heads require higher precision, such as 8bit integer. This divides the LLM models into two parts:
+one utilizing low-precision MatMul and the other relying on
+higher-precision MatMul, as illustrated in Fi. 1 (a). If the lowprecision MatMul operations that are in 1-bit LLMs account
+for most of the model’s computational and memory demands,
+then focusing on custom hardware development to maximize
+the impact of extreme quantization would be worthwhile.
+Figure 1 (b) shows the percentage of low-precision MatMul
+operations across various 1-bit OPT models [2] with different
+sizes and context lengths. In all instances, the majority of
+computations are concentrated in the low-precision MatMul
+segment. The only case where the computation is more evenly
+
+Fig. 1: (a) The 1-bit LLMs divide the model into two portions:
+attention heads with high-precision MatMul operations (shown
+in red) and projection layers with low-precision MatMuls
+(shown in green). (b) The percentage of the low-precision
+MatMul operations in various OPT models.
+distributed between low-precision and high-precision MatMuls
+occurs with the OPT 350M model at a 4096 context length.
+For larger models, the percentage of the low-precision MatMuls increases to more than 99%, highlighting the potential
+performance and throughput benefits that can be attained
+by developing specialized hardware for executing binary and
+ternary MatMuls in 1-bit LLMs.
+In this work, we introduce PIM-LLM, a hybrid architecture
+that integrates analog PIM with digital systolic arrays to
+efficiently execute low-precision and high-precision MatMuls
+in the projection layers and attention heads of 1-bit LLMs, respectively. Processing-in-memory (PIM) technology has been
+investigated as a beyond-von-Neumann architecture to accelerate machine learning (ML) workloads, particularly those with
+ternary and binary weights [14], [15]. PIM architectures commonly employ memristive crossbars to execute low-precision
+MatMul operations, leveraging massive parallelism and analog computation [16]. Interest in using PIM technologies to
+accelerate language models has grown significantly in recent
+years [17]–[27]. However, many existing approaches primarily
+target encoder-only models or conventional encoder-decoder
+architectures, which differ in scale and computational demands
+from large generative language models. For example, designs
+like iMCAT [19], ATT [21], ReBERT [22], iMTransformer
+[24], and X-Former [25] focus on smaller-scale, encoder-only
+
+=== page 2 ===
+TABLE I: MatMul Operations in decoder-only LLMs.
+Block
+Att. Projections
+Att. Head
+FF Projections
+
+Dimension
+(d × d).(d × 1)
+(l × d/h).(d/h × 1)
+(d/h × l).(l × 1)
+(dF F × d).(d × 1)
+(d × dF F ).(dF F × 1)
+
+one nonlinear transformation. As shown in Fig. 2, Gaussian
+error linear unit (GELU) [29] activation function is commonly
+used in LLMs to introduce nonlinearity.
+Table I lists the dimensions of each MatMul operation in
+the decoder-only LLMs. In these models, MatMul operations
+effectively become matrix-vector multiplications (MVMs), as
+inference is performed iteratively, processing one input token
+per iteration while caching keys and values from previous
+iterations, as illustrated in Fig. 2. This can lead to substantial
+performance drops on traditional ML accelerators like TPUs,
+due to under-utilization of processing elements in their systolic
+arrays [30]. Similarly, PIM-based architectures, which are not
+tailored for decoder-only LLMs, face notable performance
+challenges when running these models [18], [26].
+Previous studies [31] have demonstrated that by designing
+specialized hardware for nonlinear operations in LLMs (i.e.,
+LayerNorm, Softmax, and GELU), the computational overhead from these operations can be made negligible compared
+to MatMuls. Therefore, focusing on optimizing MatMul operations is a more effective approach for achieving substantial improvements in LLM performance. The 1-bit LLMs [12], [13],
+[32] aim to accelerate the weight-to-activation MatMuls in the
+projection layers by extremely quantizing all weight matrices
+(WQ , WK , WV , WX , WI , and WO ). However, activationto-activation MatMuls within the attention heads still require
+high-precision MAC units. Fully unlocking the potential of
+such extreme quantization requires custom hardware. To this
+end, we propose a hybrid PIM-LLM architecture, designed
+to accelerate both binary/ternary MatMul operations in the
+projection layers and 8-bit MatMul operations in the attention
+heads, as described in the following section.
+
+Fig. 2: The architecture of decoder-only LLMs. The tokenization and embedding layers are not shown in the figure.
+models such as BERT variants. Meanwhile, RIME [20] and
+ReTransformer [23] are PIM-based architectures designed to
+accelerate conventional encoder-decoder transformers [28].
+This is the first study to specifically target the acceleration of
+modern decoder-only LLMs using analog PIM architectures,
+achieving state-of-the-art performance and throughput at a
+scale that has not been studied before.
+II. U NDERLYING O PERATIONS OF D ECODER -O NLY LLM S
+Figure 2 shows the architecture of decoder-only LLMs,
+consisting of N decoder blocks. Each block includes selfattention and feedforward layers followed by addition and
+normalization operations [28]. The self-attention mechanism
+starts with three linear projections of the token vector, I, into
+three distinct vectors: Key (K = WK .I), Query (Q = WQ .I),
+and Value (V = WV .I), where WQ , WK , and WV are d × d
+weight matrices, in which d is the embedding dimension.
+The K, Q, and V vectors are then divided and distributed
+across h attention heads. Next, each split value and key vector
+is concatenated with the previously cached l − 1 value and
+key tokens from earlier token generation steps, creating a
+d/h × l matrix in each head, where l represents the context
+length. The attention scores are subsequently calculated using
+a scaled dot-product between the queries and keys, followed
+by multiplication with the generated value matrix. This process
+involves two MatMul operations denoted by (.) below:
+
+III. P ROPOSED PIM-LLM A RCHITECTURE
+Here, we propose the hybrid PIM-LLM architecture consisting of components tailored to meet the implementation
+requirements of the projection layers and attention heads in
+1-bit LLMs. These requirements include the need for a custom
+hardware to perform the low-precision W1A8 (1-bit weight,
+8-bit activation) MatMuls in the projection layers. To accomplish this, we leverage analog PIM technology, employing
+memristive crossbars for 1-bit MatMul operations along with
+8-bit analog-to-digital converters (ADCs) for generating the
+8-bit activations. PIM architectures are typically used for
+weight-stationary dataflow, where weights are stored in RRAM
+crossbars, avoiding frequent crossbar updates. The activationto-activation MatMuls, however, necessitate memory writes for
+each inference, resulting in substantial write energy overheads
+and potential device failures due to the endurance limitations
+
+Q.K T
+Attention(Q, K, V ) = sof tmax( √ ).V
+(1)
+d
+Next, the output of the attention heads are concatenated and
+transformed via another linear projection as follows:
+MultiHead(Q, K, V ) = Concat(h1 , ..., hh ).WX
+
+Description
+WQ , WK , WV , WX
+Score = Q.K T
+V.Score
+Intermediate FF
+Output FF
+
+(2)
+
+where hi = Attention (Qi , Ki , Vi ), and WX is a d × d weight
+matrix. Finally, the attention output passes through feedforward (FF) layers, consisting of two MatMul operations and
+
+2
+
+=== page 3 ===
+Dataflow
+Generator
+
+Global Buffer
+
+Controller
+
+Output Buffer
+
+Memristive Crossbar
+
+PE
+
+PE
+
+PE
+
+PE
+
+PE
+
+Systolic Arracy
+PE
+
+PE
+
+PE
+
+Nonlinear
+Functional Units
+
+PE
+
+Activation Memory
+
+Weight Memory
+
+CPU
+
+LPDDR
+
+Input Memory
+
+Tile
+PE
+Output Buffer
+
+Analog to Digital Converter
+
+PIM Bank
+
+Post Processing Unit
+
+PIM Architecture
+
+TPU Architecture
+
+(a)
+
+Row Decoder
+
+Scheduler
+
+Digital to Analog Converter
+
+Controller
+
+(b)
+
+Input Buffer
+
+Input Distributor
+
+(c)
+
+(d)
+
+Fig. 3: The proposed PIM-LLM architecture. (a) The LLM-specific TPU architecture, (b) The PIM architecture with multiple
+banks. (b) The PIM tile consists of a network of PEs. (c) The PEs include memristive crossbars to perform MVM operations.
+
+3
+
+Row Decoder
+
+Pooling Module
+
+Digital to Analog Converter
+
+Nonlinear
+Functional Units
+
+Activation Memory
+
+Weight Memory
+
+LPDDR
+
+CPU
+
+weights memory, while the Query and attention score vectors
+reside in the input memory. For the dataflow architecture, we
+Global Buffer
+Controller
+Dataflow
+selected an output-stationary (OS) approach, which, based on
+Controller
+Scheduler
+Generator
+our cycle-accurate analysis using the SCALE-Sim framework
+Input Memory
+[35], demonstrated better performance over weight-stationary
+(WS) and input-stationary (IS) dataflows (see Fig. 4). In the
+PE
+PE
+PE
+Tile
+OS dataflow, inputs and weights are fetched from memory,
+PE
+PE
+PE
+multiplied, and the resulting products are accumulated with
+Systolic Arracy
+partial sums that remain stationary within the PEs [36].
+Output Buffer
+PE
+PE
+PE
+In the TPU architecture, the scheduler orchestrates the
+PIM Bank
+execution
+of each layer in the workload, while the dataflow
+TPU Architecture
+PIM Architecture
+generator
+and Main Controller oversee the overall flow of
+(b)
+(a)
+the LLM workload. Depending on the workload requirements,
+the scheduler may execute multiple layers sequentially. In the
+Output Buffer
+Memristive Crossbar
+Fig. 4: Total cycles required for executing various LLMs using proposed PIM-LLM architecture,
+we use low-power double
+32 × 32 systolic arrays with different dataflow architectures.
+data rate (LPDDR) memory, which is well-suited for edge
+devices due to its low operating voltage and power-saving
+of memristive devices [33]. Due to reliability and accuracy features. The data is preloaded into LPDDR, and as the TPU
+concerns, we do not use PIM technology for implementing begins execution, the dataflow generator produces read address
+PE
+the activation-to-activation MatMul operations in the attention traces to retrieve inputs and weights from LPDDR, routing
+SRAMs
+based on the OS dataflow
+Analog to Digital
+Converter
+heads. Instead, we use a digital systolic array architecture with them to the input and weight
+Post
+Processing
+Unit
+algorithm.
+The
+main
+controller
+coordinates
+this data transfer
+8-bit multiply-and-accumulate (MAC) units that can handle the
+Input Buffer
+Input Distributor
+according
+to
+the
+scheduler’s
+instructions.
+W8A8 MatMuls in the attention heads.
+(c)
+(d)
+B.
+Design of LLM-specific PIM
+Architecture
+A. Design of LLM-Specific Tensor Processing Unit (TPU)
+Figure 3 (b) show the overall PIM architecture, which
+Figure 3 (a) illustrates the custom TPU architecture devel- includes multiple banks, a global buffer, and a controller. The
+oped in this work to perform MatMul operations within the PIM controller manages data movement between LPDDR and
+attention heads. This TPU design features dedicated memory the PIM banks based on status updates from the CPU. Each
+units for weights, inputs, and outputs, along with a 32 × 32 PIM bank contains an array of tiles interconnected through a
+systolic array. Additionally, it includes a specialized Nonlinear network-on-chip. Within each tile, multiple PEs, input buffers,
+Functional Unit, equipped with custom hardware, such as and output buffers are arranged, as depicted in Fig. 3 (c). Each
+ConSmax [34], to execute the Softmax operations in the PE block consists of memristive crossbars, digital-to-analog
+attention heads of LLMs. The systolic array includes a two- converters (DACs), analog-to-digital converters (ADCs), and
+dimensional grid of processing elements (PEs), where each postprocessing units that performs LayerNorm and GELU
+PE executes a MAC operation. Specifically, it multiplies 8-bit operations in the projection layers of LLMs.
+weights and activations via an 8-bit multiplier circuit and adds
+Memristive crossbars, shown in Fig. 3 (d), perform bithe result to accumulated partial sums through an accumulator nary/ternary MVM operations in the analog domain using pairs
+circuit.
+of memristive devices and differential amplifiers [14], [30],
+For activation-to-activation MatMuls in the attention head, [37]. In the PIM architecture, projection layer weights are prethe concatenated Value and Key matrices are stored in the loaded onto the memristive devices in the PIM banks during
+
+=== page 4 ===
+(a) l = 128
+
+(b) l = 256
+
+(d) l = 1024
+
+(e) l = 2048
+
+(c) l = 512
+
+(f) l = 4096
+
+Fig. 5: Tokens per second result for various LLMs with different context lengths (l).
+TABLE II: The hyper-parameters of LLMs.
+Models
+GPT
+
+OPT
+LLaMA
+
+Param
+355M
+774M
+1.5B
+1.3B
+2.7B
+6.7B
+7B
+
+d
+1024
+1280
+1600
+2048
+2560
+4096
+4096
+
+h
+16
+20
+25
+32
+32
+32
+32
+
+Hyperparameters
+dF F
+l
+1024
+128-4096
+1280
+128-4096
+1600
+128-4096
+8192
+128-4096
+10240
+128-4096
+16384
+128-4096
+11008
+128-4096
+
+N
+24
+36
+48
+24
+32
+32
+32
+
+(a) l = 128
+
+configuration. The weight kernels are expanded into vectors
+and loaded onto the crossbar columns, with input/activation
+vectors provided as inputs. The crossbars carry out MVM
+operations in parallel, applying Kirchhoff’s and Ohm’s Laws
+for analog computation [14], [16]. Once the projection layer
+computations are complete, results are digitized using ADCs
+and stored back in LPDDR for user access.
+
+IV. E XPERIMENTS AND D ISCUSSIONS
+(b) l = 4096
+
+In this work, we designed the digital TPU architecture using
+Verilog and synthesized it with Synopsys Design Compiler at
+45nm process technology to evaluate power and timing. For
+a 32 × 32 systolic array with 8-bit MAC units within its PEs,
+an operating frequency of 100 MHz was achieved. The TPU
+architecture includes 8 MB of SRAM, typical for edge TPU
+accelerators [38]. To simulate the PIM component and assess
+its latency and energy consumption, we used MNSIM 2.0 [39]
+with 256 × 256 RRAM crossbars and 45nm 8-bit ADCs [40].
+We start our experiments by benchmarking the throughput of
+our hybrid PIM-LLM architecture against the baseline LLMspecific TPU (TPU-LLM) design using various LLMs listed
+in Table II. Finally, we compare our architecture with previous
+PIM-based designs developed to accelerate language models.
+
+Fig. 6: Contribution of various components to the overall
+latency in the PIM-LLM architecture (percentage breakdown).
+
+A. Tokens per Second Analysis
+The proposed PIM-LLM Architecture architecture demonstrates significant performance gains compared to the TPU
+baseline. As shown in Fig. 5, the speedup varies across models
+and context lengths, with the most substantial gains observed
+for models with shorter context lengths. For instance, at a
+context length of 128, the GPT 350M model achieves an
+11.6× speedup, while the OPT 6.7B model reaches a 79.2×
+speedup. This trend is consistent across different models, with
+
+4
+
+=== page 5 ===
+(a) l = 128
+
+(b) l = 256
+
+(d) l = 1024
+
+(e) l = 2048
+
+(c) l = 512
+
+(f) l = 4096
+
+Fig. 7: Tokens per Joule result for various LLMs with different context lengths (l).
+
+is 14.7% and 3.5% for the GPT-2 350M and the OPT
+6.7B model, respectively. For other context lengths, the buffer
+latency contribution ranges from 1% to 5%. The zoomed
+section highlights values below 1%, typically reflecting PIM
+latency and, in some cases, buffer latency.
+
+larger models showing greater speedups, suggesting that the
+architecture will scale effectively for larger models.
+However, as the context length increases, the speedup decreases. This is because, for larger context lengths, the MatMul
+operations in the attention heads become larger (refer to Table
+I), requiring more computation within the TPU component of
+the hybrid PIM-LLM architecture. It is worth noting that this
+issue is less significant for edge applications, as they generally
+operate with shorter context lengths [41]. As illustrated in Fig.
+5, for a context length of 4096, the GPT 350M model shows
+a 1.5× improvement, while the OPT 6.7B model achieves a
+still considerable 5.71× speedup.
+
+C. Tokens per Joule Analysis
+We also analyze throughput per joule of energy consumed,
+as energy efficiency is a critical metric, particularly for energyconstrained edge devices. Figure 7 highlights the improvement
+in tokens per joule across different context lengths. For smaller
+models and context lengths, the TPU outperforms the proposed
+PIM-LLM architecture, particularly with the GPT-2 350M
+model, where TPU delivers 33.7% lower energy consumption.
+This trend persists across context lengths of 256, 512, and
+1024. This is due to the fact that the substantial speedup
+provided by the PIM architecture comes at the cost of high
+power dissipation.
+However, once model sizes exceed the OPT 1.3B model,
+our PIM-LLM architecture begins to demonstrate gains. For
+instance, at a context length of 128 for the OPT 1.3B model,
+the proposed architecture is 0.96% more energy efficient, with
+improvements reaching 12.49% for the OPT 6.7B model.
+Notably, the results reveal a significant increase in efficiency as
+context length increases. At context lengths of 2048 and 4096,
+the proposed architecture consistently outperforms TPU-LLM
+across all model sizes, achieving gains of 17.95% for GPT-2
+350M and 22.79% for OPT 6.7B at l = 2048, and 70.58%
+for GPT-2 350M and 33.7% for OPT 6.7B at l = 4096.
+
+B. Latency Percentage Breakdown
+Figure 6 provides a detailed breakdown of latency contributors within the PIM-LLM architecture. The systolic arrays,
+which handle MatMul operations in the attention heads, represent the largest latency component. For the OPT 6.7B model,
+they account for 60% of total latency, increasing to 73.9%
+for the GPT-2 350M model at a context length of 128. This
+pattern holds across various model sizes. At a context length
+of 4096, the systolic arrays account for over 97% of latency
+in both the GPT-2 350M and OPT 6.7B models.
+The latency contributed by the digital peripheral circuitry
+is negligible, accounting for less than 0.01%, and thus barely
+visible even in the zoomed sections of the graphs. As the
+context length increases, latency from the systolic arrays
+also rises, although it decreases as model size grows. The
+combined latency of RRAM crossbars (Xbar), DAC, and
+ADC remain below 1% highlighting the effectiveness of the
+PIM component to accelerate the projection layers in LLMs.
+Communication latency becomes more prominent in larger
+models with shorter context lengths, contributing 36.3% for
+the OPT 6.7B model and 10.7% for the GPT-2 350M model
+at a context length of 128. The buffer latency percentage
+
+D. Words per Battery Life
+Considering a standard edge battery with a capacity of 5
+watt-hours, equivalent to 18,000 Joules, and assuming a conservative average of 1.5 tokens per word [42], we introduce a
+new metric called Words/Battery Life. The results of this metric
+
+5
+
+=== page 6 ===
+(a) l = 128
+
+(b) l = 256
+
+(d) l = 1024
+
+(e) l = 2048
+
+(c) l = 512
+
+(f) l = 4096
+
+Fig. 8: Words Per Battery Life result for various LLMs with different context lengths (l).
+TABLE III: Comparison with previous works.
+TransPIM [18]
+HARDSEA [26]
+PIM-LLM
+
+Model
+GPT2-Medium (l = 4096)
+GPT2-Small (l = 1024)
+GPT2-Small (l = 1024)
+GPT2-Medium (l = 4096)
+
+GOPS
+3.2
+6.47
+3.7
+
+work. PIM-GPT [17] is a recent work that examines large
+GPT models, however it only introduces light modifications
+to DRAM and still relies on digital computation with 16-bit
+floating-point number representation. Consequently, PIM-GPT
+is more comparable to large-scale digital cloud accelerators
+than to the proposed PIM-LLM architecture here, which is
+specifically tailored for edge applications.
+In this work, we compare our approach with HARDSEA
+[26] and TransPIM [18]. Without access to the detailed implementations of these prior designs, we rely on the throughput values explicitly mentioned in their papers. As listed in
+Table III, TransPIM [18] presents several variations of its
+architecture, all achieving a GOPS/W below 200 on the GPT2 Medium model with a 4096 context length. In contrast,
+HARDSEA reports a throughput of 3.2 GOPS when running
+GPT-2 Small with a 1024 context length. Using our proposed
+PIM-LLM architecture for the same workloads, we achieve
+more than a 5× improvement in GOPS/W compared to TransPIM and a 2× improvement in GOPS compared to HARDSEA. It is worth noting that PIM-LLM demonstrates even
+greater benefits with larger language models, so comparisons
+with prior work on small GPT models may not fully reflect its
+potential. For example, with the OPT 6.7B model and a context
+length of 1024, the GOPS and GOPS/W values increase to
+58.5 and 1134.14, respectively. Similarly, for the OPT 6.7B
+model with a context length of 4096, the GOPS and GOPS/W
+values increase to 17.6 and 1262.72, respectively.
+
+GOPS/W
+<200
+487.4
+1026
+
+are shown in Fig. 8. For OPT-6.7B with a context length of
+128, PIM-LLM architecture can achieve 1.6M words/battery
+life compared to 1.4M words on TPU-LLM. As the context
+length increases to 1024, performance remains comparable
+across both TPU-LLM and PIM-LLM architectures. However,
+at context lengths of 2048 and 4096, PIM-LLM consistently
+outperforms TPU-LLM across all model sizes. For example,
+for l = 4096, the GPT2-350M model reaches 35M words,
+and OPT-6.7B achieves 1.6M words on PIM-LLM, whereas
+TPU-LLM performance for these models is capped at 20M
+and 1.2M words, respectively.
+E. Related Work
+Few prior studies have explicitly explored PIM-based architectures for decoder-only models, which dominate current
+generative language models. This focus is crucial, as works
+like HARDSEA [26] and TransPIM [18]—designed for both
+encoder-only and decoder-only models—report notable performance degradation when implementing decoder-only models.
+These challenges arise from unique characteristics of decoderonly models, such as their heavy reliance on matrix-vector
+multiplications to generate tokens sequentially, one at a time.
+Moreover, the few studies that have focused on decoder-only
+models primarily examine smaller-scale models that are not
+typically classified as “large” language models. For instance,
+HARDSEA [26] and TransPIM [18] implement the GPT-2
+Small and GPT-2 Medium models, respectively, which are
+smaller than the OPT and LLAMA models analyzed in this
+
+V. C ONCLUSION
+The advent of 1-bit LLMs has created significant research
+opportunities to lower the computational demands of generative LLMs and enhance their throughput efficiency. Although
+some recent studies have investigated this area, there is still a
+lack of practical architectural implementations that capitalize
+on the unique properties of 1-bit LLMs. This paper introduced
+
+6
+
+=== page 7 ===
+PIM-LLM, a hybrid analog-digital architecture that achieves
+considerable performance and throughput gains compared to
+conventional LLM accelerators and the limited prior efforts
+that have explicitly focused on smaller-scale decoder-only
+language models. Our work sets a new benchmark for accelerating decoder-only LLMs using PIM technology, achieving
+a scale and efficiency previously unattained.
+
+[17] Y. Wu, Z. Wang, and W. D. Lu, “Pim gpt a hybrid process in memory
+accelerator for autoregressive transformers,” npj Unconventional Computing, vol. 1, no. 1, p. 4, 2024.
+[18] M. Zhou, W. Xu, J. Kang, and T. Rosing, “Transpim: A memorybased acceleration via software-hardware co-design for transformer,” in
+2022 IEEE International Symposium on High-Performance Computer
+Architecture (HPCA). IEEE, 2022, pp. 1071–1085.
+[19] A. F. Laguna, A. Kazemi, M. Niemier, and X. S. Hu, “In-memory computing based accelerator for transformer networks for long sequences,”
+in 2021 Design, Automation & Test in Europe Conference & Exhibition
+(DATE). IEEE, 2021, pp. 1839–1844.
+[20] Z. Lu, X. Wang, M. T. Arafin, H. Yang, Z. Liu, J. Zhang, and G. Qu,
+“An rram-based computing-in-memory architecture and its application
+in accelerating transformer inference,” IEEE Transactions on Very Large
+Scale Integration (VLSI) Systems, 2023.
+[21] H. Guo, L. Peng, J. Zhang, Q. Chen, and T. D. LeCompte, “Att: A
+fault-tolerant reram accelerator for attention-based neural networks,” in
+2020 IEEE 38th International Conference on Computer Design (ICCD).
+IEEE, 2020, pp. 213–221.
+[22] M. Kang, H. Shin, and L.-S. Kim, “A framework for accelerating
+transformer-based language model on reram-based architecture,” IEEE
+Transactions on Computer-Aided Design of Integrated Circuits and
+Systems, vol. 41, no. 9, pp. 3026–3039, 2021.
+[23] X. Yang, B. Yan, H. Li, and Y. Chen, “Retransformer: Reram-based
+processing-in-memory architecture for transformer acceleration,” in
+Proceedings of the 39th International Conference on Computer-Aided
+Design, 2020, pp. 1–9.
+[24] A. F. Laguna, M. M. Sharifi, A. Kazemi, X. Yin, M. Niemier, and
+X. S. Hu, “Hardware-software co-design of an in-memory transformer
+network accelerator,” Frontiers in Electronics, vol. 3, p. 847069, 2022.
+[25] S. Sridharan, J. R. Stevens, K. Roy, and A. Raghunathan, “X-former:
+In-memory acceleration of transformers,” IEEE Transactions on Very
+Large Scale Integration (VLSI) Systems, vol. 31, no. 8, pp. 1223–1233,
+2023.
+[26] S. Liu, C. Mu, H. Jiang, Y. Wang, J. Zhang, F. Lin, K. Zhou, Q. Liu,
+and C. Chen, “Hardsea: Hybrid analog-reram clustering and digital-sram
+in-memory computing accelerator for dynamic sparse self-attention in
+transformer,” IEEE Transactions on Very Large Scale Integration (VLSI)
+Systems, vol. 32, no. 2, pp. 269–282, 2024.
+[27] C. Wolters, X. Yang, U. Schlichtmann, and T. Suzumura, “Memory is all
+you need: An overview of compute-in-memory architectures for accelerating large language model inference,” arXiv preprint arXiv:2406.08413,
+2024.
+[28] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez,
+Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in
+neural information processing systems, vol. 30, 2017.
+[29] D. Hendrycks and K. Gimpel, “Gaussian error linear units (gelus),”
+2016. [Online]. Available: https://arxiv.org/abs/1606.08415
+[30] M. E. Elbtity, B. Reidy, M. H. Amin, and R. Zand, “Heterogeneous
+integration of in-memory analog computing architectures with tensor
+processing units,” in Proceedings of the Great Lakes Symposium on
+VLSI 2023, 2023, pp. 607–612.
+[31] S. Kim, C. Hooper, T. Wattanawong, M. Kang, R. Yan, H. Genc,
+G. Dinh, Q. Huang, K. Keutzer, M. W. Mahoney et al., “Full
+stack optimization of transformer inference: a survey,” arXiv preprint
+arXiv:2302.14017, 2023.
+[32] Y. Xu, X. Han, Z. Yang, S. Wang, Q. Zhu, Z. Liu, W. Liu, and
+W. Che, “Onebit: Towards extremely low-bit large language models,”
+arXiv preprint arXiv:2402.11295, 2024.
+[33] D. B. Strukov, “Endurance-write-speed tradeoffs in nonvolatile memories,” Applied Physics A, vol. 122, no. 4, p. 302, Mar 2016.
+[34] S. Liu, G. Tao, Y. Zou, D. Chow, Z. Fan, K. Lei, B. Pan, D. Sylvester,
+G. Kielian, and M. Saligane, “Consmax: Hardware-friendly alternative
+softmax with learnable parameters,” arXiv preprint arXiv:2402.10930,
+2024.
+[35] A. Samajdar, Y. Zhu, P. Whatmough, M. Mattina, and T. Krishna, “Scale-sim: Systolic cnn accelerator simulator,” arXiv preprint
+arXiv:1811.02883, 2018.
+[36] M. E. Elbtity, P. S. Chandarana, B. Reidy, J. K. Eshraghian, and R. Zand,
+“Aptpu: Approximate computing based tensor processing unit,” IEEE
+Transactions on Circuits and Systems I: Regular Papers, vol. 69, no. 12,
+pp. 5135–5146, 2022.
+
+VI. ACKNOWLEDGMENTS
+This work is supported in part by the National Science
+Foundation (NSF) under grant numbers 2340249 and 2409697.
+R EFERENCES
+[1] A. Radford, J. Wu, R. Child, D. Luan, D. Amodei, I. Sutskever et al.,
+“Language models are unsupervised multitask learners,” OpenAI blog,
+vol. 1, no. 8, p. 9, 2019.
+[2] S. Zhang, S. Roller, N. Goyal, M. Artetxe, M. Chen, S. Chen, C. Dewan,
+M. Diab, X. Li, X. V. Lin et al., “Opt: Open pre-trained transformer
+language models,” arXiv preprint arXiv:2205.01068, 2022.
+[3] H. Touvron, T. Lavril, G. Izacard, X. Martinet, M.-A. Lachaux,
+T. Lacroix, B. Rozière, N. Goyal, E. Hambro, F. Azhar et al.,
+“Llama: Open and efficient foundation language models,” arXiv preprint
+arXiv:2302.13971, 2023.
+[4] H. Xu, A. Sharaf, Y. Chen, W. Tan, L. Shen, B. Van Durme, K. Murray, and Y. J. Kim, “Contrastive preference optimization: Pushing the
+boundaries of llm performance in machine translation,” arXiv preprint
+arXiv:2401.08417, 2024.
+[5] S. Ugare, T. Suresh, H. Kang, S. Misailovic, and G. Singh, “Improving llm code generation with grammar augmentation,” arXiv preprint
+arXiv:2403.01632, 2024.
+[6] J. Stojkovic, E. Choukse, C. Zhang, I. Goiri, and J. Torrellas, “Towards
+greener llms: Bringing energy-efficiency to the forefront of llm inference,” arXiv preprint arXiv:2403.20306, 2024.
+[7] B. Reidy, M. Mohammadi, M. Elbtity, H. Smith, and Z. Ramtin, “Work
+in progress: Real-time transformer inference on edge ai accelerators,” in
+2023 IEEE 29th Real-Time and Embedded Technology and Applications
+Symposium (RTAS). IEEE, 2023, pp. 341–344.
+[8] G. Xiao, J. Lin, M. Seznec, H. Wu, J. Demouth, and S. Han,
+“Smoothquant: Accurate and efficient post-training quantization for large
+language models,” in International Conference on Machine Learning.
+PMLR, 2023, pp. 38 087–38 099.
+[9] W. Shao, M. Chen, Z. Zhang, P. Xu, L. Zhao, Z. Li, K. Zhang, P. Gao,
+Y. Qiao, and P. Luo, “Omniquant: Omnidirectionally calibrated quantization for large language models,” arXiv preprint arXiv:2308.13137,
+2023.
+[10] J. Malekar, M. E. Elbtity, and R. Zand, “Matmul or no matmul in the
+era of 1-bit llms,” 2024. [Online]. Available: https://arxiv.org/abs/2408.
+11939
+[11] H. You, Y. Guo, Y. Fu, W. Zhou, H. Shi, X. Zhang, S. Kundu,
+A. Yazdanbakhsh, and Y. Lin, “Shiftaddllm: Accelerating pretrained llms
+via post-training multiplication-less reparameterization,” arXiv preprint
+arXiv:2406.05981, 2024.
+[12] H. Wang, S. Ma, L. Dong, S. Huang, H. Wang, L. Ma, F. Yang, R. Wang,
+Y. Wu, and F. Wei, “Bitnet: Scaling 1-bit transformers for large language
+models,” arXiv preprint arXiv:2310.11453, 2023.
+[13] S. Ma, H. Wang, L. Ma, L. Wang, W. Wang, S. Huang, L. Dong,
+R. Wang, J. Xue, and F. Wei, “The era of 1-bit llms: All large language
+models are in 1.58 bits,” arXiv preprint arXiv:2402.17764, 2024.
+[14] M. Elbtity, A. Singh, B. Reidy, X. Guo, and R. Zand, “An in-memory
+analog computing co-processor for energy-efficient cnn inference on
+mobile devices,” in 2021 IEEE Computer Society Annual Symposium
+on VLSI (ISVLSI), 2021, pp. 188–193.
+[15] A. S. Rakin, S. Angizi, Z. He, and D. Fan, “Pim-tgan: A processingin-memory accelerator for ternary generative adversarial networks,” in
+2018 IEEE 36th International Conference on Computer Design (ICCD).
+IEEE, 2018, pp. 266–273.
+[16] M. Hu, J. P. Strachan, Z. Li, E. M. Grafals, N. Davila, C. Graves,
+S. Lam, N. Ge, J. J. Yang, and R. S. Williams, “Dot-product engine
+for neuromorphic computing: Programming 1t1m crossbar to accelerate
+matrix-vector multiplication,” in ACM/EDAC/IEEE Design Automation
+Conference (DAC), 2016, pp. 1–6.
+
+7
+
+=== page 8 ===
+[37] M. H. Amin, M. Elbtity, M. Mohammadi, and R. Zand, “Mram-based
+analog sigmoid function for in-memory computing,” in Proceedings of
+the Great Lakes Symposium on VLSI 2022, 2022, pp. 319–323.
+[38] B. C. Reidy, M. Mohammadi, M. E. Elbtity, and R. Zand, “Efficient
+deployment of transformer models on edge tpu accelerators: A real
+system evaluation,” in Architecture and System Support for Transformer
+Models (ASSYST@ ISCA 2023), 2023.
+[39] Z. Zhu, H. Sun, T. Xie, Y. Zhu, G. Dai, L. Xia, D. Niu, X. Chen,
+X. S. Hu, Y. Cao, Y. Xie, H. Yang, and Y. Wang, “Mnsim 2.0: A
+behavior-level modeling tool for processing-in-memory architectures,”
+IEEE Transactions on Computer-Aided Design of Integrated Circuits
+and Systems, vol. 42, no. 11, pp. 4112–4125, 2023.
+
+[40] Y. Choi, S. Park, M.-K. Lee, S.-P. Nah, and M. Song, “Design of a
+45nm 8-bit 2gs/s 250mw cmos folding a/d converter with an adaptive
+digital error correction technique,” in 2015 International SoC Design
+Conference (ISOCC). IEEE, 2015, pp. 75–76.
+[41] W. Chen and Z. Li, “Octopus v2: On-device language model for super
+agent,” arXiv preprint arXiv:2404.01744, 2024.
+[42] B. B. Lambruschini, P. Becerra-Sanchez, M. Brorsson, and M. Zurad,
+“Reducing tokenizer’s tokens per word ratio in financial domain with
+t-mufin bert tokenizer,” in Proceedings of the Fifth Workshop on Financial Technology and Natural Language Processing and the Second
+Multimodal AI For Financial Forecasting, 2023, pp. 94–103.
+
+8

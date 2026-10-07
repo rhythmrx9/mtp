@@ -1,0 +1,972 @@
+# X-Former: In-Memory Acceleration of Transformers
+# id: W4381233128 | key: 2023_Sridharan_X-Former_TVLSI | TVLSI 2023 | card: ../cards/2023_Sridharan_X-Former_TVLSI.md
+
+
+=== page 1 ===
+1
+
+X-Former: In-Memory Acceleration of Transformers
+
+arXiv:2303.07470v1 [cs.LG] 13 Mar 2023
+
+Shrihari Sridharan, Jacob R. Stevens* , Kaushik Roy and Anand Raghunathan
+School of Electrical and Computer Engineering, Purdue University, West Lafayette, IN, USA
+
+Abstract—Transformers have achieved great success in a wide
+variety of natural language processing (NLP) tasks due to the attention mechanism, which assigns an importance score for every
+word relative to other words in a sequence. However, these models
+are very large, often reaching hundreds of billions of parameters,
+and therefore require a large number of DRAM accesses. Hence,
+traditional deep neural network (DNN) accelerators such as
+GPUs and TPUs face limitations in processing Transformers
+efficiently. In-memory accelerators based on non-volatile memory
+promise to be an effective solution to this challenge, since
+they provide high storage density while performing massively
+parallel matrix vector multiplications within memory arrays.
+However, attention score computations, which are frequently
+used in Transformers (unlike CNNs and RNNs), require matrix
+vector multiplications (MVM) where both operands change
+dynamically for each input. As a result, conventional NVM-based
+accelerators incur high write latency and write energy when used
+for Transformers, and further suffer from the low endurance of
+most NVM technologies.
+To address these challenges, we present X-Former, a hybrid
+in-memory hardware accelerator that consists of both NVM and
+CMOS processing elements to execute transformer workloads
+efficiently. To improve the hardware utilization of X-Former,
+we also propose a sequence blocking dataflow, which overlaps
+the computations of the two processing elements and reduces
+execution time. Across several benchmarks, we show that XFormer achieves upto 85x and 7.5x improvements in latency and
+energy over a NVIDIA GeForce GTX 1060 GPU and upto 10.7x
+and 4.6x improvements in latency and energy over a state-of-theart in-memory NVM accelerator.
+Index Terms—Machine Learning, Neural Networks, Inmemory computing
+
+I. I NTRODUCTION
+Deep learning models that process language such as Transformers (BERT, GPT-3) have attained state of the art accuracies in a wide variety of natural language processing
+(NLP) tasks [1], [2]. These models are able to achieve
+superior performance due to the attention mechanism [3],
+which provides an estimate of the significance of each word
+with respect to every other word in a particular sequence.
+However, as language tasks become more and more complex,
+the model sizes continue to increase rapidly. For example,
+GPT-3 contains 175 billion parameters and acquires state of
+the art results for text generation with input sequence length
+of 2048 [2]. Further, the attention mechanism also comprises
+of unique operations such as matrix vector multiplications
+between dynamically changing operands for every new batch
+of input sequences, absent in Convolutional neural networks
+(CNNs) and Recurrent neural networks (RNNs). Typically, onchip scratchpads in commodity hardware are very small to
+§* Jacob R. Stevens is currently a Research Scientist at Meta Platforms,
+Inc., Cambridge, MA
+
+store the model weights and other intermediate activations [4].
+This leads to significant overheads due to data movement costs
+from off-chip accesses. For example, the energy per access of
+a 64-byte word from DRAM is approximately three orders of
+magnitude higher than on-chip access [5]. As a result, there
+are several challenges associated with implementing Transformers on existing deep learning CMOS accelerators such
+as GPUs and TPUs [4]. Consequently, in-memory computing
+has emerged as a viable candidate to reduce this performance
+bottleneck. In this paradigm, the computations are performed
+within the memory array itself which minimizes the number of
+off-chip accesses considerably. Non-volatile memory (NVM)based in-memory compute primitives (resistive crossbars) [6],
+[7] are well suited for this application because they provide
+high storage density and facilitate massively parallel matrix
+vector multiplication (MVM) operations. However, the issues
+with NVM-based in-memory computing are twofold; First,
+Transformers require significant number of writes into the
+NVM device. This is a challenge due to NVMs requiring
+atleast one to two orders of magnitude higher latency and
+energy/bit depending on the NVM device compared to SRAM
+for the same technology node [8]–[10]. NVM devices also
+have very limited endurance, only about 106 −109 conservative
+writes [8]–[10] which degrades the lifetime of these devices
+swiftly and limits their applicability to Transformers. To
+alleviate the aforementioned challenges, we propose a hybrid
+in-memory computing architecture that combines NVM and
+CMOS-based processing elements to cater to the different
+computational and memory demands of Transformers. Our
+overall architecture consists of a Projection engine with NVM
+tiles and an Attention engine comprising of CMOS tiles, capable of executing all the operations in a transformer network
+efficiently. The advantage of this approach is that we can
+store these large models and perform the matrix multiplication
+operations that require no reprogramming of the NVM device
+in the Projection Engine. We make use of the Attention
+Engine to execute all the other operations since they provide
+high endurance, low write latency and low write energy. We
+also evaluate a traditional weight stationary dataflow for our
+architecture. However, we observe that the hardware utilization
+is low because the operations between different layers of a
+transformer encoder are dependent on one another and the size
+of intermediate activations scale quadratically with sequence
+length. Therefore, we introduce a sequence blocking dataflow
+which divides the input sequence into smaller blocks and
+processes them in a pipelined fashion. As shown in [11],
+this technique causes no loss in application-level accuracy.
+Moreover, the proposed dataflow also prevents the intermediate activation sizes to scale with sequence length while
+
+=== page 2 ===
+2
+
+Fig. 1: (a) A transformer network with multiple encoder layers and a classification layer for a specific downstream task, (b)
+Distribution of Floating Point Operations (FLOPs) for image classification models and Transformers with varying sequence
+lengths (The distribution for image classification models is shown from 90%-100%)
+keeping both the engines fully utilized. We finally compare the
+performance of our hardware design with a NVIDIA GeForce
+GTX 1060 GPU and a previously proposed crossbar-based
+machine learning accelerator on several benchmarks and report
+the improvements in energy and latency. In summary, our key
+contributions are:
+We design X-Former, an in-memory hardware architecture for Transformers comprising of Projection engine
+and Attention engine, to efficiently accelerate attention
+layers in Transformers.
+• We propose an intra-layer sequence blocking dataflow for
+the proposed architecture, which increases the hardware
+utilization and reduces intermediate on-chip memory requirements.
+• We also develop a simulation framework to evaluate the
+performance of X-Former, and observe 85x and 7.5x
+improvements in latency and energy on average compared
+to a NVIDIA GeForce GTX 1060 GPU and upto 10.7x
+and 4.6x improvements in latency and energy over a stateof-the-art NVM accelerator.
+
+•
+
+The paper is organized as follows. Section II provides an
+overview of transformer models, its associated computational
+challenges and a brief background on resistive crossbars.
+Section III discusses the existing efforts related to this work.
+Section IV describes our proposed hardware architecture in
+detail. Section V highlights different dataflows for X-Former
+and lists their advantages. Section VI explains the experimental
+methodology used for the work. We present the performance
+results of X-Former in Section VII and conclude the paper in
+Section VIII.
+
+II. P RELIMINARIES
+In this section, we describe the operations in a transformer
+network and analyze the various computational challenges. We
+also present a background on resistive crossbars.
+
+A. Transformers
+Background. Figure 1(a) represents an example Transformer
+network architecture. It consists of an embedding layer followed by multiple Transformer encoders and a final classification layer fine-tuned for a specific downstream task. Every
+Transformer encoder is further divided into an attention layer
+that contains multiple self-attention heads followed by feed
+forward layers. Multi-headed attention layers help capture finegrained relationships in a specific context for every word in a
+sequence [3]. A batch of input sequences are first processed by
+an embedding layer to obtain a learned vector representation
+of each word in the sequence. Within each self-attention
+head, these inputs are multiplied by distinct weight matrices
+to obtain the Query, Key and Value matrices. The outputs,
+Query and Key matrices are now multiplied and normalized
+by a softmax layer to generate the intermediate attention
+probabilities. The intermediate attention probabilities are then
+multiplied with the Value matrix to obtain the final attention
+output. Multiple attention heads are processed in parallel and
+the resultant matrices are concatenated before advancing the
+output to the feed forward layers. This procedure is repeated
+for all the encoder layers.
+Computational challenges. Compute kernels in a Transformer
+network differ from traditional image classification and previously proposed language models. Matrix vector multiplication
+operations are typically performed between inputs/activations
+and weights in traditional deep learning networks. Since
+the weights do not require reprogramming, these operations are matrix vector multiplications with static matrices
+or M V M Static. Transformers, in addition to M V M Static
+operations, also encompass matrix vector multiplications between Query, Key and Value. These data structures change
+for every input, hence they are dynamic and we refer to them
+as M V M Dynamic operations. We categorize other compute
+kernels such as softmax, layerNorm, vector operations, etc.
+as N onM V M operations. Figure 1(b) shows the floating
+point operations (FLOPs) distribution of various traditional
+deep learning networks compared to a Transformer self-
+
+=== page 3 ===
+3
+
+attention block of varying sequence lengths. For traditional
+deep learning models, we can observe that M V M Static
+operations contributes to 95% of the total FLOPs. However, in
+the case of Transformers, M V M Static operations contributes
+65% while M V M Dynamic operations contributes 35% for
+a sequence length of 512, accounting for a substantial proportion of the overall distribution. Figure 1(b) illustrates that
+the FLOPs count for M V M Dynamic operations becomes
+increasingly dominant as sequence length increases. Besides,
+modern Transformer networks demonstrate state of the art
+accuracy on a variety of NLP tasks for extremely long sequences [2]. In traditional crossbar based architectures, this
+is a bottleneck because, for every self-attention layer within
+a transformer encoder, all the crossbars need to be reprogrammed before the matrix vector multiplication operation
+is performed since the inputs change dynamically. This not
+only causes a huge degradation in overall latency and energy
+but also affects the lifetime of the NVM devices, since they
+have very limited endurance [8]–[10]. It is also expensive to
+implement these operations using the temporal 1-D singleinstruction, multiple data (SIMD) lanes available in traditional
+in-memory accelerators. As shown in Figure 2, for a sequence
+length of 256, 80% of the total runtime is spent in processing
+M V M Dynamic operations. Therefore, it is very important
+to design a hardware architecture that can store the model
+parameters effectively while also improve the runtime and
+efficiency of M V M Dynamic operations for better overall
+performance.
+
+Fig. 2: Runtime split of transformer operations on a
+traditional crossbar architecture (M V M Dynamic
+implemented in 1-D SIMD lanes)
+
+B. Resistive Crossbars
+Figure 3 illustrates the fundamental organization of a resistive crossbar with N rows and M columns where the
+NVM devices are arranged like a two dimensional array and
+programmed to discrete conductance states. The two terminals
+of the NVM device are connected via an access device to a
+word-line and a bit-line at each crosspoint. The digital inputs
+are converted to voltages using digital to analog converters
+(DACs). The voltages simultaneously activate all the wordlines
+and a multiplication operation is performed between the conductance (G) and voltage (V) at each NVM device by applying
+Ohm’s law. The currents (I) from multiple NVM devices
+connected to a bit-line are accumulated as a consequence of
+Kirchhoff’s current law (KCL) and converted to digital outputs
+using analog to digital converters (ADCs). A matrix vector
+
+Fig. 3: Structure of a resistive crossbar array with Digital to
+Analog converters (DACs) and Analog to Digital converters
+(ADCs)
+multiplication operation can be realized efficiently because the
+currents in multiple columns can be obtained simultaneously.
+III. R ELATED W ORK
+In this section, we describe the related research efforts and
+contrast our work with them.
+Deep learning accelerators. Recently, various hardware accelerators have been proposed to improve the efficiency and
+performance of traditional deep learning networks [4], [12]–
+[16]. However, they are not optimized to process the unique
+computational kernels of Transformers described in section II.
+Software techniques. To improve the efficiency of Transformers, software methods such as quantization and pruning
+have helped reduce the bit-width of different data structures
+and compress the overall network [17]–[20]. These efforts
+are complimentary to our work since they enable further
+improvements to our proposed hardware architecture.
+Specialized hardware accelerators. Another promising direction to improve the performance and energy efficiency
+of Transformers is to build specialized hardware for Transformers. To this end, research works such as [18], [19],
+[21]–[23] accelerate key computations in the network. These
+hardware architectures have separate memory and computation
+units which result in significant communication overheads.
+An approach to reduce the number of off-chip accesses was
+proposed by EdgeBert [24], which stores a small part of
+the model (embedding table) in NVM devices. Our work
+differs from the above architectures by performing all the
+computations of the transformer network within the memory
+itself.
+In-memory architectures for Transformers. The existing
+processing in-memory architectures on accelerating Transformers are [25] and [26]. Both the works use NVM crossbars
+to accelerate both M V M Static and M V M Dynamic operations. While they propose techniques to reduce latency of
+reprogramming the NVM crossbars, these devices offer very
+low endurance which can degrade their lifetime quickly. Our
+design avoids this issue by mapping M V M Static operations
+
+=== page 4 ===
+4
+
+to NVM crossbars while processing the M V M Dynamic
+operations using in-memory CMOS processing elements. Nevertheless, we also compare our results against a traditional inmemory accelerator that maps M V M Dynamic operations to
+NVM crossbars and highlight the improvements.
+IV. OVERALL A RCHITECTURE
+X-Former is a hybrid spatial architecture that consists of
+two different types of processing elements to accommodate
+the unique needs of Transformers. We classify key workload
+characteristics of the transformer network into M V M Static,
+where atleast one operand remains constant in the MVM
+operation for all inputs and M V M Dynamic, where both
+the operands change for every batch of input sequences. XFormer is composed primarily of a Projection Engine with
+NVM processing tiles for executing M V M Static operations
+and an Attention Engine with CMOS processing tiles for
+executing M V M Dynamic operations, as shown in Figure 4.
+The weights of all the layers are stored in the Projection
+Engine to prevent reprogramming the NVM tiles, while we
+optimize the Attention Engine to only process the largest
+self-attention layer due to area constraints. We also have a
+dedicated bus-based interconnect network for data transfers
+between the Projection engine and the Attention engine and
+model its energy and latency. In the following subsections,
+each of these components will be described in more detail.
+
+M V M Static operations. It consists of a hierarchical structure
+of tiles and cores connected via a shared memory. Each tile
+consists of multiple cores, and each core contains multiple resistive crossbars that can perform matrix vector multiplication
+operations in parallel in the analog domain. We also provision
+enough memory for local scratchpads to store the input and
+output activations within a core. The data from the scratchpads
+is written to the shared memory only when it is completely
+filled to avoid higher memory access costs. It is also important
+to size both the shared memory and the scratchpads appropriately to avoid diminishing the storage density advantage of
+resistive crossbars. The memory controller helps orchestrate
+and schedule the movement of data between different levels of
+the hierarchy. The weights are fetched from off-chip memory
+and programmed into the crossbars only once during compile
+time. Every resistive crossbar within a core is interfaced with
+DACs and ADCs (peripheral circuit) to convert inputs to
+analog values and convert the analog outputs back in the digital
+domain. Since the peripheral circuitry typically introduces a
+large overhead in area and energy, we make use of couple
+of techniques to reduce the cost: (i) Utilize low resolution
+DACs and ADCs (ii) Make multiple columns within a crossbar
+and multiple crossbars share both DACs and ADCs. The state
+of the art accuracy for Transformers inference on a variety
+of downstream tasks has been shown with 8-bit fixed point
+weights and 8-bit fixed point activations [27]. Due to limited
+conductance levels in the NVM device, we use bit-slicing
+and bit-streaming techniques to represent the higher precision
+weights and activations respectively. Finally, the Query, Key
+and Value matrices are communicated to the Attention Engine
+to compute the attention scores. The Projection Engine also
+executes other fully connected layers present in the transformer
+network. Note that the projection engine stores the weights
+across all the layers of the network spatially, thereby avoiding
+writing into the resistive crossbars. This is possible due to the
+high storage density of the NVM devices.
+As indicated in Section II, in addition to static weights in
+the encoder layers, the transformer network also contains an
+embedding layer (lookup table) that converts each word in
+a sequence to a continuous vector representation. Therefore,
+we equip the Projection Engine with additional read-only
+tiles to store the embedding lookup table. The read-only tiles
+are organized like a standard memory array and consists of
+NVM devices for efficient storage of the embedding weights,
+especially useful for longer sequence lengths. They are used
+only once before the first encoder layer.
+B. Attention Engine Overview
+
+Fig. 4: The X-Former hardware accelerator consisting of two
+different compute Engines, Projection Engine and Attention
+Engine and design of Attention Head Compute Tile (Bottom)
+
+A. Projection Engine Overview
+The Projection Engine is designed similarly to a traditional in-memory accelerator, capable of efficiently executing
+
+The Attention Engine receives the Query, Key, Value
+matrices from the Projection Engine and executes the
+M V M Dynamic operations in the CMOS processing tiles.
+To implement these multiheaded attention layers, the attention
+engine is composed of multiple attention head compute tiles
+(AHCT) that are connected via a shared bus, an on-chip
+transposable input buffer and a global attention scheduler
+to distribute the Query, Key and Value inputs to the tiles.
+Each AHCT is further divided into multiple banks composed
+
+=== page 5 ===
+5
+
+of multiple 8T-SRAM cells, shift and add blocks (SnA),
+additional scratchpads to store partial sums and intermediate
+outputs and a special functional unit (SFU) to implement
+softmax and other vector operations. We chose 8T-SRAM cells
+to perform the matrix vector multiplication operations due to
+their decoupled read and write paths, thereby ensuring that the
+values are stored more robustly. The global attention scheduler
+assigns the Query and Value matrices to their respective banks
+in the AHCT. The Query and Value matrices are then written
+by enabling the write wordlines of the 8T-SRAM cells and
+driving the write bitlines to high or low depending on the value
+to be stored. Next, the key matrix is streamed as transposed
+individual vectors sequentially into the Query banks, and the
+matrix vector multiplication operation between the Key vector
+and Query matrix is computed in the analog domain to obtain
+the intermediate attention output. We note that similar to the
+Projection Engine, bit-slicing and bit-streaming are used when
+executing multi-bit MVM operations. The partial intermediate
+attention outputs are shifted and added using the shift and
+add (SnA) block and then stored in the accumulator. The
+accumulated outputs across Query banks are now processed
+by SFU to perform the softmax operation. The SFU consists
+of multiple vector units (VUs) that provides logic units such
+as adders, multipliers, etc. to implement simple operations
+such as addition, division, multiplication and exponentiation.
+Finally, this procedure is repeated for the MVM operation
+between the intermediate attention output matrix and the previously written Value matrix to get the final attention output.
+The output matrix is communicated back to the Projection
+Engine to process the feed forward layers. The Block Sequence
+Accumulator provides hardware support for sequence blocking
+dataflow, explained in more detail in Section V. All the AHCTs
+work in parallel to produce the final attention output, and we
+repeat this approach for all the layers.
+
+in the shared memory of the Projection Engine. Once the
+controller delegates the cores that need to process a subset of
+the input, the input data is sent to the local scratchpads within
+a tile and in a fixed number of cycles, a vector Vk of size SL
+x 1 is processed by the NVM crossbars (MVM operation) to
+output a vector Ok of size HS x 1. This is repeated multiple
+times until the entire length of the sequence is processed
+to obtain Query, Key and Value matrices of size SL x HS.
+Owing to the storage density of NVM crossbars, the weights
+are distributed spatially across different tiles for these input
+matrices. Therefore, the matrix vector multiplication operation
+is parallelized for the generation of all the three matrices.
+Attention engine – Query/Value stationary. The attention
+engine dataflow is described in Figure 5(b). Once the Query,
+Key and Value matrices of size SL x HS are generated, they
+are split into smaller matrices of size HSS x SL and processed
+by each AHCT (Attention head). All the AHCTs operate in
+parallel and the outputs are concatenated together to obtain the
+final attention output. To process a HSS x SL matrix within
+an AHCT, we first load and write the entire Query and Value
+matrices into the 8T-SRAM cells of their respective banks. The
+write operation is performed only once for a sequence since we
+reuse the Query matrix for the entire sequence length. Next, we
+step through the set of Key vectors of size HSS x 1 SL times
+and aggregate the partial sums in the accumulator to obtain the
+intermediate attention output. Similarly, we step through the
+intermediate attention output vectors SL times and perform a
+matrix vector multiplication operation with the Value matrix to
+acquire the final attention output. We also observed that since
+the Query, Key and Value matrices are never reused outside
+their respective transformer encoder, the 8T-SRAM cells are
+overwritten for each layer. Consequently, we only provision
+enough SRAM tiles to process the largest layer in the network
+due to limited area budget. Therefore, the next encoder layer
+can start processing only after the current layer is completed.
+
+V. DATAFLOW
+In this section, we describe the overall dataflow of our
+architecture. We first model and implement Transformers using
+traditional weight, Query/Value stationary dataflow. Later, we
+also propose a new sequence blocking dataflow to overcome
+some of the limitations of the earlier dataflow such as low
+hardware utilization and high intermediate output storage
+requirements. We outline both the approaches in detail considering a batch size of 1. We refer to the sequence length as
+SL, hidden size as HS and the hidden size within a AHCT as
+HSS. Both HS and HSS are properties of the language model
+being simulated.
+A. Traditional Dataflow
+Projection Engine - Weight Stationary. In this approach,
+the Projection Engine first processes an entire batch of input
+sequences before the Attention Engine starts computing the
+attention output. We adopt a weight stationary dataflow where
+the model weights are distributed spatially and reused across
+all the input sequences. Figure 5(b) illustrates the process of
+generating the Query, Key and Value matrices for an input
+batch size of 1. An input sequence of size SL x HS resides
+
+B. Sequence blocking Dataflow
+In the projection engine, we observe that every word in a
+sequence is handled independently to generate the Query, Key
+and Value matrices. We apply this fact to propose a sequence
+blocking dataflow, shown in Figure 5(a) where a block of
+words in a sequence is processed together at once before the
+next block of words. This is not synonymous to changing the
+sequence length for the input because the attention score is
+computed for every word with respect to every other word
+in the overall sequence. We introduce a new parameter called
+sequence block (SB), which is a subset of the total sequence
+length. We note that multiple sequence blocks make up a
+sequence.
+We identified two major inefficiencies with the traditional
+dataflow. First, the utilization of the proposed hardware architecture is low because the Attention Engine is fully idle when
+the Projection Engine is computing the Query, Key, Value
+vectors and vice-versa. This mainly arises due to the interdependencies between different layers within a transformer
+block. With sequence blocking dataflow, once an SB length
+of Query, Key and Value is processed, the attention engine
+
+=== page 6 ===
+6
+
+Fig. 5: (a) Active cycles of Projection Engine and Attention Engine during traditional dataflow where SL input vectors are
+processed and sequence blocking dataflow when SB input vectors are processed (The cycle times are not drawn to scale), (b)
+Weight stationary dataflow in Projection Engine (Left) and Query/Value stationary dataflow in a AHCT of the Attention
+Engine (Right) when SL input vectors are processed
+can start computing the attention scores. Similarly, when the
+attention engine is working on the previous SB, the projection
+engine can process the next set of inputs, keeping both the
+engines utilized. In addition, there is an overhead associated
+with storing the partial sums until the product of the length
+of each sequence block and the number of sequence blocks
+equals the length of the overall sequence. As shown in section
+VII, this cost is negligible in comparison to the benefits of
+sequence blocking.
+
+Fig. 6: Intermediate activation storage requirements for
+increasing sequence lengths with traditional dataflow and
+sequence blocking dataflow
+Next, since the entire sequence is processed by the Attention
+
+Engine at once, the intermediate attention output size becomes
+SL x SL. As the sequence length increases, this size scales
+quadratically, which leads to high on-chip memory requirements. In contrast, sequence blocking dataflow ensures that the
+intermediate attention output size (SB x SB) doesn’t change,
+since it only depends on the sequence block length and not
+the total sequence length.
+VI. E XPERIMENTAL M ETHODOLOGY
+This section explains the experimental setup and methodology used to evaluate X-Former.
+System-level modeling. We developed an architecture simulator for X-Former to model and evaluate the different operations
+in the transformer network. We obtained separate timing and
+power models for the resistive crossbar, DAC and ADC for
+the Projection Engine from [14]. For the AHCT modules, we
+performed SPICE simulations for the MVM operations (8TSRAM macro) to obtain power and write energy measurements. We obtained the Successive Approximation Register
+(SAR) ADC power measurements from [28]. Other digital
+units were modeled as Register Transfer Level (RTL) units
+and synthesized using 32nm CMOS technology. We measured
+their power consumption using the Synopsys Design Compiler.
+
+=== page 7 ===
+7
+
+TABLE I: X-Former Micro-architectural Configuration
+Parameter
+Operating Frequency
+NVM device
+NVM Resistance
+Crossbar Dimension
+DAC
+ADC
+Projection Engine Config
+Shared Memory
+Input/Output scratchpad
+Attention Engine Config
+SFU
+Block Sequence
+Accumulator
+
+Value
+1 GHz
+ReRAM - 2bit
+100kΩ - 1MΩ
+128x128
+1-bit
+2/crossbar, 8-bit @ 1.28GS/s
+36 tiles; 8 cores/tile, 6
+crossbars/core
+384KB
+4KB
+2; 16 AHCT/PE, 8 banks/AHCT,
+6 8T-SRAM cells/bank
+16 VU with 4 lanes each
+
+VII. R ESULTS
+In this section, we evaluate X-Former using different metrics
+and illustrate the benefits.
+A. Accuracy Evaluation
+
+6KB
+
+TABLE II: Summary of Network Topology
+Variable
+# heads
+# layers
+Hidden size (HS)
+Hidden size/head (HSS)
+Bit-width (W, Q, K, V)
+
+BERT-base
+12
+12
+768
+64
+(8, 8, 8, 8)
+
+BERT-large
+16
+24
+1024
+64
+(8, 8, 8, 8)
+
+The execution timing and power for all the on-chip memories
+were modeled using the CACTI simulator [29]. Finally, we
+integrated both the Projection Engine and Attention Engine
+into PUMAsim [14] to obtain the execution traces and estimate
+the overall latency and energy. Table I describes the microarchitectural configuration for X-Former that achieves the most
+optimal performance. We report the raw performance metrics
+of X-Former compared to a NVIDIA GPU in Table IV.
+Network architectures and Benchmarks. We evaluated XFormer on the benchmarks specified in Table III using network
+configurations described in Table II. We note that for GLUE
+benchmark, the final results are an average over all the downstream tasks. In SQuAD benchmark, the doc stride parameter
+denotes the stride length when a long document is split and
+max query length indicates the maximum number of tokens
+in a question [32].
+TABLE III: Summary of Benchmarks
+Dataset
+GLUE [30]
+SQuAD [31]
+
+max sequence length
+(SL)
+
+Description
+Collection of nine different
+language understanding tasks
+Question-Answering Tasks;
+max query length = 64,
+doc stride = 128
+
+512
+384
+
+Fig. 7: Application level accuracy degradation of Bert-Base
+and Bert-Large due to analog computations for a sequence
+length of 512
+Due to the analog nature of computations in X-Former,
+functional errors are introduced in the inference pass that
+impacts the overall application level accuracy [33], [34]. The
+major sources of errors are device and circuit non-idealities
+which occur during both read and write operations. These
+circuit non-idealities arise from source and sink resistances in
+the peripheral circuitry, wire parasitic resistances in the metal
+lines of the crossbar and sneak paths. Similarly, device nonidealities include process variations and write non-linearity.
+The cumulative effect of these non-idealities manifest as errors
+in both M V M Static and M V M Dynamic operation outputs.
+We investigated the impact of these inaccuracies for BertBase and Bert-Large for a sequence classification (WNLI)
+task under different process variations using the NeuroSim
+simulator [34] and summarize the results in Figure 7. The
+accuracy of the ideal software implementation (var=0) is 56.34
+%. At the lower device variation regime (0-0.2), we observe
+less than 1% loss in accuracy. However, for larger variations,
+we observe approximately 4.2 % error for Bert-Base and 9.87
+% error for Bert-Large network. The accuracy degradation of
+Bert-Large is higher due to errors accumulating over larger
+number of layers. We note that there has been active research
+in the devices and materials community to engineer devices
+with lower process variations. Moreover, this is a energyaccuracy tradeoff that has been widely studied and several
+mitigation strategies proposed [35] to recover the accuracy
+comparable to the ideal software implementation.
+
+TABLE IV: Performance metrics
+B. Performance Results
+Performance
+Metric
+
+NVIDIA
+GeForce GTX
+1060 GPU
+
+X-Former
+
+Latency/inference
+TOPS/W
+
+51.46 ms
+0.0158
+
+7.94 ms
+0.837
+
+X-Former
+with Sequence
+blocking
+Dataflow
+0.98 ms
+6.72
+
+Figure 8 shows the normalized speedup results with reference to the execution time of a NVIDIA GeForce GTX
+1060 GPU. We consider two variations of X-Former: (i)
+Without Sequence Blocking dataflow where the execution of
+the Projection Engine and Attention Engine do not overlap (ii)
+
+=== page 8 ===
+8
+
+Fig. 8: Normalized speedup results for varying sequence
+lengths for GLUE and SQUAD benchmarks.BB refers to
+Bert-base, BL refers to Bert-Large, GL refers to GLUE
+dataset and SQ refers to SQuAD dataset (Large values
+clipped)
+With the proposed sequence blocking (SB=64) dataflow. We
+also compare our results with an in-memory NVM accelerator
+[14] where the M V M Dynamic operations are executed in
+the temporal 1-D SIMD lanes instead of the NVM tiles due
+to limited endurance. First, without sequence blocking, we
+observe upto 10x benefits on average for both GLUE and
+SQuAD benchmarks over GPU. This is because X-Former
+is a highly parallel spatial in-memory architecture. Moreover,
+we also observe improvements compared to a traditional
+NVM in-memory accelerator since the Attention Engine is
+more efficient in processing the MVM operation compared
+to the 1-D SIMD module (vector-vector operations). Next,
+we notice additional improvements with sequence blocking,
+upto 85x and 81x for GLUE and SQuAD benchmarks respectively because the Attention Engine is inactive only until
+the Projection Engine processes a subset of the input instead
+of the entire sequence length. Therefore, both the engines
+work efficiently with higher utilization, resulting in better
+throughput. In addition, the size of the intermediate activations
+are a function of the sequence block (SB) rather than the
+total length of the sequence. Consequently, the size of the
+intermediate activations reduces significantly, eliminating the
+need for off-chip accesses. We note that, as shown in Figure 8,
+for larger sequence lengths, the speedup deteriorates because
+the matrix vector multiplication operation starts consuming a
+larger fraction of the execution time.
+
+Fig. 9: Performance benefits of X-Former compared to a
+crossbar architecture with NVMIdeal device
+We also compare X-Former with two in-memory architectures with homogeneous memory technologies and explain the
+advantages of our hybrid solution. First, we consider an ideal
+
+scenario where there exists an NVM device (NVMIdeal ) that
+offers very high endurance and negligible write errors. For our
+evaluations, we assume an existing crossbar architecture that
+has the same technology node and area as X-Former and all
+the MVM operations mapped to the NVM tiles. As shown
+in Figure 9, our architecture achieves 8.1x speedup over the
+NVM architecture. This is due to NVMs requiring high latency
+for performing the M V M Dynamic operations (both write
+and compute included). We also note that sequence blocking
+dataflow cannot be implemented in the crossbar architecture
+with NVMIdeal device since the Attention Engine requires
+additional execution time due to the write latency, which
+increases the inactivity of the Projection Engine and results
+in under-utilization of the hardware.
+
+Fig. 10: Normalized speedup and energy efficiency of
+X-Former compared to baseline in-memory SRAM
+architecture
+Next, we consider an in-memory SRAM setup under isoarea, where both the M V M Static and the M V M Dynamic
+operations are computed in the SRAM arrays. We note that
+the bit cell area of 1T-1R ReRAM is approximately 8F2 while
+the area of an SRAM cell is 150F2 . Even though some of
+this density advantage is lost due to peripherals, the effective
+area of ReRAM arrays is much lower than SRAM arrays.
+Therefore, under the iso-area baseline, an off-chip DRAM
+is modeled from which the weights are fetched as required.
+We adopt a temporal architecture design for the in-memory
+SRAM setup (X-Former is spatial), where weights are written
+into the Projection Engine and Attention Engine. Other effects
+such as writing to the SRAM cells are also considered.
+Although M V M Static and M V M Dynamic operations can
+be scheduled in both the engines due to homogeneity, most
+of the tiles are required to process only one type of compute.
+This is because the majority of the chip is required to process
+M V M Dynamic and performing the attention computation
+for that layer can cause overwriting of some layer weights.
+We also observe that only a tiny fraction of the off-chip access
+latency can be hidden when M V M Dynamic is executed
+since it is 4.55x slower.
+In Figure 10, we compare the speedup and energy efficiency
+of X-former with the in-SRAM accelerator for GLUE tasks
+and a sequence length of 512. We observe that X-former with
+the traditional dataflow is 1.82x and 2.03x for Bert-Base and
+Bert-Large networks respectively. This speedup is due to Xformer not requiring any off-chip accesses since ReRAMs are
+dense and can store the weights of all the layers on chip.
+Similarly, the energy efficiency is 52.1x and 36.8x due to the
+off-chip accesses and SRAM write energy. The latency can be
+further optimized by adopting a sequence blocking dataflow
+for X-Former.
+
+=== page 9 ===
+9
+
+C. Energy Results
+
+Note that Q gen, K gen and V gen are processed by Projection
+Engine while Q x KT and Att x V layers are realized using the
+Attention Engine. The ADC energy is more dominant (36.8%)
+in NVM processing elements while it contributes lesser to the
+overall MVM energy in Attention Engine (12.1%) since the
+ratio of MVM compute energy to ADC energy in a CMOS
+memory array is higher than the NVM memory array.
+
+Fig. 11: Normalized energy efficiency of X-Former compared
+to NVIDIA GPU and a state-of-the-art in-memory accelerator
+Figure 11 shows the normalized energy efficiency of XFormer compared to a GPU and an in-memory NVM accelerator for two different benchmarks. In order to calculate the
+GPU energy, we measured the average power and execution
+time using utility tools such as nvidia-smi. We achieve 4.85x7.5x and 3.52x-5.31x energy benefits for GLUE and SQuAD
+benchmarks respectively with different configurations of the
+transformer network. Since NVMs provide very high storage
+density, the weights are already programmed in-memory leading to low data movement costs. However, GPUs require a
+large number of off-chip accesses, which increases its overall
+energy.
+
+Fig. 12: Energy breakdown of running a single Transformer
+encoder in X-Former for a sequence length of 512
+As shown in Figure 12, we report the overall energy breakdown of different components of the X-Former architecture
+for GLUE benchmark. We observe that, out of 15.2 µJ, the
+majority of energy (58%) is consumed in computing the
+relevance scores in the Attention Engine while 28% is spent on
+generating the query, key and value outputs in the Projection
+Engine. Although the number of FLOPs for M V M Dynamic
+operations is lower (35%) than M V M Static operations
+(65%) for a sequence length of 512, a larger fraction of the
+energy is spent on computing attention scores because the
+dynamic power required to perform an MVM operation using
+a CMOS memory array is 4x more than the NVM memory
+array [36]. We also observe that the attention engine write
+energy is only 2% (0.27 µJ) of the overall write energy since
+CMOS processing elements are used to process attention even
+though the FLOPs distribution is high. We note that the block
+sequence accumulator and SFU in the attention engine only
+contribute a very tiny fraction (0.02 %) of the total attention
+engine energy.
+We also present the energy breakdown in terms of different
+operations within a transformer encoder as shown in Figure 13.
+
+Fig. 13: Energy breakdown of all MVM operations in a
+attention layer for a sequence length of 512
+
+D. Scaling X-Former
+X-Former consists of a combination of ReRAM cells as inmemory compute (IMC) units to store model weights, ReRAM
+as standard memory to store embedding weights, SRAM cells
+as IMC units and buffers for inputs and outputs, intermediate
+activations and partial sums. Since we need the SRAM arrays
+to only store a single layer of the network, the attention engine
+in X-Formercan scale to arbitrary number of layers. We would
+only need more ReRAM cores in the Projection Engine to store
+the model weights. Like most previous NVM architectures, we
+assume a spatial architecture, where the amount of ReRAM
+tiles needs to be increased to support the larger networks. The
+reason for this design choices the limited endurance problem
+of ReRAM and very high write energy costs. An alternate
+approach would be to scale X-Former to multiple nodes with
+chip-to-chip interconnects.
+VIII. C ONCLUSION
+Transformer networks are a promising class of machine
+learning workloads that have greatly improved the state of the
+art accuracy in a wide variety of natural language processing
+tasks. However, these networks possess several memory and
+computational challenges that prohibit traditional deep learning accelerators to realize them efficiently. To this end, we propose X-Former, a hybrid in-memory accelerator consisting of
+both NVM and CMOS processing tiles that can store the model
+weights and perform M V M Dynamic operations efficiently.
+We also propose a intra-layer sequence blocking dataflow to
+improve the hardware utilization and reduce the size of the
+intermediate activations. Our evaluations, considering different
+network configurations and benchmarks, reveal that X-Former
+can lead to significant improvements in latency and energy
+over a NVIDIA GeForce GTX 1060 GPU and a previously
+proposed state-of-the-art in-memory NVM accelerator.
+
+=== page 10 ===
+10
+
+IX. ACKNOWLEDGMENT
+This work was supported by C-BRIC, one of six centers
+in JUMP, a Semiconductor Research Corporation (SRC) program, sponsored by DARPA.
+R EFERENCES
+[1] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova.
+BERT: pre-training of deep bidirectional transformers for language
+understanding. In Proceedings of the 2019 Conference of the North
+American Chapter of the Association for Computational Linguistics:
+Human Language Technologies, NAACL-HLT 2019, Minneapolis, MN,
+USA, June 2-7, 2019, Volume 1 (Long and Short Papers), pages 4171–
+4186. Association for Computational Linguistics, 2019.
+[2] T.B. Brown et al. Language models are few-shot learners. In Advances in
+Neural Information Processing Systems, volume 33, pages 1877–1901.
+Curran Associates, Inc., 2020.
+[3] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A.N. Gomez,
+L. Kaiser, and I. Polosukhin. Attention is all you need. In I. Guyon,
+U. V. Luxburg, S. Bengio, H. Wallach, R. Fergus, S. Vishwanathan, and
+R. Garnett, editors, Advances in Neural Information Processing Systems,
+volume 30. Curran Associates, Inc., 2017.
+[4] N.P. Jouppi et al. In-datacenter performance analysis of a tensor
+processing unit. In Proceedings of the 44th Annual International
+Symposium on Computer Architecture (ISCA), page 1–12, New York,
+NY, USA, 2017. Association for Computing Machinery.
+[5] N. Verma, H. Jia, H. Valavi, Y. Tang, M. Ozatay, L.Y. Chen, B. Zhang,
+and P. Deaville. In-memory computing: Advances and prospects. IEEE
+Solid-State Circuits Magazine, 11(3):43–55, 2019.
+[6] B. Rajendran, H. Lung, and C. Lam. Phase change memory —
+opportunities and challenges. In 2007 International Workshop on Physics
+of Semiconductor Devices, pages 92–95, 2007.
+[7] H. Akinaga and H. Shima. Resistive random access memory (reram)
+based on metal oxides. Proceedings of the IEEE, 98(12):2237–2251,
+2010.
+[8] A. Ankit, I. Hajj, S. Chalamalasetti, S. Agarwal, M. Marinella, M. Foltin,
+J.P. Strachan, D. Milojicic, W.M. Hwu, and K. Roy. Panther: A programmable architecture for neural network training harnessing energyefficient reram. IEEE Transactions on Computers, PP:1–1, 05 2020.
+[9] F. Zahoor, T. Zulkifli, and F. Khanday. Resistive random access memory
+(RRAM): An overview of materials, switching mechanism, performance,
+multilevel cell (MLC) storage, modeling, and applications. Nanoscale
+Research Letters, Apr 2020.
+[10] I. Chakraborty, M. Ali, A. Ankit, S. Jain, S. Roy, S. Sridharan,
+A. Agrawal, A. Raghunathan, and K. Roy. Resistive crossbars as approximate hardware building blocks for machine learning: Opportunities
+and challenges. Proceedings of the IEEE, 108(12):2276–2310, 2020.
+[11] Y. Tay, M. Dehghani, D. Bahri, and D. Metzler. Efficient transformers:
+A survey. CoRR, abs/2009.06732, 2020.
+[12] S. Venkataramani, A. Ranjan, S. Banerjee, D. Das, S. Avancha, A. Jagannathan, A. Durg, D. Nagaraj, B. Kaul, P. Dubey, and A. Raghunathan.
+Scaledeep: A scalable compute architecture for learning and evaluating
+deep networks. In Proceedings of the 44th Annual International
+Symposium on Computer Architecture (ISCA), page 13–26, New York,
+NY, USA, 2017. Association for Computing Machinery.
+[13] Y.H. Chen, J. Emer, and V. Sze. Eyeriss: A spatial architecture
+for energy-efficient dataflow for convolutional neural networks. In
+2016 ACM/IEEE 43rd Annual International Symposium on Computer
+Architecture (ISCA), pages 367–379, 2016.
+[14] A. Ankit et al. Puma: A programmable ultra-efficient memristor-based
+accelerator for machine learning inference. In Proceedings of the
+Twenty-Fourth International Conference on Architectural Support for
+Programming Languages and Operating Systems (ASPLOS), New York,
+NY, USA, 2019. Association for Computing Machinery.
+[15] A. Shafiee, A. Nag, N. Muralimanohar, R. Balasubramonian, J.P. Strachan, M. Hu, R.S. Williams, and V. Srikumar. Isaac: A convolutional
+neural network accelerator with in-situ analog arithmetic in crossbars.
+In Proceedings of the 43rd International Symposium on Computer
+Architecture (ISAAC), page 14–26. IEEE Press, 2016.
+[16] L. Song, X. Qian, H. Li, and Y. Chen. Pipelayer: A pipelined rerambased accelerator for deep learning. 2017 IEEE International Symposium
+on High Performance Computer Architecture (HPCA), pages 541–552,
+2017.
+[17] A. Nagarajan, S. Sen, J.R. Stevens, and A. Raghunathan. Optimizing
+transformers with approximate computing for faster, smaller and more
+accurate NLP models. CoRR, abs/2010.03688, 2020.
+
+[18] A. Hadizadeh, I. Edo, O.M. Awadand, and A. Moshovos. GOBO:
+Quantizing attention-based NLP models for low latency and energy
+efficient inference. In Proceedings of 53rd IEEE/ACM International
+Symposium on Microarchitecture (MICRO), pages 811–824, 10 2020.
+[19] H. Wang, Z. Zhang, and S. Han. Spatten: Efficient sparse attention
+architecture with cascade token and head pruning. In 2021 IEEE
+International Symposium on High-Performance Computer Architecture
+(HPCA), pages 97–110, 2021.
+[20] S. Goyal, A.R. Choudhury, V. Chakaravarthy, S. ManishRaje, Y. Sabharwal, and A. Verma. Power-bert: Accelerating BERT inference for
+classification tasks. CoRR, abs/2001.08950, 2020.
+[21] T.J. Ham, S.J. Jung, S. Kim, Y.H. Oh, Y. Park, Y. Song, J.H. Park, S. Lee,
+K. Park, J. Lee, and D.K. Jeong. A3 : Accelerating attention mechanisms
+in neural networks with approximation. In 2017 IEEE International
+Symposium on High Performance Computer Architecture (HPCA), 02
+2020.
+[22] J. Park, H. Yoon, D. Ahn, J. Choi, and J. Kim. Optimus: Optimized matrix multiplication structure for transformer neural network accelerator.
+In Proceedings of Machine Learning and Systems (MLSys), 2020.
+[23] J.R. Stevens, R. Venkatesan, S. Dai, B. Khailany, and A. Raghunathan.
+Softermax: Hardware/software co-design of an efficient softmax for
+transformers. 2021 58th ACM/IEEE Design Automation Conference
+(DAC), pages 469–474, 2021.
+[24] T. Tambe et al. Edgebert: Sentence-level energy optimizations for
+latency-aware multi-task nlp inference. In MICRO-54: 54th Annual IEEE/ACM International Symposium on Microarchitecture, page
+830–844, New York, NY, USA, 2021. Association for Computing
+Machinery.
+[25] X. Yang, B. Yan, H. Li, and Y. Chen. Retransformer: Reram-based
+processing-in-memory architecture for transformer acceleration. In
+2020 IEEE/ACM International Conference On Computer Aided Design
+(ICCAD), pages 1–9, 2020.
+[26] A.F. Laguna, A. Kazemi, M. Niemier, and X. Hu. In-memory computing
+based accelerator for transformer networks for long sequences. In 2021
+Design, Automation Test in Europe Conference Exhibition (DATE), pages
+1839–1844, 2021.
+[27] Ye Lin, Yanyang Li, Tengbo Liu, Tong Xiao, Tongran Liu, and Jingbo
+Zhu. Towards fully 8-bit integer inference for the transformer model.
+In Proceedings of the Twenty-Ninth International Joint Conference on
+Artificial Intelligence, IJCAI’20, 2021.
+[28] Boris Murmann. Adc performance survey 1997-2022. [Online].
+Available: https://github.com/bmurmann/ADC-survey.
+[29] N. Muralimanohar, R. Balasubramonian, and N. Jouppi. Optimizing
+nuca organizations and wiring alternatives for large caches with cacti
+6.0. In 40th Annual IEEE/ACM International Symposium on Microarchitecture (MICRO 2007), pages 3–14, 2007.
+[30] A. Wang, A. Singh, J. Michael, F. Hill, O. Levy, and S. Bowman.
+GLUE: A multi-task benchmark and analysis platform for natural
+language understanding. In Proceedings of the 2018 EMNLP Workshop
+BlackboxNLP: Analyzing and Interpreting Neural Networks for NLP,
+pages 353–355, Brussels, Belgium, November 2018. Association for
+Computational Linguistics.
+[31] P. Rajpurkar, J. Zhang, K. Lopyrev, and P. Liang. SQuAD: 100,000+
+questions for machine comprehension of text. In Proceedings of the 2016
+Conference on Empirical Methods in Natural Language Processing,
+pages 2383–2392, Austin, Texas, November 2016. Association for
+Computational Linguistics.
+[32] T. Wolf et al. Transformers: State-of-the-art natural language processing.
+In Proceedings of the 2020 Conference on Empirical Methods in Natural
+Language Processing: System Demonstrations, pages 38–45, Online,
+October 2020. Association for Computational Linguistics.
+[33] Sourjya Roy, Shrihari Sridharan, Shubham Jain, and Anand Raghunathan. Txsim: Modeling training of deep neural networks on resistive
+crossbar systems. IEEE Transactions on Very Large Scale Integration
+(VLSI) Systems, 29(4):730–738, 2021.
+[34] Anni Lu, Xiaochen Peng, Wantong Li, Hongwu Jiang, and Shimeng
+Yu. Neurosim simulator for compute-in-memory hardware accelerator:
+Validation and benchmark. Frontiers in Artificial Intelligence, 4, 2021.
+[35] Shubham Jain and Anand Raghunathan. Cxdnn: Hardware-software
+compensation methods for deep neural networks on resistive crossbar
+systems. ACM Trans. Embed. Comput. Syst., 18(6), nov 2019.
+[36] Mustafa Ali, Indranil Chakraborty, Utkarsh Saxena, Amogh Agrawal,
+Aayush Ankit, and Kaushik Roy. A 35.5-127.2 tops/w dynamic
+sparsity-aware reconfigurable-precision compute-in-memory sram macro
+for machine learning. IEEE Solid-State Circuits Letters, 4:129–132,
+2021.

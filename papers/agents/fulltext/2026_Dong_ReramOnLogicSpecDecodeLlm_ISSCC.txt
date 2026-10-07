@@ -1,0 +1,255 @@
+# 31.1 A 14.08-to-135.69Token/s ReRAM-on-Logic Stacked Outlier-Free Large-Language-Model Accelerator with Block-Clustered Weight-Compression and Adaptive Parallel-Speculative-Decoding
+# id: W7133301734 | key: 2026_Dong_ReramOnLogicSpecDecodeLlm_ISSCC | ISSCC 2026 | card: ../cards/2026_Dong_ReramOnLogicSpecDecodeLlm_ISSCC.md
+
+
+=== page 1 ===
+ISSCC 2026 / SESSION 31 / AI ACCELERATORS / 31.1
+31.1
+
+A 14.08-to-135.69Token/s ReRAM-on-Logic Stacked Outlier-Free Large-Language-Model Accelerator with Block-Clustered
+Weight-Compression and Adaptive Parallel-Speculative-Decoding
+Pingcheng Dong1,2, Yonghao Tan1,2, Xuejiao Liu2, Peng Luo2, Yu Liu2, Di Pang2, Songchen Ma1,2, Xijie Huang1, Shih-Yang Liu1, Dong Zhang1,2, Zhichao Lu3,
+Luhong Liang2, Chi-Ying Tsui1,2, Fengbin Tu1,2, Liang Zhao4, Kwang-Ting Cheng1,2
+Hong Kong University of Science and Technology, Hong Kong, China, 2AI Chip Center for Emerging Smart System, Hong Kong, China, 3Hefei Reliance Memory, Hefei, China,
+Zhejiang University, Hangzhou, China
+
+1
+4
+
+Abstract
+speculative decoding scheme with out-of-order scheduler for high resource and bandwidth
+utilization. Our chip achieves 14.08-to-135.69token/s and 4.46-to-7.17× speedup over vanilla
+speculative decoding.
+
+Large Language Models (LLMs) [1-2] have achieved exceptional performance in natural
+language processing tasks, but their token-by-token autoregressive decoding (AD) paradigm
+incurs severe latency overhead due to extensive weight external memory access (EMA) [37]. Recently, speculative decoding (SD) [8-9] shown in Fig. 31.1.1 has been proposed and
+widely adopted on GPUs to resolve this issue by using a small-scale draft LLM (DLM) to
+decode multiple tokens in advance, which are then veriﬁed in parallel by a large-scale target
+LLM (TLM). However, on resource-constrained edge accelerators, LLM latency under SD
+is still dominated by weight EMA, with over 60% stemming from TLM. Although longer
+draft length (DL) can reduce TLM weight EMA by yielding more accepted tokens, increasing
+DLM latency diminishes this potential latency improvement. Thus, the TLM and DLM
+synergistically become the bottlenecks of SD, raising three challenges: 1) Low-bit posttraining quantization [10] is frequently employed to reduce TLM EMA, but it suffers from
+severe accuracy degradation due to activation outliers [11]. Recent post-training
+quantization (PTQ) methods based on Fast Walsh-Hadamard Transform (FWHT) [11-13]
+can eliminate outliers, while preserving computational invariance due to the orthogonal
+property of the Hadamard matrix, but the deep FWHT array required by varied dimensions
+in TLM occupies nearly 4.37× the area of a 4K INT8 multiply-accumulate (MAC) array,
+incurring heavy area overheads. 2) Although DLM is much smaller and easily quantized to
+low bit precision via quantization-aware training (QAT), limited on-chip memory capacity
+in edge accelerators still fails to buffer all DLM weights, forcing frequent EMA where
+constrained external bandwidth further exacerbates latency overheads. 3) At long DL, over
+90% of draft tokens decoded from DLM are rejected by TLM, whose latency overhead
+outweighs the latency savings from reduced TLM EMA.
+
+loading. WDOS enables APSD by decoupling workloads into 4 parallel instruction queues,
+which are scheduled in an out-of-order manner with dependency-aware synchronization to
+maximize resource and bandwidth utilization.
+
+To overcome these challenges, we develop an SD-based LLM accelerator with three key
+features: 1) We design a local rotation unit (LRU) that approximates global rotation by
+decomposing the deep FWHT into overlapped upper and lower low-cost 6-depth FWHTs.
+By rotating token features in two stages, the LRU removes activation outliers with little area
+burden and attains a 3.82-to-3.93× speedup over vanilla SD. 2) To extend on-chip memory
+capacity and avoid DLM EMA in a low-power yet cost-effective way, we utilize bumpingbased ReRAM-on-logic stacking technology to design a ReRAM-stacked
+process-near-memory (RS-PNM) architecture with blockwise vector quantization (BVQ)
+algorithm. BVQ clusters DLM weights into block-level codebooks (CBs) stored in the highdensity ReRAM, while RS-PNM reconstructs weights by retrieving CBs via a high-bandwidth
+stacking interface, which achieves 1.1-to-1.46× speedup over W4A8 SD with a LRU. 3)
+Inspired by recent parallel SD [14], we propose an adaptive parallel SD (APSD) scheme
+that combines the low rejection ratio of short DL and the high accepted token yield of long
+DL. APSD begins with non-parallel short DL drafting, followed by parallel draft-and-verify.
+Then, it dynamically adapts the drafting strategy based on feedback from TLM veriﬁcation.
+If TLM accepts all previous draft tokens and its newest generated token matches the ﬁrst
+draft token from concurrent DLM drafting, the parallel draft-and-verify continues. Otherwise,
+the draft tokens are discarded and APSD reverts to non-parallel DLM drafting. We further
+design an out-of-order scheduler with 4 parallel instruction queues decoupled from APSD
+workloads to avoid resource competition in parallel draft-and-verify as mentioned by [14],
+which attains 1.1-to-1.29× speedup and 10-to-14% rejected token ratio reduction.
+
+Figure 31.1.4 depicts the RS-PNM architecture with the proposed BVQ algorithm. Unlike
+traditional vector quantization (VQ) methods [16-17] that incur heavy area overheads from
+index buffers and multi-port decoders [18]. BVQ performs block-level clustering by jointly
+learning blockwise CBs with INT4 QAT and block indices with Gumbel softmax
+reparameterization inspired by [19-20], which only requires a lightweight ISA decoder to
+retrieve the CBs. In RS-PNM, the MCU stores the DLM CBs into stacked ReRAM dies via
+SPI interface, after which the CFU triggers the ReRAM controller and RLI to load CBs from
+ReRAM to weight buffer. The RLI uses a double clock rate (200MHz) to stabilize the read
+data before transferring it to asynchronous FIFO groups for reliable clock domain crossing.
+To avoid data congestion caused by horizontal CB mapping at limited clock frequency,
+vertical CB mapping is employed. In addition, block dimensions within each CB are
+constrained by the per-die ReRAM bank width to maximize bandwidth utilization. However,
+vertical mapping results in redundant CB access issues when the complete weight is
+reconstructed on-chip, leading to extra latency overhead. To mitigate this, the tile fusion
+unit (TFU) fuses token tiles that share the same CB entry, ensuring each CB is fetched only
+once and thereby halving CB read latency. Moreover, TFUs facilitate both intra- and interlayer parallelism by performing token fusion independently. Compared to W4A8 SD with
+LRU, the RS-PNM with INT4 BVQ achieves 1.1-to-1.46× speedup.
+
+2026 IEEE International Solid-State Circuits Conference (ISSCC) | 979-8-3315-8936-3/26/$31.00 ©2026 IEEE | DOI: 10.1109/ISSCC49663.2026.11409211
+
+This work presents a 55nm speculative decoding-based LLM accelerator with bumpingbased face-to-face ReRAM-on-logic stacking technology. It features a local rotation unit for
+outlier-free low-bit quantization, a stacking-aware PNM architecture co-designed with
+blockwise vector quantization to reduce weight EMA overheads, and an adaptive parallel
+
+Figure 31.1.2 shows the overall architecture of the proposed LLM accelerator with 4 ReRAM
+dies stacked on the logic die via 2048 face-to-face bumps for parallel read, delivering
+25.6GB/s at 100MHz and 8MB memory capacity. The logic die mainly consists of a top
+controller, an MCU, a 64KB ISA buffer, 4 PLLs, an interconnect bus, a 1MB weight buffer,
+a 2MB global token buffer, an EMA controller (EMAC), an inter-chip transceiver, an LRU, a
+workload-decoupled out-of-order scheduler (WDOS), and an RS-PNM that includes a
+codebook fetcher unit (CFU), a ReRAM load interface (RLI), a tile-fused tensor engine
+(TFTE), and a non-linear processing unit (NLPU). During SD, the LRU performs local rotation
+for TLM, where the token allocator (TAU) sends upper/lower features to the reconﬁgurable
+FWHT array (RFA) or Hadamard accumulator unit (HAU) for decomposed FWHT. The rotated
+token is dynamically quantized with scaling factors bypassed to the TFTE for subsequent
+layer quantization. The RS-PNM utilizes the high bandwidth to load DLM CBs in ReRAM via
+RLI and fuses the token tiles that share the same CB entry by TFTE to avoid redundant CB
+
+Figure 31.1.3 illustrates the LRU with decomposed FWHT for low-bit outlier-free TLM
+quantization. The Hadamard matrix in the FWHT is built via a Kronecker product for powerof-two dimensions. However, a TLM often contains non-power-of-two (npot) channels. To
+handle them, the npot dimension n is typically factorized into 2k×m dimensions (e.g.,
+14336=29×28 for the LLaMA3-8B down_proj layer), where m is the size of a pre-computed
+npot Hadamard matrix [15]. Such factorization results in a cascaded FWHT-GEMM array,
+which requires numerous high-precision operators, leading to signiﬁcant area overhead.
+To address this, we utilize npot Hadamard construction to limit the FWHT depth from 9 to
+a low-cost 6, and approximate the global rotation using overlapped upper and lower
+rotations with searched with (m, k) pairs such that their combined coverage spans the
+original dimension n. Then, LRU starts two-stage local rotation with (m, k). In each stage,
+the TAU assigns the token tiles to RFAs ﬁrst, which are reconﬁgurable to support 21-26
+FWHT. To reduce the need for high-precision adders, adjacent FWHTs at early stages are
+merged to share inputs, and a lightweight router network further dispatches desired data
+based on the selected mode. Subsequently, the TAU allocates RFA outputs and the binary
+part of npot Hadamard tiles to the HAU for MAC-free accumulation by fusing FP16
+Hadamard and the dynamic quantizers’ scales. The LRU enables accurate W4A8 TLM
+quantization, achieving 3.82-to-3.93× speedup over BF16 SD while saving 92.7% area
+compared to global rotation.
+
+Figure 31.1.5 shows the APSD scheme with WDOS. A recent parallel SD method [14]
+enhances vanilla SD by inter-chip parallel draft-and-verify, which isolates DLM drafting and
+TLM veriﬁcation workloads to avoid resource competition issues in intra-chip parallelism.
+However, the slow TLM veriﬁcation leads to severe DLM idle time and wastes ReRAM
+bandwidth. The inter-chip parallelism further lowers both the ReRAM and DRAM bandwidth
+utilization as the memory interface in each chip cannot be shared across workloads. In
+contrast, APSD adaptively switches between short DL drafting and long DL parallel draftand-verify based on whether previous draft tokens are all accepted and the ﬁrst draft token
+matches TLM output, which alleviates DLM idleness. Moreover, APSD employs intra-chip
+parallelism enabled by WDOS with CB-interleaved intra-layer mapping (CILM). The CILM
+evenly allocates intra-layer CBs across chips and interleaves them within each DLM block
+to ensure full ReRAM bandwidth utilization at loading. Moreover, APSD workloads are
+simpliﬁed and decoupled into four instruction queues: inter-chip transceiver, compute,
+ReRAM load, and EMAC. Then, the intra-queue decoders extract dependency markers and
+send them to the inter-queue synchronizers, which jointly maintain a synchronous counter
+matrix for tracking readiness. An instruction is issued when its parent queues are ready,
+
+Authorized licensed use limited to: Hong Kong University of Science and Technology. Downloaded on May 10,2026 at 06:49:26 UTC from IEEE Xplore. Restrictions apply.
+
+532 • 2026 IEEE International Solid-State Circuits Conference
+
+979-8-3315-8936-3/26/$31.00 ©2026 IEEE
+
+=== page 2 ===
+ISSCC 2026 / February 18, 2026 / 1:30 PM
+and its daughter queues are then notiﬁed. This dependency-aware scheduling efﬁciently
+enables intra-chip parallel draft-and-verify with high resource and bandwidth utilization,
+achieving 1.1-to-1.29× speed up over RS-PNM with 10-to-14% rejected DLM latency
+reduction.
+Figure 31.1.6 shows the measurement results of the LLM accelerator, fabricated in 55nm
+using bumping-based face-to-face ReRAM-on-logic stacking technology. Die photos,
+speciﬁcations, 4-chip system, SEM/TEM images, and a ReRAM resistance distribution
+curve are shown in Fig. 31.1.7. The logic die operates at 63.5 to 285MHz at 0.89 to 1.40V,
+achieving 2.33TOPS peak performance. Each ReRAM die runs at 100MHz at 1.1V and
+consumes 49.54mW. The chip achieves 4.46-to-7.17× speedup and 3.74-to-4.85× energy
+savings over the BF16 SD baseline across various TLM/DLM pairs. Compared to the latest
+works [3-7], our chip integrates 3.43MB SRAM and 8MB stacked ReRAM with 25.6GB/s
+bandwidth. In a 4-chip system, ReRAM further scales to 32MB with 102.4GB/s bandwidth,
+sufﬁcient to store all DLM CBs. The LRU supports reliable W4A8 quantization, achieving
+perplexity comparable to a SOTA W8A16 LLM accelerator [4] and better than works [67] that leverage 4b or sub-4b weight quantization. While most prior works [3–6] focus
+on compute-bound LLM preﬁlling optimization, the critical bottleneck lies in decoding.
+For a fair system-level comparison, we enhance each work with an LPDDR3 interface [21]
+to include EMA and 4-chip parallelism. As for LLaMA2-7B on the MT-Bench dataset that
+contains both preﬁlling and decoding, our chip achieves high decoding throughput of
+17.82tokens/s and low energy consumption of 123.41mJ/token.
+Acknowledgement:
+This research was supported by ACCESS – AI Chip Center for Emerging Smart Systems,
+sponsored by InnoHK funding, Hong Kong SAR. The corresponding authors of this paper
+are Kwang-Ting Cheng (timcheng@ust.hk) and Liang Zhao (lzhao2020@zju.edu.cn).
+References:
+[1] A. Dubey et al., “The Llama 3 Herd of Models,” arXiv: 2407.21783, 2024.
+https://arxiv.org/abs/2407.21783
+[2] H. Touvron et al., “Llama 2: Open Foundation and Fine-Tuned Chat Models,”
+arXiv: 2307.09288, 2023. https://arxiv.org/abs/2307.09288
+[3] S. Kim et al., “C-Transformer: A 2.6-18.1μJ/token Homogeneous DNNTransformer/Spiking-Transformer Processor with Big-Little Network and Implicit Weight
+Generation for Large Language Models,” ISSCC, pp. 368-370, 2024.
+https://doi.org/10.1109/ISSCC49657.2024.10454330
+[4] Y. Qin et al., “An 88.36TOPS/W Bit-Level-Weight-Compressed Large-Language-Model
+Accelerator with Cluster-Aligned INT-FP-GEMM and Bi-Dimensional Workﬂow
+Reformulation,” ISSCC, pp. 420-422, 2025.
+https://doi.org/10.1109/ISSCC49661.2025.10904774
+[5] S. Kim et al., “Slim-Llama: A 4.69mW Large-Language-Model Processor with
+Binary/Ternary Weights for Billion-Parameter Llama Model,” ISSCC, pp. 421-423, 2025.
+https://doi.org/10.1109/ISSCC49661.2025.10904761
+[6] Y. Wang et al., “LLM-CIM: A 28nm 126.7 TOPS/W Input-LUT-Based Digital CIM Macro
+with Reconﬁgurable Matrix Multiplication and Nonlinear Operation Modes for LLMs,” IEEE
+Symp. VLSI Circuits, 2025.
+https://doi.org/10.23919/VLSITechnologyandCir65189.2025.11074939
+
+[7] Z. Wu et al., “CELLA: A 28nm Compute-Memory Co-Optimized Real-Time Digital CIMBased Edge LLM Accelerator with 1.78 ms-Response in Preﬁll and 31.32 Token/s in
+Decoding,” IEEE Symp. VLSI Circuits, 2025.
+https://doi.org/10.23919/VLSITechnologyandCir65189.2025.11075101
+[8] Y. Leviathan et al., “Fast Inference from Transformers via Speculative Decoding,”
+ICML, pp. 19274-19286, 2023. https://arxiv.org/abs/2211.17192
+[9] T. Li et al., “EAGLE: Speculative Sampling Requires Rethinking Feature Uncertainty,”
+ICML, pp. 28935-28948, 2024. https://arxiv.org/abs/2401.15077
+[10] E. Frantar et al., “GPTQ: Accurate Post-Training Quantization for Generative Pretrained Transformers,” ICLR, 2023. https://arxiv.org/abs/2210.17323
+[11] S. Ashkboos et al., “QuaRot: Outlier-Free 4-bit Inference in Rotated LLMs,” NeurIPS,
+pp.100213-100240, 2024. https://arxiv.org/abs/2404.00456
+[12] Z. Liu et al., “SpinQuant: LLM Quantization with Learned Rotations,” ICLR, 2025.
+https://arxiv.org/abs/2405.16406
+[13] X. Huang et al., “RoLoRA: Fine-tuning Rotated Outlier-free LLMs for Effective WeightActivation Quantization,” Empirical Methods in Natural Language Proc., pp. 7563-7576,
+2024. https://doi.org/10.18653/v1/2024.ﬁndings-emnlp.444
+[14] T. Liu et al., “PEARL: Parallel Speculative Decoding with Adaptive Draft Length,”
+ICLR, 2025. https://arxiv.org/pdf/2408.11850
+[15] N. Sloane, “A Library of Hadamard Matrices,” 2024. http://neilsloane.com/hadamard/
+[16] V. B. Mart et al., “GPTVQ: The Blessing of Dimensionality for LLM Quantization,”
+arXiv: 2402.15319, 2024. https://arxiv.org/abs/2402.15319
+[17] Y. Liu et al., “VPTQ: Extreme Low-bit Vector Post-Training Quantization for Large
+Language Models,” ACL, pp. 8181-8196, 2024.
+https://doi.org/10.18653/v1/2024.emnlp-main.467
+[18] S. Li et al., “MVQ: Towards Efﬁcient DNN Compression and Acceleration with Masked
+Vector Quantization,” ACM ASPLOS, pp. 731-745, 2025. https://arxiv.org/abs/2412.10261
+[19] F. Gong et al., “MaskLLM: Learnable Semi-Structured Sparsity for Large Language
+Models,” NeurIPS, pp.7736-7758, 2024. https://arxiv.org/abs/2409.17481
+[20] P. Dong et al., “A 28nm 0.22μJ/Token Memory-Compute-Intensity-Aware CNNTransformer Accelerator with Hybrid-Attention-Based Layer-Fusion and Cascaded Pruning
+for Semantic-Segmentation,” ISSCC, pp. 408-409, 2025.
+https://doi.org/10.1109/ISSCC49661.2025.10904499
+[21] M. Gao et al., “Tetris: Scalable and Efﬁcient Neural Network Acceleration with 3D
+Memory,” ACM ASPLOS, pp. 751-764, 2017. https://doi.org/10.1145/3093337.3037702
+
+31
+
+Figure 31.1.1: Challenges raised by target and draft large language model (LLM) in Figure 31.1.2: Overall architecture and three main features of the LLM accelerator with
+bumping-based ReRAM die on logic wafer face-to-face stacking technology.
+speculative decoding (SD) and proposed solutions.
+Authorized licensed use limited to: Hong Kong University of Science and Technology. Downloaded on May 10,2026 at 06:49:26 UTC from IEEE Xplore. Restrictions apply.
+
+DIGEST OF TECHNICAL PAPERS • 533
+
+=== page 3 ===
+ISSCC 2026 / SESSION 31 / AI ACCELERATORS / 31.1
+
+Figure 31.1.3: Local rotation unit (LRU) with proposed decomposed Fast Walsh- Figure 31.1.4: ReRAM-stacked processing-near-memory (RS-PNM) architecture with
+blockwise vector quantization (BVQ) to avoid draft LLM external memory access (EMA).
+Hadamard Transform (FWHT) for outlier-free low-bit target LLM quantization.
+
+Figure 31.1.5: Adaptive parallel speculative decoding (APSD) with workload-decoupled
+out-of-order scheduler (WDOS) to achieve intra-chip parallel draft-and-verify with high Figure 31.1.6: Measurement results and comparison with state-of-the-art LLM
+accelerators.
+resource utilization.
+
+Figure 31.1.7: Die photos, speciﬁcations, 4-chip system, SEM/TEM images of the
+ReRAM-on-logic stacking interface/ReRAM chip, and ReRAM resistance distribution
+curve.
+Authorized licensed use limited to: Hong Kong University of Science and Technology. Downloaded on May 10,2026 at 06:49:26 UTC from IEEE Xplore. Restrictions apply.
+
+• 2026 IEEE International Solid-State Circuits Conference
+
+979-8-3315-8936-3/26/$31.00 ©2026 IEEE

@@ -73,3 +73,9 @@ with open(os.path.join(ROOT, '_data', 'papers.js'), 'w') as f:
     json.dump(lib, f, ensure_ascii=False)
     f.write(';\n')
 print(f'{len(lib["papers"])} papers, {have} with local PDFs, {len(missing)} missing -> _data/missing_pdfs.md')
+
+# persist derived fields (pdf path, priority) and regenerate the AI-agent index
+with open(os.path.join(ROOT, '_data', 'library.json'), 'w') as f:
+    json.dump(lib, f, ensure_ascii=False, indent=1)
+import subprocess, sys
+subprocess.run([sys.executable, os.path.join(ROOT, '_tools', 'build_agent_index.py')])

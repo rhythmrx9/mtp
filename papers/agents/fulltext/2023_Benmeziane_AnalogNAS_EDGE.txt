@@ -1,0 +1,1254 @@
+# AnalogNAS: A Neural Network Design Framework for Accurate Inference with Analog In-Memory Computing
+# id: W4386352784 | key: 2023_Benmeziane_AnalogNAS_EDGE | EDGE 2023 | card: ../cards/2023_Benmeziane_AnalogNAS_EDGE.md
+
+
+=== page 1 ===
+AnalogNAS: A Neural Network Design Framework
+for Accurate Inference with Analog In-Memory
+Computing
+Hadjer Benmeziane∗ , Corey Lammie† , Irem Boybat† , Malte Rasch‡ ,Manuel Le Gallo† , Hsinyu Tsai§ ,
+Ramachandran Muralidhar‡ , Smail Niar∗ , Ouarnoughi Hamza∗ , Vijay Narayanan‡ ,
+Abu Sebastian† and Kaoutar El Maghraoui‡ ,
+
+arXiv:2305.10459v1 [cs.AR] 17 May 2023
+
+∗ Univ. Polytechnique Hauts-de-France, CNRS, UMR 8201 - LAMIH, F-59313 Valenciennes, France
+† IBM Research Europe, 8803 Rüschlikon, Switzerland
+‡ IBM T. J. Watson Research Center, Yorktown Heights, NY 10598, USA
+§ IBM Research Almaden, 650 Harry Road, San Jose, CA USA
+
+DNNs are becoming more memory and compute intensive,
+edge AI deployments on resource-constrained devices pose
+significant challenges. These challenges have driven the need
+for specialized hardware accelerators for on-device Machine
+Learning (ML) and a plethora of tools and solutions targeting
+the development and deployment of power-efficient edge AI
+solutions. One such promising technology for edge hardware
+accelerators is analog-based IMC, which is herein referred to
+as analog IMC.
+Analog IMC [1] can provide radical improvements in
+performance and power efficiency, by leveraging the physical
+properties of memory devices to perform computation and
+storage at the same physical location. Many types of memory
+devices, including Flash memory, PCM, and Resistive Random
+Access Memory (RRAM), can be used for IMC [2]. Most
+notably, analog IMC can be used to perform Matrix-Vector
+Mutliplication (MVM) operations in O(1) time complexity [3],
+which is the most dominant operation used for DNN acceleration. In this novel approach, the weights of linear, convolutional,
+and recurrent DNN layers are mapped to crossbar arrays (tiles)
+of Non-Volatile Memory (NVM) elements. By exploiting basic
+Kirchhoff’s circuit laws, MVMs can be performed by encoding
+inputs as Word-Line (WL) voltages and weights as device
+I. I NTRODUCTION
+conductances. For most computations, this removes the need
+ITH the growing demands of real-time DL workloads, to pass data back and forth between Central Processing Units
+today’s conventional cloud-based AI deployment ap- (CPUs) and memory. This back and forth data movement is
+proaches do not meet the ever-increasing bandwidth, real- inherent in traditional digital computing architectures, and is
+time, and low-latency requirements. Edge computing brings often referred to as the von Neumann bottleneck. Because there
+storage and local computations closer to the data sources is greatly reduced movement of data, tasks can be performed
+produced by the sheer amount of Internet of Things (IoT) in a fraction of the time, and with much less energy.
+objects, without overloading network and cloud resources. As
+NVM crossbar arrays and analog circuits, however, have inherent non-idealities, such as noise, temporal conductance drift,
+and non-linear errors, which can lead to imprecision and noisy
+© 2023 IEEE. Personal use of this material is permitted. Permission from
+IEEE must be obtained for all other uses, in any current or future media, computation [4]. These effects need to be properly quantified
+including reprinting/republishing this material for advertising or promotional
+and mitigated to ensure the high accuracy of DNN models.
+purposes, creating new collective works, for resale or redistribution to servers
+In addition to the hardware constraints that are prevalent in
+or lists, or reuse of any copyrighted component of this work in other works.
+1 https://github.com/IBM/analog-nas
+edge devices, there is the added complexity of designing DNN
+Abstract—The advancement of Deep Learning (DL) is driven
+by efficient Deep Neural Network (DNN) design and new hardware accelerators. Current DNN design is primarily tailored
+for general-purpose use and deployment on commercially viable
+platforms. Inference at the edge requires low latency, compact
+and power-efficient models, and must be cost-effective. Digital
+processors based on typical von Neumann architectures are not
+conducive to edge AI given the large amounts of required data
+movement in and out of memory. Conversely, analog/mixedsignal in-memory computing hardware accelerators can easily
+transcend the memory wall of von Neuman architectures when
+accelerating inference workloads. They offer increased areaand power efficiency, which are paramount in edge resourceconstrained environments. In this paper, we propose AnalogNAS,
+a framework for automated DNN design targeting deployment
+on analog In-Memory Computing (IMC) inference accelerators.
+We conduct extensive hardware simulations to demonstrate the
+performance of AnalogNAS on State-Of-The-Art (SOTA) models
+in terms of accuracy and deployment efficiency on various Tiny
+Machine Learning (TinyML) tasks. We also present experimental
+results that show AnalogNAS models achieving higher accuracy
+than SOTA models when implemented on a 64-core IMC chip
+based on Phase Change Memory (PCM). The AnalogNAS search
+code is released1 .
+Index Terms—Analog AI, Neural Architecture Search, Optimization, Edge AI, In-memory Computing
+
+W
+
+=== page 2 ===
+We design and construct a search space for analog
+IMC, which contains ResNet-like architectures, including
+ResNext [8] and Wide-ResNet [9], with blocks of varying
+widths and depths;
+• We train a collection of networks using Hardware-Aware
+(HWA) training for image classification, Visual Wake
+Words (VWW), and Keyword Spotting (KWS) tasks.
+Using these networks, we build a surrogate model to rank
+the architectures during the search and predict robustness
+to conductance drift;
+• We propose a global search strategy that uses evolutionary
+search to explore the search space and efficiently finds
+the right architecture under different constraints, including
+the number of network parameters and analog tiles;
+• We conduct comprehensive experiments to empirically
+demonstrate that AnalogNAS can be efficiently utilized
+Fig. 1. The effect of PCM conductance drift after one day on standard
+CNN architectures and one architecture (AnalogNAS_T500) obtained using
+to carry out architecture search for various edge tiny
+HW-NAS, evaluated using CIFAR-10. FP refers to the original network
+applications, and investigate what attributes of networks
+accuracy, and 1-day to the simulated analog network accuracy after 1-day
+make them ideal for implementation using analog AI;
+device drift.
+• We validate a subset of networks on hardware using a
+64-core IMC chip based on PCM.
+architectures which are optimized for the edge on a variety of The rest of the paper is structured as follows. In Section II,
+hardware platforms. This requires hardware-software co-design we present related work. In Section III, relevant notations
+approaches to tackle this complexity, as manually-designed and terminology are introduced. In Section IV, the search
+architectures are often tailored for specific hardware platforms. space and surrogate model are presented. In Section V, the
+For instance, MobileNet [5] uses a depth-wise separable search strategy is presented. In Section VI, the methodology
+convolution that enhances CPU performance but is inefficient for all experiments is discussed. The simulation results are
+for Graphics Processing Unit (GPU) parallelization [6]. These presented in Section VI-B, along with the hardware validation
+are bespoke solutions that are often hard to implement and and performance estimation in Section VII. The results are
+generalize to other platforms.
+discussed in Section VIII. Section IX concludes the paper.
+HW-NAS [7] is a promising approach that seeks to auII. R ELATED W ORK
+tomatically identify efficient DNN architectures for a target
+hardware platform. In contrast to traditional Neural Architecture A. NAS for TinyML
+Search (NAS) approaches that focus on searching for the most
+HW-NAS has been successfully applied to a variety of edge
+accurate architectures, HW-NAS searches for highly accurate hardware platforms [7], [10] used to deploy networks for
+models while optimizing hardware-related metrics. Existing TinyMLPerf tasks [11] such as image classification, VWW,
+HW-NAS strategies cannot be readily used with analog IMC KWS, and anomaly detection. MicroNets [12] leverages NAS
+processors without significant modification for three reasons: (i) for DL model deployment on micro-controllers and other
+their search space contains operations and blocks that are not embedded systems. It utilizes a differentiable search space [13]
+suitable for analog IMC, (ii) lack of a benchmark of hardware- to find efficient architectures for different TinyMLPerf tasks.
+aware trained architectures, and (iii) their search strategy does For each task, the search space is an extension of current
+not include noise injection and temporal drift on weights.
+SOTA architectures. µ-nas [14] includes memory peak usage
+To address these challenges, we propose AnalogNAS, a novel and a number of other parameters as constraints. Its search
+HW-NAS strategy to design dedicated DNN architectures for strategy combines aging evolution and Bayesian optimization
+efficient deployment on edge-based analog IMC inference to estimate the objectives and explore a granular search space
+accelerators. This approach considers the inherent characteris- efficiently. It constructs its search space from a standard CNN
+tics of analog IMC hardware in the search space and search and modifies the operators’ hyper-parameters and a number of
+strategy. Fig. 1 depicts the necessity of our approach. As can layers.
+be seen, when traditional DNN architectures are deployed on
+analog IMC hardware, non-idealities, such as conductance drift, B. NAS for Mixed-Signal IMC Accelerators
+drastically reduce network performance. Networks designed
+Many works [15]–[18] target IMC accelerators using
+by AnalogNAS are extremely robust to these non-idealities and HW-NAS. FLASH [15] uses a small search space inspired
+have much fewer parameters compared to equivalently-robust by DenseNet [19] and searches for the number of skip
+traditional networks. Consequently, they have reduced resource connections that efficiently satisfy the trade-off between
+utilization.
+accuracy, latency, energy consumption, and chip area. Its
+Our specific contributions can be summarized as follows:
+surrogate model uses linear regression and the number of
+•
+
+=== page 3 ===
+skip connections to predict model accuracy. NAS4RRAM [17] as the conductance drift. This poses challenges for maintaining
+uses HW-NAS to find an efficient DNN for a specific RRAM- synaptic weights reliably [2]. Conductance drift is most
+based accelerator. It uses an evolutionary algorithm, trains each commonly modelled using Eq. (1), as follows:
+sampled architecture without HWA training, and evaluates each
+G(t) = G(t0 )(t/t0 )−ν ,
+(1)
+network on a specific hardware instance. NACIM [16] uses coexploration strategies to find the most efficient architecture where G(t0 ) is the conductance at time t0 and ν is the drift
+and the associated hardware platform. For each sampled exponent. In practice, conductance drift is highly stochastic
+architecture, networks are trained considering noise variations. because ν depends on the programmed conductance state and
+This approach is limited by using a small search space due varies across devices. Consequently, when reporting the network
+to the high time complexity of training. UAE [18] uses a accuracy at a given time instance (after device programming),
+Monte-Carlo simulation-based experimental flow to measure it is computed across multiple experiment instances (trials) to
+the device uncertainty induced to a handful of DNNs. Similar to properly capture the amount of accuracy variations.
+NACIM [16], evaluation is performed using HWA training with
+noise injection. AnalogNet [20] extends the work of Micronet C. HWA-training and analog hardware accuracy evaluation
+by converting their final models to analog-friendly models, simulation
+replacing depthwise convolutions with standard convolutions
+To simulate training and inference on analog IMC acand tuning hyperparameters.
+celerators, the IBM Analog Hardware Acceleration Kit
+Compared to the above-mentioned SOTA HW-NAS strate- (AIHWK IT) [21] is used. The AIHWK IT is an open-source
+gies, our AnalogNAS is better tailored to analog IMC hardware Python toolkit for exploring and using the capabilities of infor two reasons: (i) Our search space is much larger and memory computing devices in the context of artificial intellimore representative, featuring resnet-like connections. This gence and has been used for HWA training of standard DNNs
+enables us to answer the key question of what architectural with hardware-calibrated device noise and drift models [22].
+characteristics are suitable for analog IMC which cannot be
+addressed with small search spaces. (ii) We consider the D. Hardware-aware Neural Architecture Search (HW-NAS)
+inherent characteristics of analog IMC hardware directly in the
+HW-NAS refers to the task of automatically finding the
+objectives and constraints of our search strategy in addition to most efficient DNN for a specific dataset and target hardware
+noise injection during the HWA training as used by existing platform. HW-NAS approaches often employ black-box optiapproaches.
+mization methods such as evolutionary algorithms [23], reinforcement learning [24], [25], and Bayesian optimization [26],
+III. P RELIMINARIES
+[27]. The optimization problem is either cast as a constrained
+A. Analog IMC Accelerator Mechanisms
+or multi-objective optimization [7]. In AnalogNAS, we chose
+Analog IMC accelerators are capable of performing MVM constrained optimization over multi-objective optimization for
+operations YT = XT W using the laws of physics, where W several reasons. First, constrained optimization is more comis an M × N matrix, X is a M × 1 vector, and Y is a N × 1 putationally efficient than multi-objective optimization, which
+vector. When arranged in a crossbar configuration, M × N , is important in the context of HW-NAS, to allow searching a
+NVM devices can be used to compute MVM operations. This large search space in a practical time frames. Multi-objective
+is done by encoding elements of X as WL voltages, denoted optimization is computationally expensive and can result in a
+using V, and elements of W as conductances of the unit cells,
+denoted using G. Negative conductance states cannot be directly encoded/represented using NVM devices. Consequently,
+differential weight mapping schemes are commonly employed,
+where either positive weights, i.e., W+ = max(W, 0), and
+negative weights, i.e., W− = − min(W, 0), are encoded
+within unit cells, using alternate columns, or on different
+tiles [3]. The analog computation, i.e., I = VG is performed,
+where P
+the current flow to the end of the N -th column is
+M
+IN = i=0 Gi,N Vi . Typically, Digital-to-Analog Converters
+(DACs) are required to encode WL voltages and Analog-toDigital Converters (ADCs) are required to read the output
+currents of each column. The employed analog IMC tile, its
+weight mapping scheme, and computation mechanism are
+depicted in Fig. 2.
+B. Temporal Drift of Non-Volatile Memory Devices
+Many types of NVM devices, most prominantly, PCM,
+exhibit temporal evolution of the conductance values referred to
+
+Fig. 2. Employed analog IMC tile and weight mapping scheme.
+
+=== page 4 ===
+Conv out_channel0, kernel_size0
+
+Main Block
+Residual Block
+WF
+Conv 3x3
+
+A
+Conv 3x3
+
+Conv 1x1
+
+Conv 1x1
+
+Conv 3x3
+
+B
+
+Conv 3x3
+
+Conv 1x1
+
+Conv 1x1
+
++
+
+#NB
+
+#R #M
+
+Avg Pooling
+FC
+Architecture Representation
+OC0 KS0 M
+
+R
+
+main
+blocks
+kernel_size0
+out_channel0
+
+R
+
+R NB NB NB CT CT CT WF WF WF
+
+residual
+blocks
+
+number of
+branches
+
+conv type widening
+factor
+
+Fig. 3. Resnet-like macro architecture.
+
+a series of M distinct main blocks. Each main block contains
+R residual blocks. The residual blocks use skip connections
+with or without downsampling. Downsampling is performed
+using 1x1 convolution layers when required, i.e., when the
+input size does not match the output size. The residual block
+can have B branches. Each branch uses a convolution block.
+We used different types of convolution blocks to allow the
+search space to contain all standard architectures such as
+Resnets [30], ResNext [8], and Wide Resnets [9]. The standard
+convolution blocks used in Resnets, commonly referred to
+as BottleNeckBlock and BasicBlock, are denoted as A and
+B respectively. We include variants of A and B in which
+we inverse the order of the ReLU and Batch normalization
+operations. The resulting blocks are denoted as C and D.
+Table I summarizes the searchable hyper-parameters and their
+respective ranges. The widening factor scales the width of the
+residual block. We sample architectures with different depths
+by changing the number of main and residual blocks. The total
+size of the search space is approximately 73B architectures.
+The larger architecture would contain 240 convolutions and
+start from an output channel of 128 multiplying that by 4 for
+every 16 blocks.
+B. Analog-accuracy Surrogate Model
+
+1) Evaluation Criteria: To efficiently explore the search
+space, a search strategy requires evaluating the objectives of
+large number of non-dominated solutions that can be difficult each sampled architecture. Training the sampled architectures
+to interpret. Secondly, by using constrained optimization, we is very time-consuming; especially when HWA retraining is
+can explicitly incorporate the specific constraints of the analog performed, as noise injection and I/O quantization modeling
+hardware in our search strategy. This enables us to find DNN greatly increases the computational complexity. Consequently,
+architectures that are optimized for the unique requirements we build a surrogate model capable of estimating the objecand characteristics of analog IMC hardware, rather than simply tives of each sampled architecture in IMC devices. To find
+optimizing for multiple objectives.
+architectures that maximize accuracy, stability, and resilience
+against IMC noise and drift characteristics, we have identified
+IV. A NALOG -NAS
+the following three objectives.
+The objective of AnalogNAS is to find an efficient network
+a) The 1-day accuracy: is the primary objective that most
+architecture under different analog IMC hardware constraints.
+NAS
+algorithms aim to maximize. It measures the performance
+AnalogNAS comprises three main components: (i) a resnetof
+an
+architecture
+on a given dataset. When weights are encoded
+like search space, (ii) an analog-accuracy surrogate model,
+using
+IMC
+devices,
+the accuracy of the architecture can drop
+and (iii) an evolutionary-based search strategy. We detail each
+over
+time
+due
+to
+conductance
+drift. Therefore, we have selected
+component in the following subsections.
+the 1-day accuracy as a metric to measure the architecture’s
+A. Resnet-like Search Space
+performance.
+b) The Accuracy Variation over One Month (AVM): is
+Resnet-like architectures have inspired many manually
+the
+difference
+between the 1-month and 1-sec accuracy. This
+designed SOTA DL architectures, including Wide ResNet [9]
+objective
+is
+essential
+to measure the robustness over a fixed
+and EfficientNet [28]. Their block-wise architecture offers
+time
+duration.
+A
+30-day
+period allows for a reasonable trade-off
+a flexible and searchable macro-architecture for NAS [29].
+between
+capturing
+meaningful
+accuracy changes and avoiding
+Resnet-like architectures can be implemented efficiently using
+short-term
+noise
+and
+fluctuations
+that may not reflect long-term
+IMC processors, as they are comprised of a large number
+trends.
+of MVM and element-wise operations. Additionally, due to
+c) The 1-day accuracy standard deviation: measures the
+the highly parallel nature of IMC, Resnet architectures can
+get free processing of additional input/output channels. This variation of the architecture’s performance across experiments,
+makes Resnet-like architectures highly amenable to analog as discussed in Section III-B. A lower standard deviation
+indicates that the architecture produces consistent results
+implementation.
+Fig. 3 depicts the macro-architecture used to construct all on hardware deployments, which is essential for real-world
+architectures in our search space. The architecture consists of applications.
+
+=== page 5 ===
+TABLE I
+S EARCHABLE HYPER - PARAMETERS AND THEIR RESPECTIVE RANGES .
+HyperDefinition
+parameter
+
+Range
+
+OC0
+KS0
+M
+R*
+
+Discrete Uniform [8, 128]
+Discrete Uniform [3, 7]
+Discrete Uniform [1, 5]
+Discrete Uniform [1, 16]
+
+B*
+CT*
+WF*
+
+First layer’s output channel
+First layer’s kernel size
+Number of main blocks
+Number of residual block per
+main block
+Number of branches per
+main block
+Convolution block type per
+main block
+Widening factor per main
+block
+
+Discrete Uniform [1, 12]
+Uniform Choice [A; B; C; D]
+Uniform [1, 4]
+
+*The hyper-parameter is repeated for each main block. ConvBlock refers to
+different Conv-Relu-BN blocks.
+
+To build the surrogate model, we follow two steps: Dataset
+creation and Model training:
+2) Dataset Creation: The surrogate model will predict the
+rank based on the 1-day accuracy and estimates the AVM and
+1-day accuracy standard deviation using the Mean Squared
+Error (MSE). Since the search space is large, care has to be
+taken when sampling the dataset of architectures that will be
+used to train the surrogate model.
+The architectures of the search space are sampled using two
+methods: (i) Latin Hypercube Sampling (LHS) [31] and (ii)
+NAS with full training. A more detailed description of the
+AnalogNAS algorithm is presented in Section V. We use LHS
+to sample architectures distributed evenly over the search space.
+This ensures good overall coverage of different architectures
+and their accuracies. NAS with full training is performed
+using an evolutionary algorithm to collect high-performance
+architectures. This ensures good exploitation when reaching
+well-performing regions. In Fig. 4, we present a visualization of
+the search space coverage, which does not show any clustering
+of similarly performing architectures at the edge of the main
+cloud of points. Thus, it is not evident that architectures with
+similar performance are located close to each other in the
+search space. This suggests that traditional search methods that
+
+Fig. 5. Surrogate models comparison.
+
+rely on local optimization may not be effective in finding the
+best-performing architectures. Instead, population-based search
+strategies, which explore a diverse set of architectures, could
+be more effective in finding better-performing architectures.
+Our search strategy extracted 400 test points, and we found
+that architectures were distributed throughout the main cloud,
+indicating that our dataset covers a diverse portion of the search
+space, despite the limited size of only 1,000.
+Each sampled architecture is trained using different levels
+of weight noise and HWA training hyper-parameters using the
+AIHWK IT [21]. Specifically, we modify the standard deviation
+of the added weight noise between [0.1, 5.0] in increments
+of 0.1. The tile size was assumed to be symmetric and varied
+in [256, 512], representing 256-by-256 and 512-by-512 arrays
+respectively. Training with different configurations allowed us
+to generalize the use of the surrogate model across a range of
+IMC hardware configurations, and to increase the size of the
+constructed dataset.
+3) Model training: To train the surrogate model, we used a
+hinge pair-wise ranking loss [32] with margin m = 0.1. The
+hinge loss, defined in Eq. (2), allows the model to learn the
+relative ranking order of architectures rather than the absolute
+accuracy values [32], [33].
+
+L({aj , yj }j=1,...,N ) =
+
+N
+X
+
+X
+
+max[0, m−P (ai )−P (aj )]
+
+j=1 {i,j|yi >yj }
+
+Fig. 4. t-Distributed Stochastic Neighbor Embedding (t-SNE) visualization of
+the sampled architectures for CIFAR-10.
+
+(2)
+aj refers to architectures indexed j, and yj to its corresponding
+1-day accuracy. P (a) is the predicted score of architecture a.
+P (a) during training, the output score is trained to be correlated
+with the actual ranks of the architectures. Several algorithms
+were tested. After an empirical comparison, we adopted
+Kendall’s Tau ranking correlation [34] as the direct criterion
+for evaluating ranking surrogate model performance. Fig. 5
+shows the comparison using different ML algorithms to predict
+the rankings and AVMs. Our dataset is tabular. It contains
+each architecture and its corresponding features. XGBoost
+outperforms the different surrogate models in predicting the
+architectures’ ranking order, the AVM of each architecture, and
+the 1-day standard deviation.
+
+=== page 6 ===
+Fig. 6. Overview of the AnalogNAS framework.
+
+V. S EARCH S TRATEGY
+Fig. 6 depicts the overall search framework. Given a dataset
+and a hardware configuration readable by AIHWK IT, the
+framework starts by building the surrogate model presented in
+Section IV-B. Then, we use an optimized evolutionary search
+to efficiently explore the search space using the surrogate
+model. Similar to traditional evolutionary algorithms, we use
+real number encoding. Each architecture is encoded into a
+vector, and each element of the vector contains the value of
+the hyper-parameter, as listed in Table I.
+
+Algorithm 1 AnalogNAS algorithm.
+Input: Search space: S, RPU Configuration: rpu conf ig,
+target task: task, population size: population size, AVM
+threshold: TAVM , parameter threshold: Tp , number of iterations: N , time budget
+Output: Most efficient architecture for rpu conf ig in S
+Begin
+D = sample(S, dataset size)
+HW Train(D, task)
+AVMs = compute AVM(D)
+surrogate model = XGBoost
+train(surrogate model, D, AVMs)
+repeat
+population = LHS(population size, Tp )
+AVMs, ranks = surrogate model(population)
+until AVMs > TAVM
+while i < N or time < time budget do
+top 50 = select(population, ranks)
+mutated = mutation(top
+S 50, Tp )
+population = top 50
+mutated
+AVMs, ranks = surrogate model(population)
+end while
+return top1 (population, ranks)
+
+for a given analog IMC configuration and task. The algorithm
+begins by generating a dataset of neural network architectures,
+which are trained on the task and evaluated using AIHWK IT.
+A surrogate model is then created to predict the efficiency of
+new architectures. The algorithm then generates a population
+of architectures using an LHS technique and selects the topperforming architectures to be mutated and generate a new
+population. The process is repeated until a stopping criterion
+is met, such as a maximum number of iterations or a time
+A. Problem Formulation
+Given the search space S, our goal is to find an architecture budget. Finally, the most robust architecture is returned. In the
+α, that maximizes the 1-day accuracy while minimizing the following, we detail how the population initialization, fitness
+1-day standard deviation, subject to constraints on the number evaluation, and mutations are achieved.
+1) Population Initialization: The search starts by generating
+of parameters and the AVM. The number of parameters is
+an
+initial population. Using the LHS algorithm, we sample
+an important metric in IMC, because it directly impacts the
+the
+population uniformly from the search space. LHS ensures
+amount of on-chip memory required to store the weights of a
+that
+the initial population contains architectures with different
+DNN. Eq. (3) formally describes the optimization problem as
+architectural
+features. LHS is made faster with parallelization
+follows:
+by dividing the sampling into multiple independent subsets,
+ACC(α)
+which can be generated in parallel using multiple threads.
+max
+α∈S
+σ(α)
+(3)
+2) Fitness Evaluation: We evaluate the population using the
+s.t
+ψ(α) < Tp ,
+AVM(α) < TAVM
+aforementioned analog-accuracy surrogate model. In addition
+ACC refers to the 1-day accuracy objective, σ denotes the to the rankings, the surrogate model predicts the AVM of
+1-day accuracy’s standard deviation, and ψ is the number each architecture. As previously described, the AVM is used
+of parameters. Tp and TAVM are user-defined thresholds that to gauge the robustness of a given network. If the AVM is
+correspond to the maximum number of parameters and AVM, below a defined threshold, TAVM , the architecture is replaced
+by a randomly sampled architecture. The new architecture is
+respectively.
+constrained to be sampled from the same hypercube dimension
+B. Search Algorithm
+as the previous one. This ensures efficient exploration.
+Our evolutionary search algorithm, i.e., AnalogNAS, is for3) Selection and Mutation: We select the top 50% architecmally defined using Algorithm 1. AnalogNAS is an algorithm tures from the population using the predicted rankings. These
+to find the most accurate and robust neural network architecture architectures are mutated. The mutation functions are classified
+
+=== page 7 ===
+as follows:
+c) Visual Wake Words (VWW) training: We first trained
+a) Depth-related mutations: modify the depth of the the network architectures using the VWW dataset [36], which
+architectures. Mutations include adding a main block, by contains 82,783 train and 40,504 test images. Images are labeled
+increasing or decreasing M or a residual block R, or modifying 1 when a person is detected, and 0 when no person is present.
+the type of convolution block, i.e., {A, B, C, D}, for each main The image pre-processing pipeline includeded horizontal and
+block.
+vertical flipping, scale augmentation [37], and random Red
+b) Width-related mutations: modify the width of the Green Blue (RGB) color shift. To train the architectures, we
+architectures. Mutations include modifying the widening factor used the RMSProp optimizer [38] with a momentum of 0.9,
+W of a main block or adding or removing a branch B, or a learning rate of 0.01, a batch normalization momentum of
+modifying the initial output channel size of the first convolution, 0.99, and a l2 weight decay of 1e-5.
+OC.
+d) Keyword Spotting (KWS) training: We first trained the
+c) Other mutations: modify the kernel size of the first network architectures using the KWS dataset [39], which conconvolution, KS, and/or add skip connections,denoted using tains 1-second long incoming audio clips. These are classified
+ST .
+into one of twelve keyword classes, including ”silence” and
+Depth- and width-related mutations are applied with the ”unknown” keywords. The dataset contains 85,511 training,
+same probability of 80%. The other mutations are applied with 10,102 validation, and 4,890 test samples. The input was
+a 50% probability. In each class, the same probability is given transformed to 49 × 10 × 1 features from the Mel-frequency
+to each mutation. The top 50% architectures in addition to cepstral coefficients [40]. The data pre-processing pipeline
+the mutated architectures constitute the new population. For included applying background noise and random timing jitter.
+the remaining iterations, we verify the ranking correlation To train the architectures, we used the Adam optimizer [41]
+of the surrogate model. If the surrogate model’s ranking with a decay of 0.9, a learning rate of 3e-05, and a linear
+correlation is degraded, we fine-tune the surrogate model with learning rate scheduler with a warm-up ratio of 0.1.
+the population’s architectures. The degradation is computed
+2) Search Algorithm: The search algorithm was run five
+every 100 iterations. The surrogate model is tested on the times to compute the variance. The evolutionary search was
+population architectures after training them. It is fine-tuned if executed with a population size of 200. If not explicitly
+Kendall’s tau correlation drops below 0.9.
+mentioned, the AVM threshold was set to 10%. The width and
+depth mutation probability was set to 0.8. The other mutations’
+VI. E XPERIMENTS
+This section describes the experiments used to evaluate probability was set to 0.5. The total number of iterations was
+AnalogNAS on three tasks: CIFAR-10 image classification, 200. After the search, the obtained architecture for each task
+VWW, and KWS. The AIHWK IT was used to perform was compared to SOTA baselines for comparison.
+hardware simulations.
+B. Results
+A. Experimental Setup
+The final architecture compositions for the three tasks are
+1) Training Details: We detail the hyper-parameters used
+to train the surrogate model and different architectures on listed in Table II. In addition, figure 10 highlights the architectural differences between AnalogNAS T500 and resnet32.
+CIFAR-10, VWW, and KWS tasks.
+a) Surrogate model training: We trained a surrogate We modified Tp to find smaller architectures. To determine
+model and dataset of HWA trained DNN architctures for each the optimal architecture for different parameter thresholds, we
+task. The sizes of the datasets were 1,200, 600, and 1,500, use TX, where X represents the threshold Tp in K units
+respectively. An additional 500 architectures were collected (e.g., T100 refers to the architecture with a threshold of
+during the search trials for validation. All architectures were 100K parameters). When searching for T200 and T100, the
+first trained without noise injection (i.e., using vanilla training probability of increasing the widening factor or depth to their
+routines), and then converted to AIHWK IT models for HWA highest values, was lessened to 0.2.
+In Fig. 7, the simulated hardware comparison of the three
+retraining. The surrogate model architecture used was XGBoost.
+For VWW and KWS, the surrogate model was fine-tuned from tasks is depicted. Our models outperform SOTA architectures
+with respect to both accuracy and resilience to drift. On
+the image classification XGBoost model.
+b) Image classification training: We first trained the CIFAR-10, after training the surrogate model, the search took
+network architectures using the CIFAR-10 dataset [35], which 17 minutes to run. We categorize the results based on the
+contains 50,000 training and 10,000 test samples, evenly number of parameters threshold into two distinct groups. We
+distributed across 10 classes. We augmented the training images consider edge models with a number of parameters below 1M
+with random crops and cutouts only. For training, we used and above 400k. Below 400K, architectures are suitable for
+Stochastic Gradient Descent (SGD) with a learning rate of TinyML deployment. The final architecture, T500, is smaller
+0.05 and a momentum of 0.9 with a weight decay of 5e-4. The than Resnet32, and achieved +1.86% better accuracy and
+learning rate was adjusted using a cosine annealing learning a drop of 1.8% after a month of inference, compared to
+rate scheduler with a starting value of 0.05 and a maximum 5.04%. This model is ∼ 86× smaller than Wide Resnet [9],
+number of 400 iterations.
+which has 36.5M parameters. Our smallest model, T100,
+
+=== page 8 ===
+Fig. 7. Simulated hardware comparison results on three benchmarks: (a,b) CIFAR-10, (c)VWW, and (d) KWS. The size of the marker represents the size (i.e.,
+the number of parameters) of each model. The shaded area corresponds to the standard deviation at that time.
+
+TABLE II
+F INAL A RCHITECTURES FOR CIFAR-10, VWW, AND KWS. OTHER
+NETWORKS FOR VWW AND KWS ARE NOT LISTED , AS THEY CANNOT
+EASILY BE REPRESENTED USING OUR MACRO - ARCHITECTURE .
+Network
+
+OC0
+
+KS0
+
+Macro-Architecture Parameter
+M
+R*
+B*
+CT*
+
+WF*
+
+CIFAR-10
+Resnet32
+AnalogNAS T100
+AnalogNAS T300
+AnalogNAS T500
+AnalogNAS T1M
+
+64
+32
+32
+64
+32
+
+7
+3
+3
+5
+5
+
+3
+1
+1
+1
+2
+
+AnalogNAS T200
+AnalogNAS T400
+
+24
+68
+
+3
+3
+
+3
+2
+
+(5, 5, 5)
+(2, )
+(3, 3)
+(3, )
+(3, 3)
+
+(1, 1, 1)
+(1,)
+(1, 1)
+(3, )
+(2, 2)
+
+(B, B, B)
+(C, )
+(A, B)
+(A, )
+(A, A)
+
+(1, 1, 1)
+(2, )
+(2, 1)
+(2, )
+(3, 3)
+
+(1, 2, 1)
+(2, 1)
+
+(B, A, A)
+(C, C)
+
+(2, 2, 2)
+(3, 2)
+
+C. Comparison with HW-NAS
+
+VWW
+(2, 2, 2)
+(3, 5)
+
+use hybrid networks containing recurrent cells and convolutions.
+The recurrent part of the model ensures high robustness to
+noise. While current models are already robust with an average
+accuracy drop of 4.72%, our model outperforms tiny SOTA
+models with 96.8% and an accuracy drop of 2.3% after a month
+of drift. Critically, our AnalogNAS models exhibit greater
+consistency across experiment trials, with an average standard
+deviation of 0.17 over multiple drift times as opposed to 0.36
+for SOTA models.
+
+In accordance with commonly accepted NAS methodologies,
+we
+conducted a comparative analysis of our search approach
+KWS
+with
+Random Search. Results, presented in Fig. 8, were
+AnalogNAS T200
+80
+1
+1
+(1, )
+(2, )
+(C, )
+(4, )
+AnalogNAS T400
+68
+1
+2
+(2, 1)
+(1, 2)
+(B, B)
+(3, 3)
+obtained across five experiment instances. Our findings indicate
+that Random Search was unable to match the 1-day accuracy
+*As depicted in Fig. 3, thse macro-architecture parameters comprise
+levels of our final models, even after conducting experiments
+multiple instances.
+for a duration of four hours and using the same surrogate
+was 1.23× bigger than Resnet-V1, the SOTA model bench- model. We further conducted an ablation study to evaluate
+marked by MLPerf [11]. Despite not containing any depth-wise the effectiveness of our approach by analyzing the impact
+convolutions, Resnet V1 is extremely small, with only 70k of the LHS algorithm and surrogate model. The use of a
+parameters. Our model offers a +7.98% accuracy increase with
+a 5.14% drop after a month of drift compared to 10.1% drop
+for Resnet V1. Besides, our largest model, AnalogNAS 1M,
+outperforms Wide Resnet with +0.86% in the 1-day accuracy
+with a drop of only 1.16% compared to 6.33%. In addition, the
+found models exhibit greater consistency across experiment
+trials, with an average standard deviation of 0.43 over multiple
+drift times as opposed to 0.97 for SOTA models.
+Similar conclusions can be made about VWW and KWS. In
+VWW, current baselines use a depth-wise separable convolution
+that incurs a high accuracy drop on analog devices. Compared
+to AnalogNet-VWW and Micronets-VWW, the current SOTA
+networks for VWW in analog and edge devices, our T200
+model has similar number of parameters (x1.23 smaller) with
+a +2.44% and +5.1% 1-day accuracy increase respectively.
+AnalogNAS was able to find more robust and consistent
+networks with an average AVM of 2.63% and a standard
+μ-nas [14]
+deviation of 0.24. MCUNet [42] and MobileNet-V1 present
+FLA SH [ 15 ]
+the highest AVM. This is due to the sole use of depth-wise
+separable convolutions.
+Fig. 8. Ablation study comparison against HW-NAS. Mean and standard
+On KWS, the baseline architectures, including DSCNN [43], deviation values are reported across five experiment instances (trials).
+
+=== page 9 ===
+TABLE III
+AVM THRESHOLD VARIATION RESULTS ON CIFAR-10.
+TAVM (%)
+1-day Accuracy
+AVM
+Search Time (min)
+
+1.0
+
+3.0
+
+5.0*
+
+88.7%
+0.85%
+34.65
+
+93.71%
+1.8%
+28.12
+
+93.71%
+1.8%
+17.65
+
+*Overall results computed with TAVM (%) = 5.0.
+
+random sampling strategy and exclusion of the surrogate model
+resulted in a significant increase in search time. The LHS
+algorithm helped in starting from a diverse initial population
+and improving exploration efficiency, while the surrogate model
+played a crucial role in ensuring practical search times.
+Besides, AnalogNAS surpasses both FLASH [15] and µ
+-nas [14] in performance and search time. FLASH search
+strategy is not adequate for large search spaces such as ours.
+As for µ-nas, although it manages to achieve acceptable results,
+its complex optimization algorithm hinders the search process,
+resulting in decreased efficiency.
+D. Search Time and Accuracy Variation over One Month (AVM)
+Threshold Trade-Off
+During the search, we culled architectures using their
+predicted AVM, i.e., any architecture with a higher AVM than
+the AVM threshold was disregarded. As listed in Table III, we
+varied this threshold to investigate the trade-off between TAVM
+and the search time. As can be seen, as TAVM is decreased,
+the delta between AVM and TAVM significantly decreases. The
+correlation between the search time and TAVM is observed to
+be non-linear.
+VII. E XPERIMENTAL H ARDWARE VALIDATION AND
+A RCHITECTURE P ERFORMANCE S IMULATIONS
+A. Experimental Hardware Validation
+An experimental hardware accuracy validation study was
+performed using a 64-core IMC chip based on PCM [44].
+Each core comprises a crossbar array of 256x256 PCM-based
+unit-cells along with a local digital processing unit [45]. This
+validation study was performed to verify whether the simulated
+network accuracy values and rankings are representative of
+those when the networks are deployed on real physical
+hardware. We deployed two networks for the CIFAR-10 image
+classification task on hardware: AnalogNAS T500 and the
+baseline ResNet32 [30] networks from Fig. 7(a).
+To implement the aforementioned models on hardware,
+after HWA training was performed, a number of steps were
+carried out. First, from the AIHWK IT, unit weights of linear
+(dense) and unrolled convolutional layers, were exported
+to a state dictionary file. This was used to map network
+parameters to corresponding network layers. Additionally, the
+computational inference graph of each network was exported.
+These files were used to generate proprietary data-flows to be
+executed in-memory. As only hardware accuracy validation
+was being performed, all other operations aside from MVMs
+were performed on a host machine connected to the chip
+
+TABLE IV
+E XPERIMENTAL HARDWARE ACCURACY VALIDATION AND SIMULATED
+POWER PERFORMANCE ON THE IMC SYSTEM IN [46].
+Architecture
+
+ResNet32
+
+AnalogNAS T500
+
+Hardware Experiments
+FP Accuracy
+Hardware accuracy*
+
+94.34%
+89.55%
+
+94.54%
+92.07%
+
+Simulated Hardware Power Performance
+Total weights
+Total tiles
+Network Depth
+Execution Time (msec)
+Inferences/s/W
+
+464,432
+43
+32
+0.434
+43,956.7
+
+416,960
+27
+17
+0.108
+54,502
+
+*The mean accuracy is reported across five experiment
+repetitions.
+
+through an Field-programmable Gate Array (FPGA). The
+measured hardware accuracy was 92.05% for T500 and 89.87%
+for Resnet32, as reported in Table IV. Hence, the T500
+network performs significantly better than Resnet32 also when
+implemented on real hardware. This further validates that our
+proposed AnalogNAS approach is able to find networks with
+similar number of parameters that are more accurate and robust
+on analog IMC hardware.
+B. Simulated Hardware Energy and Latency
+We conducted power performance simulations for AnalogNAS T500 and ResNet32 models using a 2D-mesh based
+heterogeneous analog IMC system with the simulation tool
+presented in [46]. The simulated IMC system consists of one
+analog fabric with 48 analog tiles of 512x512 size, on-chip
+digital processing units, and digital memory for activation orchestration between CNN layers. Unlike the accuracy validation
+experiments on the 64-core IMC chip, the simulated power
+performance assumes all intermediate operations to be mapped
+and executed on-chip. Our results, provided in Table IV, show
+that AnalogNAS T500 outperformed ResNet32 in terms of
+both execution time and energy efficiency.
+We believe that this power performance benefit is realized because, in analog IMC hardware, wider layers can be computed
+in parallel, leveraging the O(1) latency from analog tiles, and
+are therefore preferred over deeper layers. It is noted that both
+networks exhibit poor tile utilization and that the tile utilization
+and efficiency of these networks could be further improved by
+incorporating these metrics as explicit constraints. This is left
+to future work and is beyond the scope of AnalogNAS.
+VIII. D ISCUSSION
+During the search, we analyzed the architecture characteristics and studied which types of architectures perform the best on
+IMC inference processors. The favoured architectures combine
+robustness to noise and accuracy performance. Fig. 9 shows the
+evolution of the average depth, the average widening factor, the
+average number of branches, and the average first convolution’s
+output channel size of the search population for every 20
+iterations. The depth represents the number of convolutions.
+
+=== page 10 ===
+A. Are Wider or Deeper Networks More Robust to PCM Device
+Drift?
+
+Fig. 9. Evolution of architecture characteristics in the population during the
+search for CIFAR-10. Random individual networks are shown.
+
+From Fig. 9, it can be observed that the depth of all networks
+decreases during the search. This trend is especially seen when
+we constrain the model’s size to 100K and 500K parameters.
+During the search, the widening factor also increases, allowing
+the blocks to have wider convolutions. The number of branches
+is highly dependent on Tp . This number is, on average, between
+1 and 2. The branches are the number of parallel convolutions
+in a block disregarding the skip connection. In the literature,
+architectures such as ResNext, that support a higher number
+of branches, have a number of parameters around 30M. It is
+still interesting to get blocks with two branches, which also
+reflects an increase in the width of the network by increasing
+the number of features extracted within the same block.The
+average output channel size of the first convolution decreases
+during the search. Its final value is around the same number of
+output channels as standard architectures, i.e., between 16 and
+32. This follows the general trend of having wider convolutions
+in deeper network positions.
+B. Types Of Architectures
+
+More branches
+
+Wider convolutions
+
+BottleneckBlock vs. BasicBlock
+
+AnalogNAS T500
+Architecture
+
+Shallower and smaller network
+
+ResNet32
+Architecture
+
+Fig. 10. Architectural differences between AnalogNAS T500 and Resnet32.
+
+The architectures and parameter constraints differ for each
+task, but they all exhibit an increasing expansion ratio in the
+convolution block. This allows the convolutions to effectively
+utilize the tile and mitigate noise from unused cells in
+the crossbar.For CIFAR-10, architectures behave like Wide
+Resnet [9] while respecting the number of parameters constraint.
+For the VWW task, the architectures are deeper. The input
+resolution is 224 × 224, which requires more feature extraction
+blocks. However, they are still smaller than SOTA architectures,
+with a maximum depth of 22. As depth is essential to obtain
+high accuracy for the VWW task, no additional branches are
+added. For the KWS task, the architectures are the widest
+possible, maximizing the tile utilization for each convolutional
+layer.
+IX. C ONCLUSION
+
+A sampled architecture has a widening factor per block. To
+compute the average widening factor, we first computed the
+average widening factor per architecture by dividing the sum of
+the widening factors by the number of blocks contained in the
+architecture. Then, we calculated the average widening factor
+across all architectures. Similar computations were performed
+for the average number of branches.
+For each plot, the search was run 5 times and the mean
+is represented in each point. The plotted error corresponds
+to one standard deviation from that mean. Starting from a
+random population obtained using LHS, the population evolves
+through different width and depth-related mutations. During this
+analysis, we want to answer the following questions: (i) does
+the search favor wide or deep networks? And subsequently, are
+wider architectures more noise resilient? (ii) what architectures
+are exploited by the search for different tasks when constraining
+the number of parameters?
+
+In this paper, we propose an efficient NAS methodology
+dedicated to analog in-memory computing for TinyML tasks
+entitled AnalogNAS. The obtained models are accurate, noise
+and drift-resilient, and small enough to run on resourceconstrained devices. Experimental results demonstrate that our
+method outperforms SOTA models on analog hardware for
+three tasks of the MLPerf benchmark: image classification on
+CIFAR-10, VWW, and KWS. Our AnalogNAS T500 model
+implemented on physical hardware demonstrates > 2% higher
+accuracy experimentally on the CIFAR-10 benchmark than
+ResNet32. Calculated speed and energy efficiency estimates
+reveal a > 4× reduction in execution time, in addition
+to > 1.2× higher energy efficiency for AnalogNAS T500
+compared with ResNet32 when evaluated using a system-level
+simulator. While our paper has focused on a ResNet-like search
+space, it is important to note that our search strategy is adaptable
+and can be extended in future work to explore a broader range
+of architectures.
+
+=== page 11 ===
+ACKNOWLEDGEMENT
+We would like to thank Thanos Vasilopoulos and Julian
+Büchel from IBM Research, Zurich lab, for their help with
+the development of the hardware-software infrastructure. We
+also thank the IBM Research Analog AI team for their
+feedback. We thank the computational support from AiMOS,
+an AI supercomputer made available by the IBM Research AI
+Hardware Center and Rensselaer Polytechnic Institute’s Center
+for Computational Innovations (CCI).
+R EFERENCES
+[1] A. Sebastian, M. Le Gallo, R. Khaddam-Aljameh, and E. Eleftheriou,
+“Memory devices and applications for in-memory computing,” Nature
+Nanotechnology, vol. 15, no. 7, pp. 529–544, Jul 2020.
+[2] V. Joshi, M. L. Gallo, I. Boybat, S. Haefeli, C. Piveteau, M. Dazzi,
+B. Rajendran, A. Sebastian, and E. Eleftheriou, “Accurate deep neural
+network inference using computational phase-change memory,” CoRR,
+vol. abs/1906.03138, 2019.
+[3] C. Lammie, W. Xiang, B. Linares-Barranco, and M. Rahimi Azghadi,
+“Memtorch: An open-source simulation framework for memristive deep
+learning systems,” Neurocomputing, vol. 485, pp. 124–133, 2022.
+[4] I. Boybat, B. Kersting, S. G. Sarwat, X. Timoneda, R. L. Bruce,
+M. BrightSky, M. L. Gallo, and A. Sebastian, “Temperature sensitivity of
+analog in-memory computing using phase-change memory,” in 2021 IEEE
+International Electron Devices Meeting (IEDM), 2021, pp. 28.3.1–28.3.4.
+[5] A. G. Howard, M. Zhu, B. Chen, D. Kalenichenko, W. Wang, T. Weyand,
+M. Andreetto, and H. Adam, “Mobilenets: Efficient convolutional neural
+networks for mobile vision applications,” CoRR, vol. abs/1704.04861,
+2017.
+[6] G. Lu, W. Zhang, and Z. Wang, “Optimizing depthwise separable
+convolution operations on gpus,” IEEE Transactions on Parallel and
+Distributed Systems, vol. 33, no. 1, pp. 70–87, 2022.
+[7] H. Benmeziane, K. E. Maghraoui, H. Ouarnoughi, S. Niar, M. Wistuba,
+and N. Wang, “A comprehensive survey on hardware-aware neural
+architecture search,” CoRR, vol. abs/2101.09336, 2021.
+[8] S. Xie, R. B. Girshick, P. Dollár, Z. Tu, and K. He, “Aggregated residual
+transformations for deep neural networks,” in IEEE Conference on
+Computer Vision and Pattern Recognition, CVPR. IEEE Computer
+Society, 2017, pp. 5987–5995.
+[9] S. Zagoruyko and N. Komodakis, “Wide residual networks,” in Proceedings of the British Machine Vision Conference, BMVC, R. C. Wilson,
+E. R. Hancock, and W. A. P. Smith, Eds. BMVA Press, 2016.
+[10] L. Sekanina, “Neural architecture search and hardware accelerator cosearch: A survey,” IEEE Access, vol. 9, pp. 151 337–151 362, 2021.
+[11] C. R. Banbury, V. J. Reddi, P. Torelli, N. Jeffries, C. Király, J. Holleman,
+P. Montino, D. Kanter, P. Warden, D. Pau, U. Thakker, A. Torrini,
+J. Cordaro, G. D. Guglielmo, J. M. Duarte, H. Tran, N. Tran, W. Niu,
+and X. Xu, “Mlperf tiny benchmark,” in Proceedings of the Neural
+Information Processing Systems Track on Datasets and Benchmarks
+1, NeurIPS Datasets and Benchmarks 2021, December 2021, virtual,
+J. Vanschoren and S. Yeung, Eds., 2021.
+[12] C. R. Banbury, C. Zhou, I. Fedorov, R. M. Navarro, U. Thakker, D. Gope,
+V. J. Reddi, M. Mattina, and P. N. Whatmough, “Micronets: Neural
+network architectures for deploying tinyml applications on commodity
+microcontrollers,” in Proceedings of Machine Learning and Systems,
+A. Smola, A. Dimakis, and I. Stoica, Eds. mlsys.org, 2021.
+[13] H. Liu, K. Simonyan, and Y. Yang, “DARTS: differentiable architecture
+search,” CoRR, vol. abs/1806.09055, 2018. [Online]. Available:
+http://arxiv.org/abs/1806.09055
+[14] E. Liberis, L. Dudziak, and N. D. Lane, “µnas: Constrained neural
+architecture search for microcontrollers,” in EuroMLSys@EuroSys 2021,
+Proceedings of the 1st Workshop on Machine Learning and Systemsg
+Virtual Event, Edinburgh, Scotland, UK, 26 April, 2021, E. Yoneki and
+P. Patras, Eds. ACM, 2021, pp. 70–79.
+[15] G. Li, S. K. Mandal, Ü. Y. Ogras, and R. Marculescu, “FLASH: fast
+neural architecture search with hardware optimization,” ACM Trans.
+Embed. Comput. Syst., vol. 20, no. 5s, pp. 63:1–63:26, 2021.
+[16] W. Jiang, Q. Lou, Z. Yan, L. Yang, J. Hu, X. S. Hu, and Y. Shi,
+“Device-circuit-architecture co-exploration for computing-in-memory
+neural accelerators,” IEEE Trans. Computers, vol. 70, no. 4, pp. 595–605,
+2021.
+
+[17] Z. Yuan, J. Liu, X. Li, L. Yan, H. Chen, B. Wu, Y. Yang, and G. Sun,
+“NAS4RRAM: neural network architecture search for inference on rrambased accelerators,” Sci. China Inf. Sci., vol. 64, no. 6, 2021.
+[18] Z. Yan, D.-C. Juan, X. S. Hu, and Y. Shi, “Uncertainty modeling of
+emerging device based computing-in-memory neural accelerators with
+application to neural architecture search,” in 2021 26th Asia and South
+Pacific Design Automation Conference (ASP-DAC), 2021, pp. 859–864.
+[19] G. Li, M. Zhang, J. Li, F. Lv, and G. Tong, “Efficient densely connected
+convolutional neural networks,” Pattern Recognit., vol. 109, p. 107610,
+2021.
+[20] C. Zhou, F. Redondo, J. Buchel, I. Boybat, X. Comas, S. R. Nandakumar,
+S. Das, A. Sebastian, M. L. Gallo, and P. N. Whatmough, “Ml-hw codesign of noise-robust tinyml models and always-on analog computein-memory edge accelerator,” IEEE Micro, vol. 42, no. 06, pp. 76–87,
+2022.
+[21] M. J. Rasch, D. Moreda, T. Gokmen, M. L. Gallo, F. Carta, C. Goldberg,
+K. E. Maghraoui, A. Sebastian, and V. Narayanan, “A flexible and fast
+pytorch toolkit for simulating training and inference on analog crossbar
+arrays,” in 3rd IEEE International Conference on Artificial Intelligence
+Circuits and Systems. IEEE, 2021, pp. 1–4.
+[22] M. J. Rasch, C. Mackin, M. L. Gallo, A. Chen, A. Fasoli,
+F. Odermatt, N. Li, S. R. Nandakumar, P. Narayanan, H. Tsai, G. W.
+Burr, A. Sebastian, and V. Narayanan, “Hardware-aware training
+for large-scale and diverse deep learning inference workloads using
+in-memory computing-based accelerators,” 2023. [Online]. Available:
+https://arxiv.org/abs/2302.08469
+[23] C. Termritthikun, Y. Jamtsho, J. Ieamsaard, P. Muneesawang, and I. Lee,
+“Eeea-net: An early exit evolutionary neural architecture search,” Eng.
+Appl. Artif. Intell., vol. 104, p. 104397, 2021.
+[24] X. Dai, A. Wan, P. Zhang, B. Wu, Z. He, Z. Wei, K. Chen, Y. Tian,
+M. Yu, P. Vajda, and J. E. Gonzalez, “Fbnetv3: Joint architecture-recipe
+search using predictor pretraining,” in IEEE Conference on Computer
+Vision and Pattern Recognition, CVPR. Computer Vision Foundation /
+IEEE, 2021, pp. 16 276–16 285.
+[25] W. Jiang, X. Zhang, E. H. Sha, L. Yang, Q. Zhuge, Y. Shi, and J. Hu,
+“Accuracy vs. efficiency: Achieving both through fpga-implementation
+aware neural architecture search,” in Proceedings of the 56th Annual
+Design Automation Conference 2019, DAC 2019, Las Vegas, NV, USA,
+June 02-06, 2019. ACM, 2019, p. 5.
+[26] A. Sarah, D. Cummings, S. N. Sridhar, S. Sundaresan, M. Szankin,
+T. Webb, and J. P. Munoz, “A hardware-aware system for accelerating
+deep neural network optimization,” CoRR, vol. abs/2202.12954, 2022.
+[27] Z. Dong, Y. Gao, Q. Huang, J. Wawrzynek, H. K. H. So, and K. Keutzer,
+“HAO: hardware-aware neural architecture optimization for efficient
+inference,” in 29th IEEE Annual International Symposium on FieldProgrammable Custom Computing Machines, FCCM 2021, Orlando, FL,
+USA, May 9-12, 2021. IEEE, 2021, pp. 50–59.
+[28] M. Tan and Q. V. Le, “Efficientnetv2: Smaller models and faster training,”
+in Proceedings of the 38th International Conference on Machine Learning,
+ICML, ser. Proceedings of Machine Learning Research, M. Meila and
+T. Zhang, Eds., vol. 139. PMLR, 2021, pp. 10 096–10 106.
+[29] B. Zoph, V. Vasudevan, J. Shlens, and Q. V. Le, “Learning transferable
+architectures for scalable image recognition,” in 2018 IEEE Conference
+on Computer Vision and Pattern Recognition, CVPR 2018, Salt Lake
+City, UT, USA, June 18-22, 2018. Computer Vision Foundation / IEEE
+Computer Society, 2018, pp. 8697–8710.
+[30] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for
+image recognition,” in IEEE Conference on Computer Vision and Pattern
+Recognition, CVPR. IEEE Computer Society, 2016, pp. 770–778.
+[31] M. D. McKay, “Latin hypercube sampling as a tool in uncertainty analysis
+of computer models,” in Proceedings of the 24th Winter Simulation
+Conference, Arlington, VA, USA, December 13-16, 1992, R. C. Crain,
+Ed. ACM Press, 1992, pp. 557–564.
+[32] X. Ning, Y. Zheng, T. Zhao, Y. Wang, and H. Yang, “A generic graphbased neural architecture encoding scheme for predictor-based NAS,” in
+Computer Vision - ECCV 2020 - 16th European Conference, Glasgow,
+UK, August 23-28, 2020, Proceedings, Part XIII, ser. Lecture Notes in
+Computer Science, A. Vedaldi, H. Bischof, T. Brox, and J. Frahm, Eds.,
+vol. 12358. Springer, 2020, pp. 189–204.
+[33] H. Benmeziane, S. Niar, H. Ouarnoughi, and K. E. Maghraoui, “Pareto
+rank surrogate model for hardware-aware neural architecture search,” in
+International IEEE Symposium on Performance Analysis of Systems and
+Software, ISPASS. IEEE, 2022, pp. 267–276.
+
+=== page 12 ===
+[34] H. Abdi, “The kendall rank correlation coefficient,” Encyclopedia of
+Measurement and Statistics. Sage, Thousand Oaks, CA, pp. 508–510,
+2007.
+[35] A. Krizhevsky, G. Hinton et al., “Learning multiple layers of features
+from tiny images,” 2009.
+[36] A. Chowdhery, P. Warden, J. Shlens, A. Howard, and R. Rhodes, “Visual
+wake words dataset,” CoRR, vol. abs/1906.05721, 2019.
+[37] H. Zhang, C. Wu, Z. Zhang, Y. Zhu, H. Lin, Z. Zhang, Y. Sun, T. He,
+J. Mueller, R. Manmatha, M. Li, and A. J. Smola, “Resnest: Splitattention networks,” in IEEE/CVF Conference on Computer Vision and
+Pattern Recognition Workshops, CVPR. IEEE, 2022, pp. 2735–2745.
+[38] M. C. Mukkamala and M. Hein, “Variants of rmsprop and adagrad with
+logarithmic regret bounds,” in Proceedings of the 34th International
+Conference on Machine Learning, ICML, ser. Proceedings of Machine
+Learning Research, D. Precup and Y. W. Teh, Eds., vol. 70. PMLR,
+2017, pp. 2545–2553.
+[39] P. Warden, “Speech Commands: A Dataset for Limited-Vocabulary
+Speech Recognition,” ArXiv e-prints, Apr. 2018. [Online]. Available:
+https://arxiv.org/abs/1804.03209
+[40] J. Martı́nez, H. Pérez-Meana, E. E. Hernández, and M. M. Suzuki,
+“Speaker recognition using mel frequency cepstral coefficients (MFCC)
+and vector quantization (VQ) techniques,” in 22nd International Conference on Electrical Communications and Computers, CONIELECOMP,
+P. B. Sánchez, R. Rosas-Romero, and M. J. O. Galindo, Eds. IEEE,
+2012, pp. 248–251.
+[41] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,”
+in 3rd International Conference on Learning Representations, Y. Bengio
+and Y. LeCun, Eds., 2015.
+[42] J. Lin, W. Chen, Y. Lin, J. Cohn, C. Gan, and S. Han, “Mcunet: Tiny deep
+learning on iot devices,” in Advances in Neural Information Processing
+Systems 33: Annual Conference on Neural Information Processing
+Systems, H. Larochelle, M. Ranzato, R. Hadsell, M. Balcan, and H. Lin,
+Eds., 2020.
+[43] P. M. Sørensen, B. Epp, and T. May, “A depthwise separable convolutional
+neural network for keyword spotting on an embedded system,” EURASIP
+J. Audio Speech Music. Process., vol. 2020, no. 1, p. 10, 2020.
+[44] M. L. Gallo, R. Khaddam-Aljameh, M. Stanisavljevic, A. Vasilopoulos,
+B. Kersting, M. Dazzi, G. Karunaratne, M. Braendli, A. Singh, S. M.
+Mueller, J. Buechel, X. Timoneda, V. Joshi, U. Egger, A. Garofalo,
+A. Petropoulos, T. Antonakopoulos, K. Brew, S. Choi, I. Ok, T. Philip,
+V. Chan, C. Silvestre, I. Ahsan, N. Saulnier, V. Narayanan, P. A. Francese,
+E. Eleftheriou, and A. Sebastian, “A 64-core mixed-signal in-memory
+compute chip based on phase-change memory for deep neural network
+inference,” 2022. [Online]. Available: https://arxiv.org/abs/2212.02872
+[45] R. Khaddam-Aljameh, M. Stanisavljevic, J. F. Mas, G. Karunaratne,
+M. Braendli, F. Liu, A. Singh, S. M. Müller, U. Egger, A. Petropoulos,
+T. Antonakopoulos, K. Brew, S. Choi, I. Ok, F. L. Lie, N. Saulnier,
+V. Chan, I. Ahsan, V. Narayanan, S. R. Nandakumar, M. L. Gallo,
+P. A. Francese, A. Sebastian, and E. Eleftheriou, “Hermes core – a
+14nm cmos and pcm-based in-memory compute core using an array of
+300ps/lsb linearized cco-based adcs and local digital processing,” in 2021
+Symposium on VLSI Technology, 2021, pp. 1–2.
+[46] S. Jain, H. Tsai, C.-T. Chen, R. Muralidhar, I. Boybat, M. M. Frank,
+S. Woźniak, M. Stanisavljevic, P. Adusumilli, P. Narayanan, K. Hosokawa,
+M. Ishii, A. Kumar, V. Narayanan, and G. W. Burr, “A heterogeneous and
+programmable compute-in-memory accelerator architecture for analogai using dense 2-d mesh,” IEEE Transactions on Very Large Scale
+Integration (VLSI) Systems, vol. 31, no. 1, pp. 114–127, 2023.

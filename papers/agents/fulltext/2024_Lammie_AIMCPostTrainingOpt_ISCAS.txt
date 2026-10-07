@@ -1,0 +1,660 @@
+# Improving the Accuracy of Analog-Based In-Memory Computing Accelerators Post-Training
+# id: W4400233540 | key: 2024_Lammie_AIMCPostTrainingOpt_ISCAS | ISCAS 2024 | card: ../cards/2024_Lammie_AIMCPostTrainingOpt_ISCAS.md
+
+
+=== page 1 ===
+Improving the Accuracy of Analog-Based
+In-Memory Computing Accelerators Post-Training
+Corey Lammie 1,† , Athanasios Vasilopoulos 1 , Julian Büchel 1,2 , Giacomo Camposampiero1,2 ,
+Manuel Le Gallo 1 , Malte Rasch 1 , and Abu Sebastian 1,†
+1 IBM Research Europe, 8803 Rüschlikon, Switzerland
+2 Department of Computer Science, ETH Zürich, Switzerland
+
+arXiv:2401.09859v1 [cs.ET] 18 Jan 2024
+
+† Corresponding authors. Emails: {corey.lammie@ibm.com, ase@zurich.ibm.com}
+
+Abstract—Analog-Based In-Memory Computing (AIMC) inference accelerators can be used to efficiently execute Deep Neural
+Network (DNN) inference workloads. However, to mitigate accuracy losses, due to circuit and device non-idealities, HardwareAware (HWA) training methodologies must be employed. These
+typically require significant information about the underlying
+hardware. In this paper, we propose two Post-Training (PT)
+optimization methods to improve accuracy after training is
+performed. For each crossbar, the first optimizes the conductance
+range of each column, and the second optimizes the input, i.e,
+Digital-to-Analog Converter (DAC), range. It is demonstrated
+that, when these methods are employed, the complexity during
+training, and the amount of information about the underlying
+hardware can be reduced, with no notable change in accuracy
+(≤0.1%) when finetuning the pretrained RoBERTa transformer
+model for all General Language Understanding Evaluation
+(GLUE) benchmark tasks. Additionally, it is demonstrated that
+further optimizing learned parameters PT improves accuracy.
+Index Terms—In-Memory Computing, Training, Optimization
+
+I. I NTRODUCTION
+RTIFICIAL Intelligence (AI) has been successfully applied
+across diverse domains to solve challenging engineering
+problems, ranging from image classification to Natural Language Processing (NLP) [1]. As the complexity of AI models,
+in particular, Deep Neural Networks (DNNs), continues to
+increase, dedicated accelerators are required to accelerate the
+inference workloads of these models in resource-contained
+environments [2]–[5]. Analog-Based In-Memory Computing
+(AIMC) accelerators are one such type of accelerator, which
+have gained significant interest, due to their ability to execute Vector-Matrix Multiplications (VMMs) in O (1) timecomplexity [6]–[8]. While there are significant efforts to
+mitigate both circuit and device non-idealities [9]–[14], networks trained to be deployed on traditional compute hardware
+with Floating-Point (FP)-precision parameters, e.g., Graphics
+Processor Units (GPUs), when deployed on AIMC hardware,
+require retraining with some degree of consideration about the
+underlying hardware to achieve near- or at-ISO accuracy.
+
+A
+
+© 2024 IEEE. Personal use of this material is permitted. Permission from
+IEEE must be obtained for all other uses, in any current or future media,
+including reprinting/republishing this material for advertising or promotional
+purposes, creating new collective works, for resale or redistribution to servers
+or lists, or reuse of any copyrighted component of this work in other works.
+
+Figure 1. By performing PT optimization methods, accuracy can be
+improved. (a) By reducing the input (DAC) range, the effective dynamic
+resolution of ADCs can be increased, at the cost of clipping inputs. (b) The
+maximum conductance range of each column can be reduced to avoid ADC
+saturation, and increased to boost the signal, improving the SNR.
+
+While some Hardware-Aware (HWA) training techniques,
+such as Quantization-Aware Training (QAT), are widely
+adopted [15], due to the proliferation of reduced precision
+digital accelerators and deterministic execution flows, others
+require instance specific information [16]. Hence, they cannot
+easily be generalized for different hardware architectures.
+Moreover, when Processing Elements (PEs) are arranged in
+crossbar arrangements, as done in AIMC architectures, they
+require input and output scales, in addition to clipping parameters, to be specified. This usually requires the tiling of layer
+weights, which further increases training complexity [16]. For
+large models, which require significant resources and time to
+retrain, this is problematic.
+Recently, for these models, Post-Training Quantization
+(PTQ) [17] methods, which quantize network parameters PT,
+without the requirements of retraining or fine-tuning using
+training data, have burgeoned in popularity [18]. Taking
+inspiration from this approach, in this paper we introduce
+two methods to improve the inference accuracy of AIMC
+accelerators (Fig. 1). Both employ optimization methods PT,
+to determine parameters which are normally learned. The first
+optimizes the input (DAC) range for all Word-Lines (WLs),
+
+=== page 2 ===
+and the second optimizes the conductance range of each BitLine (BL). Our specific contributions are as follows:
+1) We propose two novel PT optimization methods to
+improve the accuracy of AIMC inference accelerators
+PT, which reduce training complexity;
+2) We model hardware implementations of the RoBERTa
+transformer model, and demonstrate, that, after finetuning, both methods can improve scores across General
+Language Understanding Evaluation (GLUE) tasks
+when input ranges and conductance ranges are not
+learned;
+3) We establish baseline GLUE scores for the RoBERTa
+model on simulated AIMC-hardware.
+II. P RELIMINARIES
+A. Analog-Based In-Memory Computing
+AIMC accelerators are capable of performing VMM operations Y𝑇 = X𝑇 W using the laws of physics, where W is an
+𝑀 × 𝑁 matrix, X is a 𝑀 × 1 vector, and Y is a 𝑁 × 1 vector.
+This is done by encoding elements of X as WL voltages,
+denoted using V, and elements of W as conductances of the
+unit cells, denoted using G. The analog computation, i.e.,
+I = VG is performed, where
+Í 𝑀the current flow to the end of
+the 𝑁-th column is 𝐼 𝑁 = 𝑖=0
+𝐺 𝑖, 𝑁 𝑉𝑖 . By presenting rows
+of a matrix as X, sequentially, or in parallel (using multiple
+crossbars), matrix multiplication, the most dominant operation
+in DNNs, can be performed. In traditional AIMC architectures,
+other, i.e., auxiliary operations, can be performed using digital
+compute blocks - usually at reduced fixed-point precision.
+B. Hardware-Aware Training
+For current AIMC hardware, HWA training is usually required to mitigate degradation in accuracy. To perform HWA
+training, the IBM Analog Hardware Acceleration Kit (AIHWKIT) [19], [20] is used. Additional operations, including
+weight noise injection, are added during forward propagation
+passes. Mathematically, the generally simulated AIMC forward passes can be expressed as
+∑︁
+
+𝑦 𝑖 = 𝛼𝑖out 𝑓adc
+( 𝑤˘ 𝑖 𝑗 + 𝜎w 𝜉𝑖 𝑗 ) ( 𝑓dac (𝑥 𝑗 ) + 𝜎inp 𝜉 𝑗 ) + 𝜎out 𝜉𝑖 + 𝛽𝑖 ,
+𝑗
+
+(1)
+where 𝑓adc and 𝑓dac model the non-linear analog-to-digital and
+digital-to-analog processes, with dynamic scaling and range
+clipping, and 𝜉 denotes Gaussian noise [16]. In addition to
+training noise-resilient weights, it is also possible to train other
+parameters, such as the input (DAC) bounds of each crossbar,
+using back-propagation (see Section IV).
+C. The GLUE Benchmark and RoBERTA
+The GLUE benchmark is a collection of resources for training, evaluating, and analyzing natural language understanding
+systems [21]. In this paper, we consider eight sentence- and
+sentence-pair language understanding tasks. The WNLI task
+is excluded, as in the original BERT study, as it contains
+a large number of adversarial examples [22]. We adopt the
+base RoBERTA model, which is a ubiquitous bidirectional
+
+Figure 2. The simulated and ideal MVM outputs for 5,120 inputs sampled from a uniform distribution, with clipped normally distributed weights
+(𝜎=0.25). At 𝑡 = 0, the L2 error is ≈14%.
+
+transformer based on BERT [22], with approximately 125M
+learnable parameters [23].
+III. H ARDWARE M ODEL
+To perform realistic hardware simulations, we used an
+experimentally verified model, calibrated based on extensive
+measurements performed on an array containing 1 million
+Phase-Change Memory (PCM) devices [24]. A tile size of
+512×512 is assumed. Inputs are encoded using 8-bit PulseWidth Modulation (PWM), and weights are represented using
+a standard differential weight mapping scheme with 𝐺 𝑚𝑎𝑥 =
+25𝜇𝑆. Weight (programming), read, drift, and output noise is
+captured, in addition to IR drop with 0.35Ω wire resistance
+between adjacent cross-points. ADCs are assumed to operate
+at 8-bit precision. Saturation occurs, when for a given tile
+
+Table I
+N ETWORK UTILIZATION INFORMATION AND BASELINE TASK SCORES .
+Network Utilization
+Total number of network parameters
+Number of mapped parameters
+Number of tiles
+Avg. tile utilization
+Task
+
+Metric(s)
+
+MNLI
+QNLI
+QQP
+RTE
+SST-2
+MRPC
+CoLA
+STS-B
+
+Accuracy
+Accuracy
+Accuracy/F1
+Accuracy
+Accuracy
+Accuracy/F1
+Matthews Correlation
+Pearson/Spearman Correlation
+
+124,647,170
+85,609,730
+486
+61.57%
+Baseline (FP) Score1 (/100)
+86.2
+92.1
+89.2/86.1
+79.4
+94.0
+90.2/92.9
+63.3
+90.3/90.0
+
+1 The pre-trained RoBERTA network was fine-tuned (without noise) and eval-
+
+uated in FP.
+
+=== page 3 ===
+column, 10 PEs are at 𝐺 𝑚𝑎𝑥 and the corresponding inputs
+are at a maximum. All auxiliary operations are assumed to be
+computed in FP precision. As seen in Fig. 2, the MVM error
+increases linearly with respect to logarithmic time.
+IV. M ETHODOLOGY
+A. Initial Training
+RoBERTA was originally pre-trained in FP precision using
+five English-language corpora of varying sizes and domains,
+totaling over 160GB of uncompressed text [23].
+B. Mapping
+Both convolutional and linear (dense) layers were unfolded
+and mapped to tiles using a symmetrical weight mapping
+scheme, where layers that spanned more than one tile were distributed evenly. The residual weights, i.e., mod(𝑚, 𝑛), where
+𝑚 is the length of the one weight dimension and 𝑛 is the
+size of the tile along this dimension, were mapped to the last
+tile(s). In Table I, the number of mapped parameters and tiles,
+in addition to the tile utilization, is reported.
+C. Hardware-Aware Finetuning
+For each configuration, networks were finetuned using the
+mismatched validation set for the MNLI task and the validation
+set for all other tasks. HWA training was performed for 20
+epochs with an initial learning rate of 5E-5 and a linearly
+decaying (to 5E-8) learning rate schedule. A batch size of
+8 was used and the maximum sequence length was set to
+128. The AdamW [25] optimizer was used. Unit valued
+weights were used to represent conductance values, which
+were linearly mapped to conductance values after training.
+Additive noise sampled from a normal distribution with a
+standard deviation value of 0.06 was injected to unit weight
+values during forward propagation passes, and output noise
+was sampled from a normal distribution with a standard
+deviation of 0.1. For some configurations, during finetuning,
+input range and channel-wise conductance range learning was
+performed. The additional training steps for each are described
+as follows.
+1) Input Range Learning: can be used to find the optimal
+input range for each crossbar during HWA training by computing additional gradients as described in Eq. 2
+∑︁
+∇𝑋𝑟 =
+clamp(∇𝑋 [𝑋 ≥ 𝑋𝑟 ], max = 0)
+∑︁
+
+−
+clamp(∇𝑋 [𝑋 ≤ −𝑋𝑟 ], min = 0)
+Í
+abs(𝑋 < 𝑋𝑟 )
+).
++𝑋𝑟 𝜂(
+𝑋.numel()
+
+(2)
+
+𝑋𝑟 denotes the input range, 𝑋 denotes cached WL inputs, and
+𝜂 is a user-specifiable constant decay term. For all relevant
+configurations, this was set to the default value of 1E-2.
+
+Figure 3. Temporal dependence of the mean and standard deviation (10
+repetitions) of the validation accuracy after HWA finetuning on the RTE task.
+For all three PT configurations, weight clipping and I/O quantization was also
+performed. Input and conductance range learning was not performed.
+
+2) Channel-wise Conductance Range Learning: can be
+performed by introducing a learnable parameter, 𝜂 ∈ (0, 1],
+which scales the computed output current of each BL. By
+representing inputs and weights as normalized values, i.e.,
+Algorithm 1 PT optimization methods.
+Require: N. input samples, 𝑁, percentile 𝐾, N. standard deviations, 𝐿, maximum 𝐺 𝑚𝑎𝑥 , and minimum 𝐺 𝑚𝑖𝑛 largest
+conductance values, ADC saturation current 𝐼𝑆
+1: procedure INPUT RANGE OPTIMIZATION (𝑁, 𝐾)
+2:
+for each tile do
+3:
+Collect 𝑁 input samples, X
+4:
+Xr = percentile(X, 𝐾) ⊲ Set the input range, Xr ,
+to the 𝐾th percentile of all input samples
+5:
+end for
+6: end procedure
+7: procedure CONDUCTANCE RANGE OPTIMIZATION (𝑁,
+𝐾, 𝐺 𝑚𝑎𝑥 , 𝐺 𝑚𝑖𝑛 , 𝐼𝑆 )
+8:
+for each tile do
+9:
+Collect 𝑁 input samples, X
+10:
+for each BL do
+11:
+𝐺 BL max ← 𝐺 𝑚𝑎𝑥 ⊲ Additionally, rescale all
+PE conductance values, by 𝐺 BL max /𝐺 max
+12:
+I = Vread GBL [X[X! = 0]𝑦 factor
+⊲ 𝑦 factor
+is a linear correlation factor used to relate the ADC count
+and conductance
+13:
+𝜇 = mean(I), 𝜎 = std(I), 𝐼 𝑃 = 𝜇 + 𝐿N (0, 𝜎)
+14:
+if 𝐼 𝑃 > 𝐼𝑆 then
+15:
+𝐺 𝑚𝑎𝑥 = min(𝐺 𝑚𝑎𝑥 𝐼𝑆 /𝐼 𝑃 , 𝐺 𝑚𝑖𝑛 )
+16:
+end if
+17:
+end for
+18:
+end for
+19: end procedure
+
+=== page 4 ===
+Table II
+T HE MEAN AND STANDARD DEVIATION OF ALL (/100) GLUE TASK SCORES AT T =1 H , FOR DIFFERENT CONFIGURATIONS (10 REPETITIONS ). F OR EACH
+TASK , THE BEST CONFIGURATION ( S ) ARE BOLDED AND UNDERLINED . F OR EACH CONFIGURATION , THE AVERAGE SCORE IS ALSO REPORTED .
+GLUE Task
+
+Learned Input
+Range
+Post-1
+
+Quant I/O.
+
+Learned Conductance
+Range
+Post-1
+
+Weight Clipping
+
+Configuration
+
+Ideal2
+
+MNLI
+QNLI
+Accuracy Accuracy
+
+85.6
+
+91.7
+
+QQP
+Accuracy/F1
+
+88.7/85.5
+
+RTE
+SST-2
+Accuracy Accuracy
+
+78.9
+
+93.5
+
+MRPC
+Accuracy/F1
+
+CoLA
+Matthews
+Correlation
+
+STS-B
+Pearson/
+Spearman
+Correlation
+
+Avg.
+
+89.9/92.3
+
+62.7
+
+90.0/89.9
+
+85.9
+
+✓ ✗
+✓ ✓
+
+✗ ✗ ✗ ✗
+✗ ✗ ✗ ✗
+
+74.1(0.11) 79.2(0.12) 76.1(0.13)/74.3(0.13) 68.5(0.08) 82.3(0.13) 77.4(0.11)/81.4(0.14) 55.3(0.04) 78.5(0.13)/78.5(0.13) 75.1
+74.5(0.12) 79.6(0.13) 78.4(0.12)/75.2(0.12) 69.0(0.10) 83.0(0.15) 78.9(0.12)/82.7(0.16) 55.5(0.04) 79.8(0.14)/82.1(0.11) 76.3
+
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+
+✗ ✗
+✗ ✗
+✗ ✗
+✗ ✓
+✗ ✓
+✓ ✗
+✓ ✗
+✓ ✓
+✓ ✓
+✓ ✓
+✓ ✓
+
+76.5(0.10) 83.7(0.13) 79.6(0.12)/77.1(0.11) 71.6(0.10) 83.7(0.13) 79.0(0.13)/83.8(0.17)
+79.2(0.11) 85.5(0.16) 82.1(0.13)/79.8(0.12) 73.1(0.12) 89.2(0.16) 83.6(0.13)/87.4(0.17)
+79.5(0.09) 85.7(0.17) 81.4(0.17)/80.4(0.15) 72.0(0.10) 88.1(0.16) 83.3(0.12)/87.6(0.15)
+79.3(0.13) 84.8(0.13) 81.3(0.14)/79.4(0.13) 73.1(0.10) 87.9(0.14) 82.6(0.16)/86.9(0.17)
+80.7(0.14) 86.3(0.15) 82.7(0.13)/80.8(0.12) 74.4(0.12) 89.4(0.17) 84.2(0.15)/88.5(0.17)
+79.7(0.11) 85.3(0.18) 81.6(0.14)/80.0(0.13) 72.1(0.10) 88.0(0.17) 83.6(0.14)/88.2(0.17)
+80.7(0.13) 86.3(0.14) 82.9(0.13)/80.9(0.13) 73.6(0.10) 90.2(0.18) 84.3(0.15)/88.6(0.18)
+79.1(0.13) 85.7(0.14) 81.9(0.13)/80.1(0.15) 71.9(0.10) 88.3(0.15) 83.1(0.16)/88.0(0.14)
+81.4(0.14) 86.9(0.15) 83.6(0.16)/81.5(0.16) 73.9(0.12) 90.2(0.18) 85.1(0.12)/89.5(0.15)
+80.9(0.12) 86.8(0.16) 83.3(0.15)/81.2(0.14) 73.8(0.11) 90.1(0.19) 84.7(0.14)/89.3(0.18)
+81.4(0.13) 87.3(0.17) 83.7(0.13)/81.8(0.13) 75.3(0.12) 90.4(0.19) 85.1(0.16)/89.6(0.20)
+
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+✓
+
+✗
+✓
+✓
+✗
+✗
+✗
+✓
+✗
+✗
+✓
+✓
+
+✓
+✗
+✓
+✗
+✓
+✗
+✗
+✗
+✓
+✗
+✓
+
+1 Determined PT using Alg. 1.
+
+56.0(0.04)
+60.0(0.05)
+59.3(0.05)
+59.2(0.05)
+60.2(0.05)
+59.4(0.06)
+60.3(0.06)
+59.4(0.05)
+60.8(0.05)
+60.9(0.06)
+60.7(0.05)
+
+81.4(0.15)/82.3(0.14)
+85.3(0.17)/84.9(0.15)
+84.0(0.15)/85.2(0.13)
+83.9(0.17)/83.8(0.14)
+85.3(0.14)/85.4(0.14)
+85.2(0.13)/84.4(0.13)
+85.5(0.13)/85.3(0.15)
+84.3(0.17)/84.3(0.12)
+86.0(0.15)/85.8(0.14)
+85.9(0.14)/85.9(0.18)
+86.4(0.13)/86.3(0.14)
+
+77.7
+80.9
+80.6
+80.2
+81.6
+80.7
+81.7
+80.6
+82.3
+82.1
+82.6
+
+2 HWA finetuned weights evaluated without noise in FP.
+
+∈ [−1, 1], after training is completed, the conductance range
+for each channel (BL) can be computed, 𝜂𝐺 𝑚𝑎𝑥 , for which
+weights can be scaled to.
+D. Post-Training Optimization Methods
+PT optimization methods for input and conductance ranges
+are described in Alg. 1. These can be performed in addition
+to, or without, input range and/or channel-wise conductance
+range learning. For conductance range optimization, 𝑁 = 2
+was considered. This was determined empirically.
+V. R ESULTS
+First, to establish a baseline, after initial training,
+RoBERTA was retrained, as described in Section IV-C, for
+each task without any non-idealities (see Table I). To evaluate
+each configuration after HWA finetuning, programming noise
+was applied, and for multiple (10) instances, the corresponding
+task score was determined at different points in time. It is noted
+there is a significant drop in accuracy between the baseline and
+most accurate configuration for each task, as the RoBERTA
+model was not retrained using the original corpora.
+The temporal dependence of the score for one of the tasks
+(RTE) is evaluated in Fig. 3 for four different configurations.
+To investigate the effectiveness of both PT optimization methods, and to compare them to HWA training configurations
+where these parameters are learned, we report the scores for
+a number of combinations of conductance and input range
+configurations at 𝑡 =1h in Table II. For tasks other than RTE,
+the temporal dependence did not differ substantially.
+
+VI. D ISCUSSION AND O UTLOOK
+Post-training optimization methods result in significant
+accuracy recovery: When PT optimization methods were employed, a significant recovery in accuracy was observed when
+only weight clipping and I/O quantization was performed
+during training (on average, 5.3%). Additionally, compared
+to when both input and conductance ranges were learned,
+the average score decreased by only 0.1% when they were
+optimized PT, compared to 5.3% when they were not.
+Further optimizing learned parameters can improve
+accuracy: When both input and conductance ranges were
+learned and optimized PT, the average score increased by
+0.9%. When optimizing these parameters PT, more detailed
+and hardware-specific aspects can be captured without compromising training scalability.
+Hyper-parameter tuning: By decreasing the number of
+hyper-parameters which affect HWA training performance, in
+addition to reducing the computational complexity, especially
+when hyper-parameters are not tuned, training stability and
+generalizability is increased.
+Regular calibration: Due to temporal dynamics, as observed in Fig. 3, for current AIMC accelerators, some degree
+of regular calibration is required to retain accuracy over
+sustained periods of operation. PT optimization methods, such
+as input range optimization, can be performed, which do not
+require the costly reprogramming of devices.
+VII. C ONCLUSION
+In this paper, we improved the accuracy of AIMC accelerators PT using two novel optimization methods. The
+
+=== page 5 ===
+effectiveness of these methods were demonstrated empirically
+using fine-tuned RoBERTA models, and eight GLUE tasks
+with realistic hardware simulations. Using both methods, the
+average score across all tasks was increased from 76.3 to
+81.6%. Regular calibration experiments, investigation of more
+types of sizes of models, and hardware experiments form the
+basis of future work.
+R EFERENCES
+[1] R. Chellappa, S. Theodoridis, and A. van Schaik, “Advances in Machine
+Learning and Deep Neural Networks,” Proceedings of the IEEE, vol.
+109, no. 5, pp. 607–611, 2021.
+[2] X. Xu, Y. Ding, S. X. Hu, M. Niemier, J. Cong, Y. Hu, and Y. Shi,
+“Scaling for edge inference of deep neural networks,” Nature Electronics, vol. 1, no. 4, p. 216, 2018.
+[3] P. P. Ray, “A review on TinyML: State-of-the-art and prospects,” Journal
+of King Saud University - Computer and Information Sciences, vol. 34,
+no. 4, pp. 1595–1623, 2022.
+[4] M. R. Azghadi, C. Lammie, J. K. Eshraghian, M. Payvand, E. Donati,
+B. Linares-Barranco, and G. Indiveri, “Hardware Implementation of
+Deep Network Accelerators Towards Healthcare and Biomedical Applications,” IEEE Transactions on Biomedical Circuits and Systems,
+vol. 14, no. 6, pp. 1138–1159, Dec. 2020.
+[5] M. Le Gallo, R. Khaddam-Aljameh, M. Stanisavljevic, A. Vasilopoulos, B. Kersting, M. Dazzi, G. Karunaratne, M. Brändli, A. Singh,
+S. M. Müller, J. Büchel, X. Timoneda, V. Joshi, M. J. Rasch,
+U. Egger, A. Garofalo, A. Petropoulos, T. Antonakopoulos, K. Brew,
+S. Choi, I. Ok, T. Philip, V. Chan, C. Silvestre, I. Ahsan, N. Saulnier,
+V. Narayanan, P. A. Francese, E. Eleftheriou, and A. Sebastian, “A
+64-core mixed-signal in-memory compute chip based on phase-change
+memory for deep neural network inference,” Nature Electronics, vol. 6,
+no. 9, pp. 680–693, Sep. 2023.
+[6] C. Lammie, O. Krestinskaya, A. James, and M. R. Azghadi, “VariationAware Binarized Memristive Networks,” in 2019 26th IEEE International Conference on Electronics, Circuits and Systems (ICECS), Genoa,
+Italy, Nov. 2019, pp. 490–493.
+[7] A. Sebastian, M. Le Gallo, R. Khaddam-Aljameh, and E. Eleftheriou,
+“Memory devices and applications for in-memory computing,” Nature
+Nanotechnology, vol. 15, no. 7, pp. 529–544, Jul. 2020.
+[8] M.-K. Song, J.-H. Kang, X. Zhang, W. Ji, A. Ascoli, I. Messaris, A. S.
+Demirkol, B. Dong, S. Aggarwal, W. Wan, S.-M. Hong, S. G. Cardwell,
+I. Boybat, J.-s. Seo, J.-S. Lee, M. Lanza, H. Yeon, M. Onen, J. Li,
+B. Yildiz, J. A. del Alamo, S. Kim, S. Choi, G. Milano, C. Ricciardi,
+L. Alff, Y. Chai, Z. Wang, H. Bhaskaran, M. C. Hersam, D. Strukov, H.S. P. Wong, I. Valov, B. Gao, H. Wu, R. Tetzlaff, A. Sebastian, W. Lu,
+L. Chua, J. J. Yang, and J. Kim, “Recent Advances and Future Prospects
+for Memristive Materials, Devices, and Systems,” ACS Nano, Jun. 2023.
+[9] G. Molas, G. Sassine, C. Nail, D. A. Robayo, J.-F. Nodin, C. Cagli,
+J. Coignus, P. Blaise, and E. Nowak, “(Invited) Resistive Memories
+(RRAM) Variability: Challenges and Solutions,” ECS Transactions,
+vol. 86, no. 3, p. 35, Jul. 2018.
+[10] X. Yang, B. Taylor, A. Wu, Y. Chen, and L. O. Chua, “Research
+Progress on Memristor: From Synapses to Computing Systems,” IEEE
+Transactions on Circuits and Systems I: Regular Papers, vol. 69, no. 5,
+pp. 1845–1857, May 2022.
+[11] J. Büchel, A. Vasilopoulos, B. Kersting, F. Odermatt, K. Brew, I. Ok,
+S. Choi, I. Saraf, V. Chan, T. Philip, N. Saulnier, V. Narayanan,
+M. L. Gallo, and A. Sebastian, “Gradient descent-based programming
+of analog in-memory computing cores,” in 2022 International Electron
+Devices Meeting (IEDM), Dec. 2022, pp. 33.1.1–33.1.4.
+[12] J. Büchel, A. Vasilopoulos, B. Kersting, C. Lammie, K. Brew, T. Philip,
+N. Saulnier, V. Narayanan, M. Le Gallo, and A. Sebastian, “Programming weights to analog in-memory computing cores by direct
+minimization of the matrix-vector multiplication error,” IEEE Journal
+on Emerging and Selected Topics in Circuits and Systems, vol. 13, no. 4,
+pp. 1052–1061, 2023.
+[13] A. Vasilopoulos, J. Büchel, B. Kersting, C. Lammie, K. Brew, S. Choi,
+T. Philip, N. Saulnier, V. Narayanan, M. L. Gallo, and A. Sebastian,
+“Exploiting the state dependency of conductance variations in memristive devices for accurate in-memory computing,” IEEE Transactions on
+Electron Devices, vol. 70, no. 12, pp. 6279–6285, 2023.
+
+[14] N. Li, C. Mackin, A. Chen, K. Brew, T. Philip, A. Simon, I. Saraf, J.-P.
+Han, S. G. Sarwat, G. W. Burr, M. Rasch, A. Sebastian, V. Narayanan,
+and N. Saulnier, “Optimization of Projected Phase Change Memory
+for Analog In-Memory Computing Inference,” Advanced Electronic
+Materials, vol. 9, no. 6, p. 2201190, 2023.
+[15] E. Park, S. Yoo, and P. Vajda, “Value-aware Quantization for Training
+and Inference of Neural Networks,” in Proceedings of the European
+Conference on Computer Vision (ECCV), 2018, pp. 580–595.
+[16] M. J. Rasch, C. Mackin, M. Le Gallo, A. Chen, A. Fasoli, F. Odermatt,
+N. Li, S. R. Nandakumar, P. Narayanan, H. Tsai, G. W. Burr, A. Sebastian, and V. Narayanan, “Hardware-aware training for large-scale and
+diverse deep learning inference workloads using in-memory computingbased accelerators,” Nature Communications, vol. 14, no. 1, p. 5282,
+Aug. 2023.
+[17] M. Nagel, R. A. Amjad, M. V. Baalen, C. Louizos, and T. Blankevoort,
+“Up or Down? Adaptive Rounding for Post-Training Quantization,” in
+Proceedings of the 37th International Conference on Machine Learning.
+PMLR, Nov. 2020, pp. 7197–7206.
+[18] G. Xiao, J. Lin, M. Seznec, H. Wu, J. Demouth, and S. Han,
+“SmoothQuant: Accurate and Efficient Post-Training Quantization for
+Large Language Models,” in Proceedings of the 40th International
+Conference on Machine Learning. PMLR, Jul. 2023, pp. 38 087–38 099.
+[19] M. J. Rasch, D. Moreda, T. Gokmen, M. Le Gallo, F. Carta, C. Goldberg,
+K. El Maghraoui, A. Sebastian, and V. Narayanan, “A Flexible and Fast
+PyTorch Toolkit for Simulating Training and Inference on Analog Crossbar Arrays,” in 2021 IEEE 3rd International Conference on Artificial
+Intelligence Circuits and Systems (AICAS), Jun. 2021.
+[20] M. Le Gallo, C. Lammie, J. Büchel, F. Carta, O. Fagbohungbe,
+C. Mackin, H. Tsai, V. Narayanan, A. Sebastian, K. El Maghraoui, and
+M. J. Rasch, “Using the IBM analog in-memory hardware acceleration
+kit for neural network training and inference,” APL Machine Learning,
+vol. 1, no. 4, p. 041102, 11 2023.
+[21] A. Wang, A. Singh, J. Michael, F. Hill, O. Levy, and S. R. Bowman,
+“GLUE: A Multi-Task Benchmark and Analysis Platform for Natural
+Language Understanding,” Feb. 2019.
+[22] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “BERT: Pre-training
+of Deep Bidirectional Transformers for Language Understanding,” May
+2019.
+[23] Y. Liu, M. Ott, N. Goyal, J. Du, M. Joshi, D. Chen, O. Levy, M. Lewis,
+L. Zettlemoyer, and V. Stoyanov, “RoBERTa: A Robustly Optimized
+BERT Pretraining Approach,” Jul. 2019.
+[24] V. Joshi, M. Le Gallo, S. Haefeli, I. Boybat, S. R. Nandakumar,
+C. Piveteau, M. Dazzi, B. Rajendran, A. Sebastian, and E. Eleftheriou,
+“Accurate Deep Neural Network Inference Using Computational PhaseChange Memory,” Nature Communications, vol. 11, no. 1, p. 2473, May
+2020.
+[25] I. Loshchilov and F. Hutter, “Decoupled Weight Decay Regularization,”
+Jan. 2019.

@@ -1,0 +1,1071 @@
+# UniCAIM: A Unified CAM/CIM Architecture with Static-Dynamic KV Cache Pruning for Efficient Long-Context LLM Inference
+# id: W4414198682 | key: 2025_Xu_UniCAIM_DAC | DAC 2025 | card: ../cards/2025_Xu_UniCAIM_DAC.md
+
+
+=== page 1 ===
+UniCAIM: A Unified CAM/CIM Architecture with Static-Dynamic
+KV Cache Pruning for Efficient Long-Context LLM Inference
+
+arXiv:2504.07479v1 [cs.AR] 10 Apr 2025
+
+1
+
+Weikai Xu1# , Wenxuan Zeng42# , Qianqian Huang13 , Meng Li213∗ , and Ru Huang13∗
+School of Integrated Circuits, Peking University, China; 2 Institute for Artificial Intelligence, Peking University, China;
+3
+Beijing Advanced Innovation Center for Integrated Circuits, Beijing, China;
+4
+School of Software and Microelectronics, Peking University, China. # Equal contribution.
+
+Abstract—Transformer-based large language models (LLMs) have
+achieved impressive performance in various natural language processing
+(NLP) applications. However, the high memory and computation cost
+induced by the KV cache limits the inference efficiency, especially for long
+input sequences. Compute-in-memory (CIM)-based accelerators have
+been proposed for LLM acceleration with KV cache pruning. However, as
+existing accelerators only support static pruning with a fixed pattern or
+dynamic pruning with primitive implementations, they suffer from either
+high accuracy degradation or low efficiency. In this paper, we propose
+a ferroelectric FET (FeFET)-based unified content addressable memory
+(CAM) and CIM architecture, dubbed as UniCAIM. UniCAIM features
+simultaneous support for static and dynamic pruning with 3 computation
+modes: 1) in the CAM mode, UniCAIM enables approximate similarity
+measurement in O(1) time for dynamic KV cache pruning with high
+energy efficiency; 2) in the charge-domain CIM mode, static pruning
+can be supported based on accumulative similarity score, which is much
+more flexible compared to fixed patterns; 3) in the current-domain
+mode, exact attention computation can be conducted with a subset of
+selected KV cache. We further propose a novel CAM/CIM cell design
+that leverages the multi-level characteristics of FeFETs for signed multibit storage of the KV cache and in-place attention computation. With
+extensive experimental results, we demonstrate UniCAIM can reduce
+the area-energy-delay product (AEDP) by 8.2∼831× over the state-ofthe-art CIM-based LLM accelerators at the circuit level, along with
+high accuracy comparable with dense attention at the application level,
+showing its great potential for efficient long-context LLM inference.
+
+I. I NTRODUCTION
+Large language models (LLMs) have recently demonstrated remarkable performance in a wide range of applications such as
+question answering, code completion, and dialogue systems [1]–[3].
+The context length supported by LLMs is also growing progressively
+to support more applications like multi-turn chat, text summarization,
+etc. However, with the increase in sequence lengths, the KV cache
+size gradually exceeds the LLM parameter size and the attention computation latency is becoming increasingly dominant, both of which
+emerge as prominent bottlenecks in long-context LLM inference [4],
+as shown in Fig. 1.
+Recently, various solutions have been proposed to reduce the KV
+cache overhead from the algorithm perspective, utilizing the highly
+sparse nature of attention [5], [6]. There are static and dynamic KV
+cache pruning policies, aiming to either reduce memory footprint by
+permanently evicting unnecessary tokens or reduce the computation
+load by only fetching the KV pairs with high attention scores,
+respectively [5]–[8]. Meanwhile, from the hardware perspective, the
+computing-in-memory (CIM) architecture which can perform the
+general matrix-vector multiplication (GEMV) operations within the
+memory array, has been proven to compute attention efficiently
+by reducing the data movement [9]–[12]. Besides, some works
+This work was supported in part by NSFC under Grant 62495102 and Grant
+92464104, in part by the National Key Research and Development Program
+under Grant 2024YFB4505004, in part by Beijing Municipal Science and
+Technology Program under Grant Z241100004224015, and in part by 111
+Project under Grant B18001.
+∗ Corresponding author: ruhuang@pku.edu.cn; meng.li@pku.edu.cn
+
+Document
+Summarization
+Content
+creation
+Dialogue
+system
+
+Llama 2 7B
+
+Increasing
+sequence
+length
+
+Weight size
+
+Question
+answering
+Intent
+detection
+
+(a)
+
+(b)
+
+Fig. 1. (a) Various NLP tasks with increasing sequence length. (b) The impact
+of sequence length on KV cache size and attention latency in Llama-2-7B,
+which is a typical LLM, indicating the memory and computation challenges
+faced by long-context LLMs.
+
+specifically adopt KV cache pruning policies with CIM architecture
+to further support sparse attention computation [13]–[18].
+However, the current CIM-based LLM accelerators only focus on
+either static or dynamic KV cache pruning algorithms, hindering
+the simultaneous optimization of memory usage and computation
+overhead. Moreover, the existing hardware implementations are relatively primitive, suffering from the following challenges. On the one
+hand, the current CIM designs adopting static KV cache pruning only
+support fixed sparse attention pattern [13], [14], leading to accuracy
+degradation, especially for long sequences [19], [20]. Although there
+are advanced token-aware static KV pruning policies with better
+accuracy, they require the computation of accumulative attention
+scores, which will lead to a significant amount of extra computation
+and power consumption in current CIM architectures. On the other
+hand, to further support dynamic KV cache pruning, additional
+expensive operators such as top-k selection, are required, suffering
+from high hardware cost, latency, and energy consumption [15],
+[16]. Therefore, it is challenging for the current CIM architectures
+to efficiently support both dynamic and static KV cache pruning
+simultaneously, restricting the practical deployment of LLMs with
+increasing sequence length.
+In this work, a unified content addressable memory (CAM) and
+CIM architecture called UniCAIM, featuring static-dynamic KV
+cache pruning for long-context LLM inference, is proposed through
+algorithm-hardware co-optimization. UniCAIM addresses the challenges mentioned above, and the main contributions can be summarized as follows:
+• A hardware-friendly static-dynamic KV cache pruning framework is proposed, which can significantly improve the inference
+efficiency of LLMs without degrading the model. Firstly, the
+unimportant tokens are dropped permanently in the prefill stage,
+reducing the overall memory overhead. Moreover, during each
+decoding step, only the most relevant (i.e., top-k) tokens are selected for exact attention computation to reduce the computation
+load, and one token is evicted based on accumulative attention
+scores to enhance memory utilization and management when the
+generated length exceeds the reserved KV cache size.
+• A UniCAIM architecture with CAM and CIM modes is proposed
+for efficiently implementing the static-dynamic KV cache pruning and sparse attention computing. Based on the CAM mode
+
+=== page 2 ===
+of UniCAIM, attention scores can be approximately measured
+and compared to select the top-k tokens in O(1) time without
+the exact computations, and the attention scores can also be
+accumulated for static eviction by further leveraging the chargedomain CIM within the same operation cycle, leading to fast and
+energy-efficient static-dynamic KV cache pruning. Moreover,
+the current-based CIM is utilized for the exact attention score
+computation of selected tokens with high precision.
+• The proposed UniCAIM is implemented based on emerging
+compact ferroelectric FET (FeFET) devices with carefully designed circuits in hardware for further area-energy-delay product
+(AEDP) reduction. Experiments and evaluations show that the
+proposed FeFET-based UniCAIM can achieve 8.2∼831× AEDP
+reduction compared with the state-of-the-art CIM-based LLM
+accelerators, showing its great potential for high speed, areaand energy-efficient long-context LLM acceleration.
+
+Fig. 2. (a) Typical device structure of ferroelectric FET (FeFET). (b) FE
+polarization-voltage loops with multilevel FE polarizations. (c) Gradually
+modulated ID -VG curves of FeFET for the multilevel storage capability.
+Table I. Qualitative comparison of proposed FeFET-based UniCAIM with
+the state-of-the-art CIM-based LLM accelerators.
+
+II. BACKGROUND
+In this section, we review the sparse attention in transformer-based
+LLMs and exiting KV cache pruning policies from the algorithm
+and hardware perspectives, as well as the basics of FeFET and its
+advantages for CIM and CAM.
+A. Sparse attention and KV cache pruning
+1) Sparse attention and existing KV cache pruning algorithms:
+In transformers, the quadratic computational complexity of attention
+is one of the major bottlenecks [21]. Many recent research efforts
+have been devoted to exploiting the intrinsic sparsity in attention
+[22]. For long-context generation tasks, KV cache pruning becomes
+a promising solution for efficient sparse attention computation. Existing KV cache pruning methods can be roughly categorized into
+static pruning and dynamic pruning. Some static pruning policies
+predefine the positions of important tokens and remain consistent
+across decoding steps, such as StreamingLLM [19], while such fixed
+patterns lack flexibility for different LLMs and contexts. Other static
+pruning policies permanently drop some tokens and the dropped ones
+cannot be used in the subsequent decoding steps, such as SnapKV
+[8] and H2O [7]. However, only tokens that remain throughout the
+entire decoding process can be pruned, otherwise suffering significant
+accuracy degradation. On the other hand, dynamic pruning policies
+select unimportant tokens to drop at for different decoding steps,
+such as InfLLM [23] and LongCache [24]. Though dynamic pruning
+is more flexible than static pruning, it involves more expensive
+computations, such as attention score ranking and top-k selection,
+which pose greater challenges for efficient hardware implementation.
+2) Existing hardware implementations for KV cache pruning:
+KV cache pruning in LLMs offers significant advantages by reducing memory usage and redundant computation. Recently, CIMbased transformer accelerators have attracted widespread attention for
+LLMs due to the largely reduced data movement overhead, with some
+studies exploring the implementation of KV cache pruning in hardware. On the one hand, some works implement fix-pattern KV cache
+pruning which is well-suited for CIM architecture, such as TranCIM
+[13] adopting the pruning algorithm proposed in StreamingLLM [19].
+However, this approach performs computations on neighboring tokens
+within a predetermined fixed attention range defined in the algorithm,
+which lacks flexibility and fails to consider the varying contributions
+of different tokes to the final prediction. Consequently, the CIM
+with fix-pattern KV cache pruning designs suffers from suboptimal
+accuracy and efficiency, especially when processing different LLMs
+and contexts. On the other hand, some works have implemented
+
+dynamic KV cache pruning, primarily involving attention score
+ranking and selection, such as CIMFormer [15] adopting the topk selection. However, it requires additional hardware overhead to
+achieve top-k selection with complex time complexity of O(nlogn)
+[25] or O(logn) with additional circuits for token gathering [15],
+resulting in high latency and power consumption. Besides, there
+are emerging non-volatile memories (NVMs)-based CIM designs for
+dynamic pruning by utilizing approximate attention scores [17], [18],
+but suffering the trade-off between energy efficiency and accuracy.
+Therefore, current CIM-based LLM accelerators support either
+static or dynamic KV cache pruning policies, along with relatively
+primitive implementations, facing substantial penalties in terms of
+area, latency, and power consumption (Table I). Thus, while CIMbased KV cache optimization techniques bring new possibilities
+for efficient inference of long-context LLMs, there are still several
+challenges that need to be addressed.
+B. FeFET for CIM and CAM
+In recent years, various emerging NVMs, such as resistive randomaccess memory (RRAM), magnetic tunnel junction (MTJ) and FeFET,
+have triggered lots of attention for CIM, due to the high storage
+density and efficient GEMV operation via analog computing within
+the memory array [26]–[28]. On the other hand, CAM is a specialized
+memory architecture, where an input query is compared with entire
+stored entries simultaneously within the memory array [29]–[31].
+Different from conventional CIM, CAM only identifies the matching
+entry or measures the matching degree without precise quantification,
+which is more energy efficient. Among the NVMs, the three-terminal
+FeFET has the advantages of low write energy due to the electricfield-driven write mechanism and high ION /IOFF ratio due to the
+transistor structure, along with good CMOS compatibility [32].
+Fig. 2(a) shows the structure of an FeFET device, with a HfO2 based ferroelectric (FE) layer integrated into the gate stack of a
+MOSFET. Applying different program voltages (VP ) to the gate of
+FeFET will switch the FE polarization states (Fig. 2(b)), and thus
+gradually modulate the threshold voltage (VTH ) of FeFET, indicating
+the multilevel storage capability (Fig. 2(c)). Besides, by applying
+a relatively small read voltage (VR ), the channel conductance state
+can be non-destructively readout without FE polarization switching.
+Therefore, FeFET can achieve both storage and computation, making
+it a promising candidate for CIM and CAM designs [27], [31].
+
+=== page 3 ===
+(b) Auto-regressive decoding stage
+
+(a) Prefill stage
+√
+1.0
+
+Decoding step 1
+
+Decoding step 2
+
+Decoding step M
+Decoding step M+1
+Fixed size: H+M
+
+√
+
+0.5 0.9
+
+×
+
+0.4 0.3 0.2
+
+√
+
+0.1 0.4 0.1 0.4
+
+Inference process of LLM
+
+0.2 0.4 0.1 0.1 0.6
+
+0.2 0.4 0.1 0.1 0.6
+
+0.2 0.4 0.1 0.1 0.6
+
+0.2 0.4
+
+0.1 0.6
+
+0.2 0.4 0.1 0.1 0.6
+
+0.1 0.2 0.1 0.5 0.1 0.4
+
+0.1 0.2 0.1 0.5 0.1 0.4
+
+0.1 0.2
+
+0.5 0.1 0.4
+
+0.3 0.6 0.2 0.6 0.7 0.1
+
+0.6 0.1 0.1 0.2 0.2 0.2 0.7
+
+0.6 0.1
+
+0.2 0.2 0.2 0.7
+
+0.9 0.7 0.3 0.8 0.9 0.6 0.7
+
+0.1 0.2 0.9 0.1 0.3 0.5 0.1
+
+√
+Initial H heavy
+tokens
+
+0.1 0.2 0.1 0.2 0.5
+2.1 1.8 0.4 0.6 0.5
+×: Statically evicted tokens
+√: Initial H heavy tokens
+
+Newly-generated
+tokens
+
+Dynamically
+selected tokens
+
+Statically
+evicted tokens
+
+…
+
+1.0 0.9 0.9 0.9 1.2 1.1 0.8
+Directly fill with newly-generated KV in
+the statically evicted position
+
+Fig. 3. Framework of the proposed hybrid static-dynamic KV cache pruning algorithm. (a) During the prefill stage, static pruning evicts unimportant tokens
+for the subsequent generation. (b) During the decoding stage, dynamic pruning preserves a subset of tokens for sparse attention computation, while static
+pruning evicts one token at each step when the generated length exceeds the reserved size for a fixed KV cache size.
+
+(a)
+
+Reserved KV
+cache for
+generation
+(M entries)
+
+CAM
+
+Currentdomain CIM
+
+Top-k attention computation
+
+(H entries)
+
+Dynamic pruning (top-k selection)
+
+Initial heavy
+tokens after
+prefill stage
+Static pruning
+
+FeFET-based UniCAIM array
+(Key cache)
+
+Charge-domain CIM
+
+Static pruning
+
+Attention
+Top-k selection computation
+
+(b)
+
+Fig. 4. (a) The proposed UniCAIM architecture for static-dynamic KV cache pruning and sparse attention computing. (b) The hardware design of UniCAIM
+based on FeFET, including FeFET-based UniCAIM array and carefully designed peripheral circuits for CAM, charge-domain and current-domain CAM.
+
+III. U NI CAIM A RCHITECTURE WITH S TATIC -DYNAMIC KV
+C ACHE P RUNING
+A. Hybrid Static-Dynamic KV Cache Pruning Algorithm
+The framework of the proposed hybrid pruning algorithm is illustrated in Fig. 3, which combines static pruning during the prefill stage
+for an overall memory footprint reduction and static-dynamic pruning
+during the decoding stage for further efficient sparse attention.
+1) Prefill stage with one-shot static pruning: During the prefill
+stage, we leverage static pruning to drop a part of tokens permanently
+which are almost unimportant throughout the entire decoding process,
+and remain the heavy tokens. Following [5], [7], [8], we determine
+which tokens to statically drop based on the accumulative attention
+scores as shown in Fig. 3(a). Specifically, we drop the tokens with
+the lowest accumulated attention scores, reducing the overhead of the
+entire inference process.
+2) Decoding stage with step-wise static-dynamic pruning: Since
+the LLM attention exhibits high sparsity [5] and different queries can
+attend to different tokens [6], we propose to further selectively choose
+a subset of important tokens for efficient attention computation at
+different decoding steps (Fig. 3(b)). We adopt the most commonly
+used Cosine similarity as the attention score (Attn) to evaluate the
+importance of the KV cache for previous tokens as follows:
+Attn(q, K) = q · K T ,
+h×1×d
+
+(1)
+
+where q ∈ R
+denotes the query at the current step, K ∈
+Rh×N ×d denotes the key cache, and h, N , d represent the number
+of heads, the number of tokens in key cache, and hidden dimension,
+respectively. After the similarity measure, we leverage the top-k
+selection strategy to pick up the most important tokens for the
+subsequent sparse attention.
+
+Moreover, when considering the memory limitation and hardware
+constraints, the consistently increasing KV cache size during the
+decoding process is not friendly. To address this problem, we always
+keep a table of the accumulated attention scores and statically drop
+one token with the lowest accumulated attention score when the
+generated length exceeds the reserved size for decoding, and directly
+fill with the newly-generated token in the statically evicted position.
+As a result, the KV cache size is fixed with enhanced memory
+utilization and management.
+B. FeFET-based UniCAIM Architecture
+1) Overview of FeFET-based UniCAIM: Fig. 4(a) shows the proposed UniCAIM architecture for static-dynamic KV cache pruning,
+which is specially optimized for the auto-regressive decoding stage,
+due to the memory-bound nature of the decoding stage. After oneshot static pruning at the prefill stage, H heavy tokens with the highest
+accumulated attention scores are retained and stored in the UniCAIM
+array, and M entries are reserved for newly generated tokens at
+the decoding stage. During each encoding step, the approximate
+attention scores are evaluated for dynamically selecting the top-k
+tokens with the highest scores, which will be accurately computed.
+Additionally, the accumulated attention scores are also evaluated
+for statically evicted the token with the lowest scores, when the
+number of generated tokens exceeds M. The step-wise static pruning
+during the decoding stage can maintain a fixed-size KV cache,
+resulting in higher area efficiency and better memory utilization. In
+this work, the proposed UniCAIM architecture is implemented using
+emerging FeFET in hardware (Fig. 4(b)), incorporating an FeFETbased UniCAIM array which is shared by CAM and CIM, along with
+
+=== page 4 ===
+“0”
+(VM, VM)
+
+Top-k selection based on CAM mode
+
+“+1” Attn = “+1” Attn = “-1” Attn = “0”
+ISL = I0
+(0, VR)
+ISL = I+1
+ISL = I-1
+
+Fdyn
+
+“-1”
+(VH, VL)
+
+“-1” Attn = “-1” Attn = “+1” Attn = “0”
+ISL = I0
+(VR, 0)
+ISL = I-1
+ISL = I+1
+
+I1
+_d
+yn
+
+“+1”
+(VL, VH)
+
+0
+
+(a)
+
+Idyn
+
+TH
+
+Key
+Query
+
+V
+
+FeFET-based UniCAIM cell
+(a)
+
+VDD VSL’
+
+(c) Key (VTH1, VTH1b) Query (VBL1, VBL1b)
+I-1
+
+Attn = “+1”
+
+VR (d)
+(b)
+Fig. 5. (a) The proposed FeFET-based UniCAIM cell. (b) Modulated
+threshold voltages (VTH ) of FeFET. (c) The truth table of signed key and
+query. (d) The computing results of local signed multiplication.
+1-bit signed query
+3-bit signed key
+
+VL’ VM VH’ VH
+
+(VL’, VH’) “+0.5”
+(VH’, VL’) “-0.5”
+
+(b)
+
+(c) Multilevel query expansion
+Query Cell1
+
+Cell2
+
+Cell3
+
+Cell4
+
+2-bit signed query
+2-bit signed key
+
+“+1” (0, VQ) (0, VQ) (0, VQ) (0, VQ)
+“+0.5” (VQ, 0) (0, VQ) (0, VQ) (0, VQ)
+“0”
+
+Top-3 from 9
+keys
+
+Key/Query =
+“+1”, “0”, “-1”
+
+I+1
+
+(a)
+
+Top-k
+
+Top-k
+
+Attn = “0”
+
+I0
+
+VL
+
+Attn = “+4”
+~ “-4”
+
+Attn = “-1”
+
+(VQ, 0) (VQ, 0) (0, VQ) (0, VQ)
+
+“-0.5” (VQ, 0) (VQ, 0) (VQ, 0) (0, VQ)
+“-1” (VQ, 0) (VQ, 0) (VQ, 0) (VQ, 0)
+(d)
+Fig. 6. (a) Gradually modulated VTH of FeFET for in-place multilevel
+signed key expansion. (b) The computing results of local signed multiplication
+between 1-bit signed query and 3-bit signed key. (c) The proposed encoding
+method for multilevel query expansion. (d) (b) The computing results of local
+signed multiplication between 2-bit signed query and 2-bit signed key.
+
+carefully designed peripheral circuits dedicated to dynamic pruning,
+static pruning, and attention computation.
+2) FeFET-based UniCAIM cell: The proposed FeFET-based UniCAIM cell is composed of two 1-transistor-1-FeFET (1T1F) units
+(Fig. 5(a)), which can store the signed key and implement the local
+signed multiplication (i.e., attention score) between signed key and
+query. In the write stage, the signed key of ”-1”/”+1’ is programmed
+in two FeFETs (F1 and F1b ) with complementary VTH states (VTH1 and
+VTH1b ) by applying relatively large VP for FE polarization switching
+(Fig. 5(b) and (c)). Then the signed query of ”-1”/”+1” is represented
+by complementary non-destructive read voltages at bit-lines (BL1 and
+BL1b ) with relatively small amplitudes. The signed multiplication
+result can be expressed through sense-line current (ISL ), where the
+low/high ISL represents the result of ”+1”/”-1”, which is meticulously
+designed for efficient KV-cache pruning and attention computation
+which will be discussed in the following sections. Moreover, the
+Key of ”0” can be represented by programming both FeFETs to the
+medium VTH states, which will result in medium ISL with both query
+inputs (Fig. 5(d)).
+Furthermore, by utilizing the multilevel storage capability of
+
+IRef1
+
+d=4
+
+(b)
+
+(c)
+
+Fig. 7. (a) The main circuit of CAM mode for top-k selection. (b) The
+discharge speed of the sense-line (SL) is correlated with the attention scores,
+where the SL with higher attention discharges more slowly. (c) The sequence
+diagrams of top-k selection take the example of top-3 selection from 9 keys.
+
+FeFET, the proposed FeFET-based UniCAIM cell supports signed
+multi-bit storage and in-place attention computation for higher areaefficiency. With multiple VP applied to the gate of FeFET, the
+FE polarization can be gradually switched in succession, resulting
+in the continuous modulation of VTH , and the multiple VTH pairs
+(VTH1 , VTH1b ) in complementary form represent multilevel signed
+key states (Fig. 6a). For example, the (VL ’, VH ’) and (VH ’, VL ’)
+can represent keys of ”+0.5” and ”-0.5”, respectively. The signed
+multiplication results with 3-bit signed keys are shown in Fig. 6b.
+Besides, the multilevel signed query expansion, including ”0”, can be
+implemented through bitwise expansion with the proposed mapping
+method as shown in Fig. 6(c), enabling signed multiplication with
+multilevel signed queries and keys (Fig. 6(d)).
+3) CAM mode of UniCAIM for dynamic pruning: To implement
+the dynamic KV cache pruning, the CAM mode of UniCAIM is
+designed for fast and energy-efficient top-k selection. As shown
+in Fig. 7a, each row shares one precharge p-type transistor for
+precharging the SL and detecting circuits including one buffer and
+one FeFET (Fdyn ) with properly programmed VTH for top-k selection.
+In the dynamic pruning phase, all SLs are precharged to high voltage
+(i.e., VDD ) by setting the PSL to ground, and then all BLs are
+prechraged to the corresponding voltages according to the proposed
+mapping method of the input query. Based on the proposed UniCAIM
+cell, the higher similarity between the query and the key (i.e., the
+higher attention score) will lead to the smaller ISL , and thus result in
+a slower discharge speed of the SL. For a key/query with a dimension
+of 4, where each state is ”+1”, ”-1” or ”0”, there are 9 possible
+attention scores ranging from ”-4” to ”+4”, and the corresponding SL
+discharge processes for different scores are shown in Fig. 7b. The SLs
+with lower similarity will discharge to VDD /2 more quickly, resulting
+in VDyn switching to ground, which turns off the corresponding Fdyn .
+In contrast, the SLs with higher similarity maintain VDyn at VDD ,
+which turns on the Fdyn with Idyn . By setting the IRef1 to (k+1)Idyn ,
+top-k selection can be performed, as shown in the example of top-3
+selection from 9 keys (Fig. 7(c)). When k SLs with higher similarity
+maintain high voltage, the accumulated I1 will be less than IRef1 ,
+causing the control signal (Ctrl1 ) to switch (Fig. 4), which will disable
+the discharge process of SLs. The addresses of the top-k selected
+keys are stored in the local register for exact similarity computation
+in subsequent steps.
+
+=== page 5 ===
+Discharging
+and eviction
+
+Charge sharing of SL
+
+Attn = “+4”, “+2”,
+“0”, “-2”, “-4”
+
+UniCAIM w/ 3-bit cell
+
+Static pruning
+
+0.75×
+0.76×
+
+Fsta
+
+0.27×
+
+FE-INV
+
+Evicted
+0.33×
+
+(b)
+
+Total: 7.1nJ (1 ×)
+0.59nJ
+
+ADC
+
+(a)
+
+The proposed FeFET-based CAM can achieve top-k selection
+with O(1) time complexity by comparing the similarity without the
+need for actual computation, which improves the speed and energyefficiency compared with conventional designs. Moreover, k can be
+easily configured by programming the Fdyn without the additional
+hardware overhead, indicating the enhanced versatility for different
+LLMs and contexts.
+4) Charge-domain CIM mode of UniCAIM for static pruning:
+During the decoding stage, different tasks will generate varying
+lengths of tokens, which poses significant challenges to memory
+overhead and management. Therefore, in this work, when the number
+of generated tokens exceeds the reserved KV cache size (i.e., M),
+the static KV cache pruning is applied. The charge-domain CIM
+is further designed for accumulating the similarity and evicting the
+smallest one. After implementing top-k selection based on CAM
+mode, the switch S1 is closed and the charge sharing occurs between
+SL capacitor (CSL ) and accumulate capacitor (CAcc ) which has
+accumulated the previous similarity scores (Fig. 8(a)). To implement
+static pruning within the same operation cycle along with dynamic
+pruning, without the need to recharge SLs, an FeFET-based inverter
+(FE-INV) is designed with programmed switching voltage (VS ).
+The SL with the smallest accumulated similarity will discharge to
+VS firstly through the discharge transistor, which will turn on the
+corresponding Fsta with Ista . Consequently, the accumulated I2 is larger
+than IRef2 which is equal to Ista , causing the control signal (Ctrl2 ) to
+switch, which will turn off the discharge transistor (Fig. 8(b)). The
+address of the statically selected key is stored in the local register,
+which will be evicted after exact similarity computation at the current
+generation step. Moreover, to avoid swapping memory when the
+stored key is evicted, the newly-added key is directly overwritten by
+enabling the word-line (WL) of the corresponding row and applying
+the appropriate VP on BLs with a single write cycle.
+5) Current-domain CIM mode of UniCAIM for attention computation: To implement the exact attention computation for the
+
+4.99nJ
+
+1.29nJ
+
+No pruning
+
+With conventional
+dynamic pruning
+
+UniCAIM with
+dynamic pruning
+
+(b)
+
+UniCAIM
+
+0.27×
+0.044×
+
+UniCAIM
+
+Top-k keys with
+smaller ISL
+
+(a)
+(b)
+Fig. 9. (a) The distribution of high/low VTH states of 128 FeFET devices.
+(b) The ISL is linear to the singed multiply-accumulate (MAC) value.
+
+6.51nJ
+
+0.27×
+0.037×
+
+Top-k
+
+0.27×
+0.05×
+
+256
+FeFETs
+
+Total: 1.34nJ ( 0.19×)
+0.03nJ 0.02nJ
+
+1.29nJ
+
+CIM array
+
+0.53×
+
+d = 128
+Key/Query = “+1”, “0”, “-1”
+Attn = “-128” ~ “+128”
+Li
+ne
+ar
+ity
+
+Total: 6.49nJ (0.91 ×)
+0.21nJ
+
+Energy
+consumption
+
+0.1×
+
+(b)
+
+Fig. 8. (a) The main circuit of charge-domain CIM mode for static pruning.
+(b) The process and sequence diagrams of static pruning, including charge
+sharing of SL for accumulating attention scores and static eviction.
+
+0.19×
+
+(a)
+
+0.27×
+
+VS
+
+(a)
+
+Fig. 10. The required device count as (a) input sequence length and (b) output
+sequence length increases with different pruning conditions.
+
+0.05×
+
+IRef2 = Ista
+
+(c)
+
+Fig. 11. (a) The impact of dynamic pruning on power consumption, with
+a 20% pruning ratio. The energy consumption as (b) input sequence length
+with an output sequence length of 64 and (c) output sequence length with an
+input sequence length of 2048 increases with different pruning conditions.
+
+top-k selected tokens after dynamic-static KV cache pruning, the
+FeFET-based current-domain CIM is proposed, where the ISL is
+precisely quantized via the analog-to-digital converter (ADC) to
+calculate the accurate attention score. Fig. 9 shows the ISL with 128
+activated FeFET-based UniCAIM cells, which shows robust linearity
+with respect to the singed multiply-accumulate (MAC) value, when
+considering the device-to-device variation of FeFET devices with
+a standard deviation of 54mV [33]. Benefiting from the dynamic
+pruning, only the ISL of top-k most similar keys need to be quantized
+by the ADCs, which can be selected through a Multiplexer (MUX).
+It can significantly reduce the computational overhead and the power
+consumption of the ADC, which is the primary source of power usage
+in analog CIM systems. Moreover, due to the meticulous design of
+FeFET-based UniCAIM cell, the ISL is smaller when the attention
+score is larger, and thus the dynamically selected top-k tokens which
+need to be precision computed have relatively small ISL , leading to
+lower energy consumption for attention computation.
+IV. E XPERIMENTAL R ESULTS
+In this section, we validate and evaluate the proposed FeFETbased UniCAIM architecture for LLM acceleration. Firstly, the key
+performance metrics for attention including area, energy, and delay
+are evaluated and compared with the state-of-the-art CIM-based
+designs at the circuit level. Subsequently, the impact of the proposed
+dynamic-static KV cache pruning algorithm on the accuracy of LLM
+applications is evaluated.
+A. Circuit-level Evaluations
+The circuit-level experiments and evaluations of proposed FeFETbased UniCAIM are carried out based on typical emerging FeFET
+devices with circuit simulation in HSPICE. The 45nm BSIM model
+
+=== page 6 ===
+HotpotQA
+
+UniCAIM
+
+0.33×
+0.06×
+
+84ns
+
+0.24×
+
+20ns
+
+0.56×
+0.11×
+
+90ns
+
+No pruning
+With
+conventional
+dynamic pruning
+
+NarrativeQA
+
+UniCache with
+2ns
+dynamic pruning 20ns
+
+(a)
+
+(b)
+
+Fig. 12. (a) The impact of dynamic pruning on latency, with 20% pruning
+ratio, 512 input sequence length, and 64 output sequence length. (b) The
+comparison of latency as input and output sequence length increase with
+different pruning conditions.
+Table II. Quantitative comparison of proposed FeFET-based UniCAIM with
+the state-of-the-art CIM-based LLM accelerators.
+
+[34] is used for all MOSFETs, and the Preisach ferroelectric switching model [35] is used for FeFETs. The parasitic wire capacitance is
+extracted according to [36]. The KV cache size contains 576 tokens,
+with 512 initial heavy tokens and 64 reserved tokens for decoding.
+Each token has a hidden dimension (i.e., d) of 128 with a 3-bit
+UniCAIM cell, and the range of attention scores is “-512” to “512”,
+and thus a 10-bit SAR ADC is used for quantization [37].
+1) Area: The static KV cache pruning during the prefill/decoding
+stage can reduce the KV cache size corresponding to the input/output
+sequence, leading to improved area efficiency, and the improvement
+is more significant as the input/sequence length increases due to
+the higher compression ratio (Fig. 10). It indicates that static KV
+cache pruning is the key technique for improving area efficiency.
+Moreover, benefiting from the proposed FeFET-based UniCAIM cell
+with in-situ multilevel expansion capability, the area efficiency can
+be further improved. Besides, the proposed CAM-based dynamic
+pruning circuit is highly compact, resulting in only a slight decrease
+in the improvement of area efficiency from 15× to 14.7× (Fig. 10(b)).
+2) Energy: To implement dynamic pruning, conventional designs
+involve approximate attention computation, followed by selecting the
+top-k highest similar tokens with additional circuits, limiting the
+energy efficiency improvement. In this work, the FeFET-based CAM
+mode is designed for dynamic pruning, which evaluates the relative
+attention and selects the top-k tokens through a single SL chargedischarge process, without the need for actually calculating attention
+scores and ranking them. It significantly improves energy efficiency,
+due to reducing the energy consumption overhead associated with
+ADCs, and avoiding the additional power needed for top-k selection
+circuits (Fig. 11(a)). On the other hand, the static KV cache pruning
+reduces the number of tokens, thereby naturally reducing energy
+consumption. Moreover, the improvement of energy-efficiency is
+more significant from 5.3× to 27× as the input and output sequence
+length increase, benefiting from the static pruning during both prefill
+and decoding stages (Fig. 11(b) and (c)).
+3) Delay: Although CIM architecture enables parallel computation
+in theory, the output parallelism is constrained by the maximum
+number of ADCs that can be accommodated within the area and
+power budget of the system, which further increases the compute
+delay. In this work, 64 SLs are sensed in parallel with 64 ADCs. As
+shown in Fig. 12(a), although the conventional dynamic KV cache
+pruning reduces the number of attention scores that need precision
+
+(a)
+
+(b)
+
+Fig. 13. Accuracy evaluation of KV cache pruning on different datasets of
+(a) HotpotQA and (b) NarrativeQA, where F1 is a widely adopted evaluation
+metric that measures the similarity of the outputs to the ground-truth answers
+for QA and summarization tasks.
+
+quantization, the approximate attention computation is still limited
+by the number of ADCs. Additionally, the top-k selection process
+involves complex O(n · log n) time complexity, which actually
+increases the overall computation latency. The proposed FeFETbased UniCAIM does not require ADC quantization during dynamic
+pruning and can implement the top-k selection with O(1) time
+complexity, thereby further reducing computation latency. Moreover,
+the static KV cache pruning reduces the number of attention scores
+that require ADC quantization, thereby reducing computation latency.
+Moreover, the speed up is more significant from 4.2× to 16.7× as
+the input and output sequence length increase, benefiting from the
+static KV cache pruning during the prefill stage and static-dynamic
+KV cache pruning decoding stages (Fig. 12(b)).
+4) Comparison with state-of-the-art designs: We use the recently
+reported CIM-based LLM accelerators CIMFormer [15], TranCIM
+[13], and Sprint [17] as the baselines for quantitative comparison,
+and we apply the same static/dynamic KV cache pruning ratio
+across different designs for a fair comparison. The proposed FeFETbased UniCAIM with static-dynamic KV cache pruning achieves
+a significant reduction in the AEDP (Table II). With 1-bit FeFETbased UniCAIM cell, the AEDP is reduced by 8.2×/13.9×/124× and
+11.5×/19×/277× with the pruning ratio of 50% and 80% compared
+with Sprint/TranCIM/CIMFormer, respectively. Moreover, When further utilizing a 3-bit FeFET-based UniCAIM cell, the AEDP reduction is even more pronounced, which achieves 24.8×/41.7×/372×
+and 34.6×/56.9×/831×, indicating its great potential for long-context
+LLM acceleration at the edge.
+B. Application-level Evaluation
+We evaluate our proposed static-dynamic KV cache pruning algorithm on the LongChat-v1.5-7B-32k [38] model on widely used
+long-context tasks from LongBench [39], including HotpotQA and
+NarrativeQA. The prompt length of HotpotQA is 1.5k and the prompt
+length of NarrativeQA is 2.5k. As can be observed in Fig. 13, our
+proposed static-dynamic KV cache pruning algorithm does not significantly affect the accuracy of LLM and achieves comparable accuracy
+with full-cache attention even under low KV cache ratios. When
+compared with the recent KV cache pruning algorithms SnapKV [8]
+and StreamingLLM [19], our algorithm consistently achieves higher
+accuracy, indicating the effectiveness of our algorithm.
+V. C ONCLUSION
+In this work, a novel FeFET-based UniCAIM architecture featuring
+dynamic-static KV cache pruning is proposed for sparse attention.
+The UniCAIM architecture can efficiently implement dynamic pruning, static pruning, and attention computation, with different CAM
+and CIM modes. Evaluation results at circuit and application levels
+show significantly reduced AEDP and high accuracy, indicating its
+great potential for long-context LLM acceleration at the edge.
+
+=== page 7 ===
+R EFERENCES
+[1] Z. Yi, J. Ouyang, Y. Liu, T. Liao, Z. Xu, and Y. Shen, “A survey
+on recent advances in llm-based multi-turn dialogue systems,” arXiv
+preprint arXiv:2402.18013, 2024.
+[2] S. Sudhakaran, M. González-Duque, M. Freiberger, C. Glanois, E. Najarro, and S. Risi, “Mariogpt: Open-ended text2level generation through
+large language models,” Advances in Neural Information Processing
+Systems, vol. 36, 2024.
+[3] D. Van Veen, C. Van Uden, L. Blankemeier, J.-B. Delbrouck, A. Aali,
+C. Bluethgen, A. Pareek, M. Polacin, E. P. Reis, A. Seehofnerová et al.,
+“Adapted large language models can outperform medical experts in
+clinical text summarization,” Nature medicine, vol. 30, no. 4, pp. 1134–
+1142, 2024.
+[4] S. Luohe, Z. Hongyi, Y. Yao, L. Zuchao, and Z. Hai, “Keep the cost
+down: A review on methods to optimize llm’s kv-cache consumption,”
+arXiv preprint arXiv:2407.18003, 2024.
+[5] Y. Zhao, D. Wu, and J. Wang, “Alisa: Accelerating large language model inference via sparsity-aware kv caching,” arXiv preprint
+arXiv:2403.17312, 2024.
+[6] J. Tang, Y. Zhao, K. Zhu, G. Xiao, B. Kasikci, and S. Han, “Quest:
+Query-aware sparsity for efficient long-context llm inference,” arXiv
+preprint arXiv:2406.10774, 2024.
+[7] Z. Zhang, Y. Sheng, T. Zhou, T. Chen, L. Zheng, R. Cai, Z. Song,
+Y. Tian, C. Ré, C. Barrett et al., “H2o: Heavy-hitter oracle for efficient
+generative inference of large language models,” Advances in Neural
+Information Processing Systems, vol. 36, 2024.
+[8] Y. Li, Y. Huang, B. Yang, B. Venkitesh, A. Locatelli, H. Ye, T. Cai,
+P. Lewis, and D. Chen, “Snapkv: Llm knows what you are looking for
+before generation,” arXiv preprint arXiv:2404.14469, 2024.
+[9] C.-C. Chen, C.-L. Yang, and H.-Y. Cheng, “Efficient and robust parallel
+dnn training through model parallelism on multi-gpu platform,” arXiv
+preprint arXiv:1809.02839, 2018.
+[10] L. Xu, S. Yuan, D. Wang, Y. Chen, X. Li, and Y. Sun, “Heirs:
+Hybrid three-dimension rram-and sram-cim architecture for multi-task
+transformer acceleration,” in Proceedings of the 61st ACM/IEEE Design
+Automation Conference, 2024, pp. 1–6.
+[11] Z. Lu, X. Wang, M. T. Arafin, H. Yang, Z. Liu, J. Zhang, and G. Qu,
+“An rram-based computing-in-memory architecture and its application
+in accelerating transformer inference,” IEEE Transactions on Very Large
+Scale Integration (VLSI) Systems, 2023.
+[12] X. Yang, B. Yan, H. Li, and Y. Chen, “Retransformer: Reram-based
+processing-in-memory architecture for transformer acceleration,” in Proceedings of the 39th International Conference on Computer-Aided Design, 2020, pp. 1–9.
+[13] F. Tu, Z. Wu, Y. Wang, L. Liang, L. Liu, Y. Ding, L. Liu, S. Wei, Y. Xie,
+and S. Yin, “Trancim: Full-digital bitline-transpose cim-based sparse
+transformer accelerator with pipeline/parallel reconfigurable modes,”
+IEEE Journal of Solid-State Circuits, vol. 58, no. 6, pp. 1798–1809,
+2022.
+[14] F. Tu, Y. Wang, Z. Wu, W. Wu, L. Liu, Y. Hu, S. Wei, and S. Yin,
+“16.4 tensorcim: A 28nm 3.7 nj/gather and 8.3 tflops/w fp32 digital-cim
+tensor processor for mcm-cim-based beyond-nn acceleration,” in 2023
+IEEE International Solid-State Circuits Conference (ISSCC). IEEE,
+2023, pp. 254–256.
+[15] R. Guo, X. Chen, L. Wang, Y. Wang, H. Sun, J. Wei, H. Han, L. Liu,
+S. Wei, Y. Hu et al., “Cimformer: A systolic cim-array-based transformer
+accelerator with token-pruning-aware attention reformulating and principal possibility gathering,” IEEE Journal of Solid-State Circuits, 2024.
+[16] F. Tu, Z. Wu, Y. Wang, W. Wu, L. Liu, Y. Hu, S. Wei, and S. Yin,
+“16.1 muitcim: A 28nm 2.24 µj/token attention-token-bit hybrid sparse
+digital cim-based accelerator for multimodal transformers,” in 2023
+IEEE International Solid-State Circuits Conference (ISSCC). IEEE,
+2023, pp. 248–250.
+[17] A. Yazdanbakhsh, A. Moradifirouzabadi, Z. Li, and M. Kang, “Sparse
+attention acceleration with synergistic in-memory pruning and on-chip
+recomputation,” in 2022 55th IEEE/ACM International Symposium on
+Microarchitecture (MICRO). IEEE, 2022, pp. 744–762.
+[18] Q. Zheng, S. Li, Y. Wang, Z. Li, Y. Chen, and H. H. Li, “Accelerating
+sparse attention with a reconfigurable non-volatile processing-in-memory
+architecture,” in 2023 60th ACM/IEEE Design Automation Conference
+(DAC). IEEE, 2023, pp. 1–6.
+[19] G. Xiao, Y. Tian, B. Chen, S. Han, and M. Lewis, “Efficient streaming
+language models with attention sinks,” arXiv preprint arXiv:2309.17453,
+2023.
+
+[20] I. Beltagy, M. E. Peters, and A. Cohan, “Longformer: The longdocument transformer,” arXiv preprint arXiv:2004.05150, 2020.
+[21] A. Vaswani, “Attention is all you need,” Advances in Neural Information
+Processing Systems, 2017.
+[22] H. Jiang, Y. Li, C. Zhang, Q. Wu, X. Luo, S. Ahn, Z. Han, A. H.
+Abdi, D. Li, C.-Y. Lin et al., “Minference 1.0: Accelerating pre-filling
+for long-context llms via dynamic sparse attention,” arXiv preprint
+arXiv:2407.02490, 2024.
+[23] C. Xiao, P. Zhang, X. Han, G. Xiao, Y. Lin, Z. Zhang, Z. Liu,
+S. Han, and M. Sun, “Infllm: Unveiling the intrinsic capacity of llms
+for understanding extremely long sequences with training-free memory,”
+arXiv preprint arXiv:2402.04617, 2024.
+[24] X. Liu, Q. Guo, Y. Song, Z. Liu, K. Lv, H. Yan, L. Li, Q. Liu, and
+X. Qiu, “Farewell to length extrapolation, a training-free infinite context
+with finite attention scope,” arXiv preprint arXiv:2407.15176, 2024.
+[25] H. Wang, Z. Zhang, and S. Han, “Spatten: Efficient sparse attention
+architecture with cascade token and head pruning,” in 2021 IEEE
+International Symposium on High-Performance Computer Architecture
+(HPCA). IEEE, 2021, pp. 97–110.
+[26] A. Sebastian, M. Le Gallo, R. Khaddam-Aljameh, and E. Eleftheriou,
+“Memory devices and applications for in-memory computing,” Nature
+nanotechnology, vol. 15, no. 7, pp. 529–544, 2020.
+[27] G. Yin, Y. Cai, J. Wu, Z. Duan, Z. Zhu, Y. Liu, Y. Wang, H. Yang,
+and X. Li, “Enabling lower-power charge-domain nonvolatile in-memory
+computing with ferroelectric fets,” IEEE Transactions on Circuits and
+Systems II: Express Briefs, vol. 68, no. 7, pp. 2262–2266, 2021.
+[28] M. M. Frank, N. Li, M. J. Rasch, S. Jain, C.-T. Chen, R. Muralidhar,
+J.-P. Han, V. Narayanan, T. M. Philip, K. Brew et al., “Impact of
+phase-change memory drift on energy efficiency and accuracy of analog
+compute-in-memory deep learning inference,” in 2023 IEEE International Reliability Physics Symposium (IRPS). IEEE, 2023, pp. 1–10.
+[29] K. Pagiamtzis and A. Sheikholeslami, “Content-addressable memory
+(cam) circuits and architectures: A tutorial and survey,” IEEE journal of
+solid-state circuits, vol. 41, no. 3, pp. 712–727, 2006.
+[30] W. Xu, J. Luo, Q. Huang, and R. Huang, “Compact and efficient
+cam architecture through combinatorial encoding and self-terminating
+searching for in-memory-searching accelerator,” in Proceedings of the
+61st ACM/IEEE Design Automation Conference, 2024, pp. 1–6.
+[31] X. S. Hu, M. Niemier, A. Kazemi, A. F. Laguna, K. Ni, R. Rajaei, M. M.
+Sharifi, and X. Yin, “In-memory computing with associative memories:
+A cross-layer perspective,” in 2021 IEEE International Electron Devices
+Meeting (IEDM). IEEE, 2021, pp. 25–2.
+[32] S. Dutta, H. Ye, A. A. Khandker, S. G. Kirtania, A. Khanna, K. Ni,
+and S. Datta, “Logic compatible high-performance ferroelectric transistor
+memory,” IEEE Electron Device Letters, vol. 43, no. 3, pp. 382–385,
+2022.
+[33] J. Cai, M. Imani, K. Ni, G. L. Zhang, B. Li, U. Schlichtmann, C. Zhuo,
+and X. Yin, “Energy efficient data search design and optimization
+based on a compact ferroelectric fet content addressable memory,” in
+Proceedings of the 59th ACM/IEEE Design Automation Conference,
+2022, pp. 751–756.
+[34] W. Zhao and Y. Cao, “New generation of predictive technology model
+for sub-45 nm early design exploration,” IEEE Transactions on electron
+Devices, vol. 53, no. 11, pp. 2816–2823, 2006.
+[35] K. Ni, M. Jerry, J. A. Smith, and S. Datta, “A circuit compatible accurate
+compact model for ferroelectric-fets,” in 2018 IEEE symposium on VLSI
+technology. IEEE, 2018, pp. 131–132.
+[36] H. Bhardwaj, S. Jain, and H. Sohal, “Power optimization using currentmode signalling technique for iot applications,” Measurement: Sensors,
+vol. 24, p. 100494, 2022.
+[37] C.-C. Liu, S.-J. Chang, G.-Y. Huang, Y.-Z. Lin, C.-M. Huang, C.-H.
+Huang, L. Bu, and C.-C. Tsai, “A 10b 100ms/s 1.13 mw sar adc with
+binary-scaled error compensation,” in 2010 IEEE International SolidState Circuits Conference-(ISSCC). IEEE, 2010, pp. 386–387.
+[38] D. Li, R. Shao, A. Xie, Y. Sheng, L. Zheng, J. Gonzalez, I. Stoica,
+X. Ma, and H. Zhang, “How long can context length of open-source
+llms truly promise?” in NeurIPS 2023 Workshop on Instruction Tuning
+and Instruction Following, 2023.
+[39] Y. Bai, X. Lv, J. Zhang, H. Lyu, J. Tang, Z. Huang, Z. Du, X. Liu,
+A. Zeng, L. Hou et al., “Longbench: A bilingual, multitask benchmark
+for long context understanding,” arXiv preprint arXiv:2308.14508, 2023.

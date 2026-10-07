@@ -1,0 +1,1207 @@
+# Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+# id: W3030670306 | key: 2020_Zhang_ParasiticResistanceMitigationCNN_JETC | JETC 2020 | card: ../cards/2020_Zhang_ParasiticResistanceMitigationCNN_JETC.md
+
+
+=== page 1 ===
+1
+
+arXiv:1912.08716v1 [cs.ET] 17 Dec 2019
+
+Mitigate Parasitic Resistance in Resistive Crossbar-based
+Convolutional Neural Networks
+FAN ZHANG, Binghamton University, USA
+MIAO HU, Binghamton University, USA
+Traditional computing hardware often encounters on-chip memory bottleneck on large scale Convolution
+Neural Networks (CNN) applications. With its unique in-memory computing feature, resistive crossbar-based
+computing attracts researchers’ attention as a promising solution to the memory bottleneck issue in von
+Neumann architectures. However, the parasitic resistances in crossbar deviate its behavior from the ideal
+weighted summation operation. In large-scale implementations, the impact of parasitic resistances must
+be carefully considered and mitigated to ensure circuits’ functionality. In this work, we implemented and
+simulated CNNs on resistive crossbar circuits with consideration of parasitic resistances. Moreover, we carried
+out a new mapping scheme for high utilization of crossbar arrays on convolution, and a mitigation algorithm
+to mitigate parasitic resistances in CNN applications. The mitigation algorithm considers parasitic resistances
+as well as data/kernel patterns of each layer to minimize the computing error in crossbar-based convolutions
+of CNNs. We demonstrated the proposed methods with implementations of a 4-layer CNN on MNIST, and
+ResNet(20, 32, and 56) on CIFAR-10. Simulation results show the proposed methods well mitigate the parasitic
+resistances in crossbars. With our methods, modern CNNs on crossbars can preserve ideal(software) level
+classification accuracy with 6-bit ADCs and DACs implementation.
+CCS Concepts: • Computing methodologies → Neural networks; • Hardware → Emerging simulation.
+Additional Key Words and Phrases: resistive crossbar, convolutional neural network, parasitic resistance
+
+1
+
+INTRODUCTION
+
+Convolutional Neural Networks(CNN) have led to many performance breakthroughs in image
+classification, video object tracking, and audio processing applications[19]. Since AlexNet won the
+ILSVRC 2012 [18], CNNs have evolved into many different models, such as GoogLeNet[32], VGG[30],
+and ResNet[11]. Using Graphics Processing Unit(GPU) and specific accelerators to accelerate
+convolutions play an important role in CNNs’ success, since convolutions dominate the overall
+computation. Interestingly, in many machine learning applications throughput of convolutions
+is prior than computing accuracy, especially on inference functions [9]. Inspired by this feature,
+Nvidia’s recent GPUs[13], Cambricon-X[43], and many other accelerators (such as Cambricon
+MLU100[34], Xilinx FPGA based accelerator[26]) start support half-floating point or even 8-bit
+integer precision to accelerate convolutions without performance degradation in many neural
+networks.
+However, modern computing hardware often encounters on-chip memory bottleneck when
+dealing with high volume convolutions in large scale CNNs[3, 28]. State-of-art convolution neural
+networks require tremendous amount of parameters to handle complex tasks. For example, AlexNet
+has 2.3 million parameters, VGG has 14.7 million parameters, and ResNet-152 has 25.5 million
+parameters[3]. Storing such amount of parameters into limited caches is impossible. Therefore,
+frequent cache flushing and weight loading from off-chip memory (usually DRAM) are usually
+inevitable, which lead to significant delay and energy cost.
+To overcome the memory bottleneck, many researchers show interest in resistive crossbar arrays
+for the computing-in-memory feature [1, 8, 14, 21, 25, 41]. The resistive crossbar is defined as a
+circuit structure with vertical and horizontal metal lines sandwiching a resistive switching material
+Authors’ addresses: Fan Zhang, Binghamton University, Binghamton, New York, USA, fzhang27@binghamton.edu; Miao
+Hu, Binghamton University, Binghamton, New York, USA, miaohu@binghamton.edu.
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 2 ===
+1:2
+
+Fan Zhang and Miao Hu
+
+at their intersection. The cross-point material could be memristor[31], phase change memory (PCM)
+device[37], floating gates[4], spintronic device[35], RRAM[36], SRAM[27], or any other devices
+with programmable resistance. By utilizing Kirchhoff’s current law (KCL) and Ohm’s law, an ideal
+resistive crossbar array can carry out analog vector-matrix-multiplication (VMM). The outputs of
+analog VMMs are represented as the analog output currents from columns of the crossbar, with
+input voltage signals flowing through rows, and weights are stored non-volatility as conductance in
+cross-point. In the inference stage, any size of VMMs can be easily done in a single step. Moreover,
+since weight storage and weighted multiplication/summation both happen at the same place — the
+crossbar array, it enables ultra-high computing efficiency on multiplications between changing
+vectors(data) and fixed matrices(weight), which is ideal for implementing ultra-low power inference
+functions of neural networks.
+However, as array scales up, circuit parasitics deviate crossbar from its ideal linear behavior and
+bring the non-negligible error to the computing result. The impact of circuit parasitics, especially
+parasitic resistances such as wire resistance and interconnect resistance, have been observed
+and analyzed in many simulations and experiments[15][6][2]. Currently, the impact of parasitic
+capacitance and inductance can be ignored since they mainly affect transient behavior of crossbar,
+while in-memory computing mainly depends on crossbars’ DC behavior. It is important to consider
+parasitic resistance in circuit simulations for practical and functional implementations, especially
+for neural network applications where many large-scale crossbars are used.
+In this paper, we investigate crossbar-based large-scale CNN implementation with consideration
+of parasitic resistances and provide methods to mitigate its impact on convolution accuracy as well
+as CNN classification accuracy. Our major contributions includes:
+• First, we invent an efficient implementation method to densely map high dimension 4-D
+kernels to 2-D crossbar arrays. Using this method, a crossbar designed for vector-matrix
+multiplication can be easily adapted for convolution with near-zero hardware overhead.
+• Second, we model resistive crossbar array with consideration of parasitic resistances and
+realistic device models. The simulation result is also verified with experiment data up to
+128×64 crossbar size.
+• Third, we study the impact of parasitic resistances and provide a mitigation method to
+minimize computing error due to parasitic resistances as well as data/kernel patterns in
+CNNs without re-training.
+• Last but not least, we demonstrate our methods for a 4-layer CNN on MNIST, and Resnet-20,
+32, and 56 on CIFAR-10.
+Comparing to other state-of-the-art crossbar simulators, our work conducts the end-to-end
+full circuit simulation on modern CNN models and large dataset with the consideration of
+circuit parasitics and realistic memristor models. Our work firstly shows that with realistic
+crossbars and other peripheral circuits (DAC+ADC), how errors will propagate in deep CNNs
+due to mixed signal processing and nonlinear activations (ReLU).
+Our result shows that, with the proposed implementation and mitigation methods, 8-bit
+ADC/DAC resolution may be good enough to preserve the software-level classification
+accuracy in deep CNNs.
+The rest of paper is organized as follows: Section II covers the background. Section III details the
+methodology of the implementation and mitigation methods. Section IV gives simulation result on
+single crossbar as well as crossbar-based CNNs. In the end, Section V concludes the paper.
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 3 ===
+Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+
+1:3
+
+Fig. 1. CNN Block Diagram.
+
+2
+2.1
+
+PRELIMINARY
+Convolutional Neural Network
+
+Fig.1 shows a typical structure of CNN models. It has three key components: convolutional layers,
+pooling layers, and fully connected layers[19]. Each convolutional layer consists of a set of kernels
+which have identical sizes. It can be used to detect the local spatial correlation in input patterns.
+The output of convolution is passed to a non-linear activation function, such as ReLU or sigmoid, to
+form new feature maps. Pooling layer acts as a down-sampling filter for the output of the activation
+function. A pooling layer not only reduces the size of the feature map but also merges similar
+features. As a result, it helps to reduce the number of parameters as well as alleviate over-fitting.
+The output from pooling layer then feeds into the next convolution layer. Fully connected (FC)
+layers usually appeared at the last few layers of CNNs as the classifier. They weight every point in
+the high-level feature maps and generate the final classification result.
+In this work, we are targeting deep residual neural network (ResNet) on resistive crossbar
+arrays, as it is one of the state-of-the-art CNNs on image classification problems. ResNet was
+firstly introduced in ILSVRC 2015 [11]. It keeps the benefit of deeper layers while addressing the
+degradation issue by optimizing the residual mapping with shortcut connections between layers.
+An ensemble of residual nets up to 152 layers has achieved 3.57% error on the ImageNet test set
+and won the 1st place on the ILSVRC 2015 classification competition. Fig.2 shows the basic block
+diagram of ResNet. It combines multiple convolutions, batch normalizations, and rectified linear
+units(ReLU) together as its basic building block. Different from other CNNs, ResNet uses a shortcut
+to directly add input data to the output result of a block. Since two data inputs may have different
+dimensions at the summation stage, a 1 × 1 convolution layer is introduced in the shortcut to match
+the dimensions of two inputs. The summation result is feed to ReLU and pass to the next Block. At
+the end of ResNet, pooling layer, one or more FC layers, and a softmax layer are used in sequence
+to generate the final classification result. By studying and optimizing resistive crossbars for ResNet,
+we can get more insight into the performance of resistive crossbar-based computing on modern
+CNNs.
+2.2 Resistive crossbar circuit for VMM computing
+Fig.3 illustrates the general structure of resistive crossbar array for VMM computing. In an ideal
+crossbar, when applying voltage inputs V at the rows simultaneously and read current outputs I
+from the columns, the input-output relationship of the crossbar can be represented as below:
+I = VG
+In this way, the analog weighted summation is achieved through Kirchhoff’s Current Law and
+Ohm’s Law. By mapping input vector X to input voltage V , positive matrix A to conductance G,
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 4 ===
+1:4
+
+Fan Zhang and Miao Hu
+
+Fig. 2. Basic block diagram of ResNet.
+
+Fig. 3. Illustration of resistive crossbar array.
+
+and output current I back to output result Y , a memristor crossbar can be regarded as an analog
+VMM module to realize Y = X A in one step. Note that I = V G is only valid for ideal crossbar where
+parasitic resistances can be ignored, and device conductance is independent of voltage/current.
+In realistic crossbar arrays, circuit parasitics, including wire resistance, input/output resistance,
+device I-V non-linearity, and parasitic capacitance, deviate crossbar’s behavior from ideal vectormatrix multiplication. For instance, the wire resistance degrades signal along the row and column
+wire, so the device on the further corner will receive signal less than expected due to increased
+wire resistance. Input/Output resistance act similarly as wire resistance, but they could cause even
+larger signal degradation since they are usually caused by pass transistors and more resistive
+than wires. Meanwhile, cross-point device I-V non-linearity affects its multiplication accuracy,
+as its conductance is no longer independent of voltage or current. The impact of capacitance
+and inductance can be ignored at current stage since they mainly affect the transient behavior
+of crossbar while we are using crossbar’s DC behavior to realize analog VMM at relatively low
+frequency (10M to 100MHz).
+2.3 Mapping algorithms for crossbar array
+When using the crossbar array as the VMM circuit, the first problem is how to map the matrix onto
+the crossbar. Since the intersection conductance and column output current cannot be the negative
+value, the mapping method needs to able to address the negative issue. One common way is using
+the positive and negative power supply, and matrices are mapped on crossbar array in absolute form.
+For the negative element in the matrix, the negative input voltage is applied to the corresponding
+position. Recently, Chris Yakopcic et.al have proposed a way to implement convolution and CNN
+on memeristor-based crossbar [39][40]. In their ex-suit process, convolutional kernel G has to be
+divided into two part, positive G+ and negative G− . All negative values in G+ have been replaced
+by zero. And those negative values have been mapped in G− as positive conductance. By providing
+G− the identical inputs to G+ but with reversed sign, memristor-based crossbar can deal with the
+matrix which contains negative values.
+[7] also maps the absolute value of the matrix on crossbar array. However, it needs two adjacent
+columns of the crossbar to represent a single column of that matrix. One represents the positive
+part, and another represents the negative part. Then the two columns have output currents I + and
+I − respectively. Final output = I + − I − .
+[16] uses another way to solve this negative issue in their ReRAM crossbar based PE(processing
+element). The positive and negative part of the matrix are still mapped on two adjacent columns of
+a crossbar. But the negative voltage input is unnecessary in this design. Instead, an extra subtracter
+component is needed for every pair of positive and negative columns. Another change in this design
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 5 ===
+Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+
+1:5
+
+is that it uses spiking schema to improve the output precision. 2n spikes are used to represent a
+number of n bits.
+In the above mapping schemes, either extra overheads or redundant crossbar areas are needed.
+Moreover, for all above implements, a rigorous full circuit simulation with consideration of parasitic
+resistances on a large enough CNN is still missing.
+2.4
+
+Crossbar based Neural Network simulator
+
+There exist a lot of crossbar-based simulators for neural network applications with the consideration
+of parasitic-effect, stuck-at-fault, thermal noise and more. However, most of those simulators are not
+experiment-verified and even over-simplified for the non-ideal effects. Table 1 compares state-of-theart crossbar-based NN simulators. Our simulator is the only circuit simulator that experimentally
+verified and works on large-scale dataset and NN models.
+MNSIM[38] and NeuroSim[5] are two famous ReRAM crossbar simulators. They count many
+non-ideal effects into consideration but they do not focus on accurate crossbar computation output
+due to lack of full analog circuit simulation. However, they could give a reasonable power/area
+estimation for crossbar based design. Moreover, they are designed for general crossbar-based neural
+networks not optimized for convolution neural networks.
+PytorX[12] and FTNNA[24] are designed for neural network applications with the consideration
+of non-ideal effects. They also have the ability to alleviate the impact of those non-ideal effects
+and have been demonstrated on large datasets. However, such rescue ability is given by the error
+tolerance of NN models rather than the optimization of simulators, since both need to re-training
+the model to assuage the non-ideal effects. In practical we cannot guarantee that all crossbars
+have same non-ideal effects and those effects may vary because of different crossbar size, stored
+conductance matrix, wire resistance, and etc. Re-training for every crossbar device is a plausible
+way to solve such non-ideal effects, but they may not always practical due to time/energy limitation.
+Moreover, online training for large-scale NNs requires deep understanding and very accurate
+modeling of memristor dynamic behaviors, which is still far from enough at this moment. Even
+we do training with existing memristor models, the learning we can get from it is questionable
+because the model is still very different from realistic device behaviors and does not account the
+impact of realistic process variations and noises.
+In this work, we developed an experiment-verified simulator to conduct the end-to-end SPICElevel analog crossbar circuit simulation with the consideration of circuit parasitics and realistic
+memristor models. Conversion and calibration methods are used to mitigate the parasitic effects in
+crossbar-based computing. Comparing to other simulators, our work not only shows the impact
+of non-ideal effects on NN model accuracy, but also explains the reasons behind such accuracy
+degradation by investigating the error propagation in crossbar-based deep CNNs. In this way, our
+work provides a more solid upper-bound for the inference performance of crossbar-based CNNs
+respecting different design parameters.
+3
+
+METHODOLOGY
+
+There are two challenges ahead of using resistive crossbars for convolution operations. The first
+challenge is how to transform high dimensional convolution kernels to 2-D matrices for resistive crossbars. The most straightforward way converts convolution kernels to Toeplitz matrices.
+However, the Toeplitz matrix is sparse, and its sparsity significantly grows with larger kernels.
+Directly mapping this sparse matrix to resistive crossbars, will cause large hardware overhead as
+well as computing accuracy concerns. The second challenge is how to mitigate parasitic resistances
+in crossbar-based computing. As introduced before, parasitic resistances in crossbar will cause
+nonlinear signal degradation at each cross-point devices, lack of considering its impact will cause
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 6 ===
+1:6
+
+Fan Zhang and Miao Hu
+
+Table 1. Crossbar based NN simulator comparison
+Simulator
+
+Experiment
+-verified
+
+Full circuit
+simulation
+
+MNIST CIFAR-10
+
+NN type
+
+MNSIM[38]
+
+✗
+
+✗
+
+✗
+
+✗
+
+MLP,CNN
+
+NeuroSim[5]
+
+✗
+
+✗
+
+✓
+
+✗
+
+MLP
+
+PytorX[12]
+
+✗
+
+✗
+
+✗
+
+✓
+
+CNN
+
+FTNNA[24]
+
+✗
+
+✗
+
+✓
+
+✓
+
+CNN
+
+DPE[15]
+
+✓
+
+✓
+
+✓
+
+✗
+
+MLP
+
+Our simulator
+
+✓
+
+✓
+
+✓
+
+✓
+
+CNN
+
+Non-ideal effects
+Consider wire resistance
+into simplified parallel
+resistance
+Wire RC considered in
+nearby synaptic cell
+Simplified nodal analysis
+for wire resistance,
+stuck-at-fault,
+thermal & shot noise
+Programming error,
+stuck-at-fault
+SPICE-level analysis with
+transistor models, circuit
+parasitics, and actual
+memristor models.
+SPICE-level analysis with
+transistor models, circuit
+parasitics, and actual
+memristor models.
+
+Method to rescue IR-Drop
+✗
+Setting a small
+IR_DROP_TOL
+Re-training with
+IR-drop consideration
+Retraining with error
+correction output code
+Conversion
+
+Conversion &
+Calibration
+
+unacceptable errors in computing result of large crossbar arrays. To solve both challenges, we
+present the dense mapping as the new mapping method to fully unitize crossbar arrays with
+near zero hardware overhead, and the mitigation algorithm to compensate parasitic resistance in
+large-scale crossbars.
+3.1 Dense mapping for crossbar-based convolution
+The critical step of mapping an arbitrary matrix A on crossbar is how to deal with negative values
+in A, as conductance cannot be negative. We first shift all elements in A by a constant AShif t to
+make sure no negative value in A. Such a shift can be easily removed at the final step by subtracting
+AShif t × sum(X ). Where sum(X ) is the summation of input. By doing so, we do not need to part
+matrix into positive and negative sub-matrices, and any VMM can be performed on the crossbar
+with much less overhead.
+When we use crossbar for VMM computing in digital circuit environment, ADC/DAC are
+necessary to convert input data to analog voltage and output current to digital form. This process
+usually assumes to be 10ns to 100ns, which is usually limited by the ADC speed. To get sum(X), an
+accumulator works in parallel with the DAC->crossbar->ADC system with similar speed. For small
+or medium size crossbars, digital accumulator would be more efficient to calculate the summation
+of input vectors; For large crossbars, an analog accumulator can be implemented by using an
+additional column in the crossbar array where its devices are programmed to the same conductance,
+and it is sensed by an additional ADC. With either method of accumulator design, the cost and
+hardware overhead on calculating sum(X) is much lower than using two crossbars or two devices
+to track negative values.
+In CNN, each convolution layer has a 4-D kernel. For example, a 3*3*3*16 kernel means it has 16
+sets of 3*3*3 3-D kernels, and each 3-D kernels contains three 2-D kernels for the three channels
+(RGB) of color images. To perform convolution on memristor crossbar, we need to convert high
+dimensional convolution into 2-D VMM. It is well known that 2D convolution can be implemented
+using matrix multiplication by converting kernel to a Toeplitz matrix. Toeplitz matrices are sparse
+matrices which contain many zeros, so we named this method as sparse mapping.
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 7 ===
+Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+
+1:7
+
+Fig. 4. Dense mapping for input data size (j,k,p), where j,k,p means data height, width, and channel, respectively. The circuit needs j*k iterations to process the input data.
+
+However, sparse mapping has three major issues: First, memristor crossbar is by nature a dense
+array structure with positive values, not efficient for sparse matrix implementation. Mapping a
+sparse matrix to crossbar means that those memristors assigned with zero would do nothing but
+adding error to the final result due to the leakage current, as well as waste circuit area. Second,
+sparse mapping requires a huge crossbar array, which is not always feasible, and vulnerable to noise
+and defects. Third, sparse mapping requires a sizeable peripheral circuit to support the enormous
+array. Since the peripheral circuit dominates the total power/area, the hardware implementation of
+sparse mapping would be too costly to afford.
+In contrast to sparse mapping, we developed a new method, named as dense mapping, targeting
+on using small and dense memristor crossbars to implement convolutions efficiently. Fig.4 illustrates
+the concept of dense mapping. Each 2-D kernel is unrolled to a vector and mapped to one column
+of crossbar so that one crossbar can implement multiple 2-D kernels as long as it has enough
+columns. For input signal, only data within the convolution window are fed to the row inputs
+of crossbar arrays. When input data has multiple feature channels, each output feature channel
+needs a 3-D convolution kernel. A 3-D convolution kernel can be treated as many 2-D kernels.
+Every 2-D kernel corresponds to one input channel. The output of 3-D convolution is given by
+performing convolution on all 2-D input channels and add them together. Thus, we can unroll
+every 2-D kernel in the 3-D kernel as the same order. It is then cascading all vectors together to
+form a single column on a crossbar. An input shift register stores the unrolled input data within
+convolution window(multiple input channels cascaded like the kernel on a crossbar) at the current
+iteration to feed to the crossbar, then updating its storage as the window moves through the entire
+data space. The convolution results for data within the convolution window are collected at the
+column outputs of the crossbar. In this way, a single convolution kernel with one stride on both
+horizontal and vertical direction needs (j − m + 1)*(k − n + 1) iterations where j, k / m, n are
+data/kernel height and width respectively. Since multiple input channels have been compressed in
+a single column on a crossbar, the input channel number doesn’t impact the iteration time.
+Comparing dense mapping to sparse mapping, it is a trade-off between time complexity and
+space complexity. Sparse mapping uses much more extra hardware to produce the result in parallel
+without iteration. From the data movement aspect, the least movement mapping method is sparse
+mapping. It uses extra space in crossbar to not only store weight in there but also perform the
+kernel window movement. However, its efficiency exponentially drops as data/kernel size scales up
+because more devices in a rectangular crossbar are unused for increasing data/kernel size.
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 8 ===
+1:8
+
+Fan Zhang and Miao Hu
+
+Table 2. Overhead comparison for dense&sparse mapping
+
+Kernel Size
+3x3x3x16
+3x3x16x16
+3x3x32x32
+3x3x64x64
+
+xbar size
+(dense&sparse)
+27 x 16
+3072 x 14400
+144 x 16
+16384 x 14400
+288 x 32
+8192 x 6272
+576 x 64
+4096 x 2304
+
+xbar power
+(mW)
+0.06
+6480
+0.34
+34560
+1.35
+7526.4
+5.4
+1382.4
+
+xbar area
+(mm2 )
+0.000005
+0.54
+0.000028
+2.88
+0.000113
+0.6272
+0.00045
+0.1152
+
+ADC
+number
+1
+113
+1
+113
+1
+49
+1
+18
+
+DAC
+number
+27
+3072
+144
+16384
+288
+8192
+576
+4096
+
+Total power
+(mW)
+29.06
+9778
+146.34
+51170
+291.35
+15816.4
+583.4
+5514.4
+
+Total area
+(mm 2 )
+0.001
+0.806
+0.007
+3.712
+0.014
+1.034
+0.026
+0.311
+
+Fig. 5. Flowchart of a 32 by 32 image in ResNet20
+
+And much larger crossbar and more ADC/DACs are required for sparse mapping a large
+data/kernel. Table 2 compares the overhead of dense&sparse mapping on common used data/kernel
+sizes from ResNet. In Table 2, crossbar, ADC/DAC parameters are adopted from ISAAC[29]. We
+exponentially scaled the DAC to 8-bit, then proportionally scaled the area and power for crossbar, ADC, and DAC respectively. Although we could partition huge matrix into multiple small
+matrices[23], sparse mapping still needs 100x numbers of DACs&ADCs than dense mapping.
+Therefore, dense mapping is an adequate and more practical method comparing to sparse
+mapping. It not only achieves 100% usage of devices but also easy to implement and provide
+sufficient performance in speed for CNN applications. From Fig.5, one classification inference in
+ResNet-20 needs 9089 iterations in sequential, if no parallel copies of hardware are used. Note that
+summation (sum#) is in parallel of convolutions, so it’s not counted in total iterations. Assuming
+crossbar runs at 100 MHz [15], for each classification the convolution part takes only 0.09 ms, which
+is fast enough for real-time classification requirement.
+3.2
+
+Crossbar simulation with parasitic resistances
+
+Fig.6 shows the circuit structure of one-transistor-one-memristor (1T1M) crossbar for vector matrix
+multiplication (VMM). In this structure, memristor crossbar is the core component as it enables
+analog current weighted summation, which leads to ultra-efficient VMM operation. A m × n
+memristor crossbar is made by m row and n column metal wires where memristors formed at
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 9 ===
+Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+
+Fig. 6. Crossbar model with consideration of parasitic
+resistance.
+
+1:9
+
+Fig. 7. 1T1M simulation and experiment result
+[14]. Wire segment resistance is calibrated to 1Ω,
+transistor and memristor models are calibrated
+with in-array device test.
+
+intersecting points. Each memristor can be tuned to arbitrary conductance within its programmable
+range. To enable precise, non-disturbing tuning in large crossbar arrays, 1T1M cell is necessary to
+program the entire array with arbitrary conductance matrix G.
+Besides memristor crossbars, DACs/ADCs are also essential to ensure accurate VMM operation.
+First, they are necessary to integrate memristor-based analog VMM module into the digital environment, as functions like pooling, ReLU, and normalization still need digital implementation; Second,
+the calibration step can be performed at the ADC/DAC stage to improve crossbar result further.
+Last but not least, ADC provides quantization, which is helpful on filtering out the output error of
+memristor-based analog VMM modules, to prevent error accumulation inter- and intra-layers in
+CNNs.
+Comparing to previous simulation work on memristor crossbar arrays, we considered parasitic
+resistances including wire resistances, input/output resistances, and intersection resistances in our
+simulation model. With consideration of parasitic resistances, we can observe the signal degradation
+along rows and columns in the array, as shown in Fig.8. The low input signals applied on further
+corner memristors also make the column current output lower than expectation. To guarantee the
+actual output close to the ideal output, we adopt an experiment verified method[14]. Instead of
+mapping conductance G to a crossbar, we map a tweaked conductance matrix G′ with consideration
+of parasitic resistances in the crossbar. To find G′ for a m × n crossbar, we first need to formulate all
+3m · n + 2m + 2n KCL equations from the crossbar circuit model to solve all node voltages, including
+m · n cross-point top nodes, cross-point middle nodes (between memristor and access transistor),
+cross-point bottom nodes, and 2m + 2n boundary nodes on both end of horizontal lines and vertical
+lines. Then as conductance G′ has m · n unknown variables, we add m · n new equations Im = V ⊙ G
+as new limitations to force each cross-point to pass the ideal current. Where Im is the cross-point
+current for each memristor, V is the ideal cross-point voltage between top nodes and bottom nodes,
+and ⊙ denotes Hadamard product, or say element-wise multiplication. Finally with 4m · n + 2m + 2n
+nonlinear equations, G′ can be solved with HSPICE or any nonlinear equation solver. As shown in
+Fig.7, the simulation result well matches the experiment result of a 128×64 array.
+3.3
+
+Mitigation algorithm for parasitic resistance
+
+Algorithm 1 summarizes the flow of crossbar-based convolution with the mitigation algorithm.
+Table 3 explains the important functions in the algorithm. After initialization, if the kernel is
+already mapped and converted onto crossbars, it will directly jump to the computing step to
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 10 ===
+1:10
+
+Fan Zhang and Miao Hu
+
+Fig. 8. Signal degradation along rows and columns in crossbar. a). 0.2V signal imported into crossbar from the
+very left point on each row. b). Current degradation along columns in crossbar. Due to parasitic resistance,
+further column has lower voltage and current than ideal.
+
+simulate crossbar-based convolution. So we only need to mapping conductance matrix once for
+CNN inference.
+Algorithm 1 Mitigation Algorithm
+1: Initialization: setup crossbar parameters(wire resistance, memristor conductance range, etc...)
+2: Get a batch of input data
+3: If kernel K is mapped and converted, jump to computing.
+4: Dense mapping kernel K to conductance matrix G
+5: Optimize conversion signal
+6: InputV ectors ← Partition input data
+7: CaliSample ← Random pick from InputV ectors
+8: G ′ ← Conversion(G, Vconv )
+9: P ← GetCaliPara(G ′, CaliSample)
+10: Begin computing
+11: while ∼end of InputV ectors do
+12:
+Vin [i] ← InputV ector [i]
+13:
+Iout [i] = CrossbarSim(G′, Vin [i])
+14:
+Output[i] = Calibration(Iout [i], InputV ector [i], P)
+15:
+i ←i +1
+16: Convolution result ← reshape(Output)
+17: End computing
+
+3.3.1 Data and kernel pattern. Input data has high sparsity after the ReLU layer. Fig. 9 shows
+the data sparsity at each convolution layer of ResNet-20. The impact of data sparsity should be
+considered when choosing the conversion signal as well as gathering calibration samples.
+Similarly, we found that kernels in CNN have different distributions. In Fig.10 we list three
+typical kernel types regarding to their weight value distributions. Kernel type 1 refers to a weight
+distribution close to Gaussian. Usually, it happens when training algorithms put no particular
+limitation on weight values, such as ResNet. Kernel type 2 refers to the training algorithm that
+preventing weight values goes near zero[10]. Kernel type 3 refers to Ternary Neural Networks
+where weights can only be -1, 0(sparse), or 1[22]. It’s worth investigating how different kennel
+types in CNN impact the quality/precision of crossbar-based convolution.
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 11 ===
+Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+
+1:11
+
+Table 3. Explanations for functions in algorithm 1
+
+Function
+
+Explanation
+
+CrossbarSim
+
+Experiment verified crossbar simulator from [14]
+
+Conversion
+
+Solve Vconv · G = CrossbarSim(Vconv , G’) to get G’.
+
+GetCaliPara
+
+Get 1st order poly fitting result P by fitting crossbar output to ideal output
+of calibration samples.
+
+Calibration
+
+Use P and InputV ector [i] to map Iout [i] to Output[i]. Here InputV ector [i]
+is needed, because in VMM Y = X A, if A contains negative values, Y can
+be calculated by Y = X (A +c) −c ∗ sum(X ), while c is a large enough scalar
+to shift A to all positive.
+
+Fig. 9. Input data sparsity at each convolution layer of ResNet-20
+
+Fig. 10. Three kernel types in CNN with different limitations on weight
+
+3.3.2 Optimize conversion signal. To better quantify the computing accuracy, we define Output
+Error and Relative Error as below:
+ActualOutput − IdealOutput
+Output Error =
+Output Range
+Relative Error = abs(Output Error)
+While ActualOutput is the crossbar output in our simulator. IdealOutput is the expected correct
+result of the same kernel and input data. Output Range is the ideal convolution output range for
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 12 ===
+1:12
+
+Fan Zhang and Miao Hu
+
+each kernel. Relative error is the absolute value of output error, and it can be converted to output
+bit accuracy as below:
+Bit Accuracy = loд2 (1/Relative Error + 1)
+The conversion step is fine-tuning crossbar conductance from G to G’ to compensate the parasitic
+resistances. The original conversion algorithm[15] takes the maximum input vector as its conversion
+signal, which works well with dense matrix and dense input signals. However, in CNN, we need
+to consider the sparsity of data/kernel to optimize the conversion signal. By testing different
+conversion signals across different kernels, we notice that the amplitude of conversion signal is
+critical, while the sparsity of conversion signal is not as important. Fig.11 shows the relative error
+distribution with different conversion signal amplitudes in crossbar with size 144 × 16. We found
+that a conversion signal with too large amplitude (all 1) will cause overcompensation for crossbar
+conductance matrix due to circuit parasitic, and a too-small conversion signal (all 0.001) do not
+have enough compensation and both of them result in obvious output error. A bad conversion
+signal may cause hundreds of times error than a good conversion signal(±20% in all 1 signal versus
+±0.2% in all 0.1 signal). So for crossbar size 144 × 16, all 0.1 signal appears to be the best conversion
+signal, and other conversion signals close to it generate similar error distribution.
+3.3.3 Calibration. In addition to the original conversion algorithm, we add a calibration stage to
+improve the result further. It randomly picks ten samples from the input data set and runs a 1st
+order polynomial fit to fit crossbar output to ideal output. The generated fitting vector P is fixed
+per crossbar and can be easily embedded in ADC/DAC configurations. Fig.12 shows the relative
+error with different calibration signals, and shuffled input patterns achieve the best result in all
+four sets of different calibration signals.
+4
+4.1
+
+RESULT
+Simulation setup
+
+In this work, convolution and fully-connected(FC) layers are implemented by analog crossbars
+with the digital interface. Other functions, such as pooling, ReLU, batch normalization, etc., are
+processed by digital circuits. The CNN is offline-trained, then its kernels are converted to the
+conductance of crossbar for inference. Similar to our previous work[42], our crossbar parameters
+are listed below: lowest resistance Ron = 15kΩ, highest resistance Rof f = 300kΩ, wire resistance
+per segment is set to 1Ω, input/output resistance of crossbar are set to 1Ω. Input voltage range is
+[0, 0.4V]. The sensing voltage for device conductance is 0.2V. The CNN framework used in this
+work is MatConvNet[33].
+4.2
+
+Individual convolution layer simulation
+
+We first run circuit simulation at individual convolution layer to study the impact of input data
+sparsity, kernel type and crossbar size on convolution accuracy.
+Fig. 13 shows the output distribution with different input sparsity and different mapping algorithms in a 144 × 16 crossbar, which stores a 3*3*16*16 convolution kernel. If just using linear
+mapping without any consideration of circuit parasitics, crossbar result deviates far always from
+the ideal outcome. Our mitigation algorithm demonstrates better performance compared to the
+original conversion algorithm in all cases. The result overlaps well on the y = x trend-line with
+different input sparsity. The original conversion algorithm can force the output to get close to
+the ideal output. But as the sparsity goes up, the original conversion algorithm loses its ability to
+amend the result.
+Fig.14, 15, 16, 17 illustrate the impact of input data sparsity on different size of crossbar. There
+are three observations: first, our method provides ∼50% better overall accuracy than the original
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 13 ===
+Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+
+Fig. 11. Output error with different conversion signal
+amplitudes on crossbar(size: 144 × 16), (a),(b),(c),(d)
+are conversion signals with all 1, 0.1, 0.01, 0.001 respectively.
+
+1:13
+
+Fig. 12. Calibration with different signal types
+on crossbar(size: 288 × 32), (a):Non-calibration,
+(b):random calibration signal, (c):random but decreased value(rand/cali_iters),(d):chosen from shuffled input.
+
+Fig. 13. Comparing three methods with different signal sparsities for crossbar size 144 × 16
+
+conversion algorithm. Second, our method gives a lower mean relative error when the ideal value is
+small. Third, our method minimizes the impact of data sparsity comparing to the original conversion
+algorithm. Fig.18 summarizes the mean/worst relative error across the aforementioned three kernel
+types with different input sparsity and crossbar sizes. In short, the result shows that our method is
+independent of kernel types and data sparsity, and achieves the best accuracy overall.
+4.3
+
+End-to-end CNN circuit simulation
+
+CNN contains more than one layer, any error in one layer will propagate and accumulate to the
+next layer. It is essential to analyze how error propagates and accumulates in deep neural networks,
+and evaluate their impact on the final classification result. For MNIST[20], We trained a CNN
+with four convolution layers. Table.4 summarizes the kernel information, corresponding crossbar
+sizes, and the conversion signal for each layer. Note that for larger crossbars, conversion signal
+with smaller amplitude tends to ease the calculation of G′, and provides G′ with better quality
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 14 ===
+1:14
+
+Fan Zhang and Miao Hu
+
+Fig. 14. Relative error of 27 × 16 crossbar. (a),(b): mitigation algorithm, (c),(d): original conversion algorithm
+
+Fig. 15. Relative error of 144 × 16 crossbar. (a),(b):
+mitigation algorithm, (c),(d): original conversion algorithm
+
+Fig. 16. Relative error of 288 × 32 crossbar. (a),(b):
+mitigation algorithm, (c),(d): original conversion algorithm
+
+Fig. 17. Relative error of 576 × 64 crossbar. (a),(b):
+mitigation algorithm, (c),(d): original conversion algorithm
+
+(higher VMM accuracy). It is because, in the conversion process, conversion signals are used for the
+initialization of node states in crossbar simulation. For example, we initialize all top voltage nodes
+to be its row input voltages. Large conversion signal is okay for small to medium size crossbar
+arrays since the signal degradation along wires is not too significant. However, in large crossbar
+arrays, the node voltage of devices in further corners are significantly different from the ideal
+values due to notable parasitic resistance. Initializing these nodes with ideal values not only makes
+the solver takes more iteration to complete, but also may lead to non-convergence issues due to
+lousy initialization, observed as extremely large or even negative values in G′. In practice, we found
+that as the crossbar size goes up, the lower conversion signal helps the algorithm to compute the
+G′ quickly in the appropriate range.
+Fig.19 shows the error propagation at each convolution layer for MNIST. Different ADC/DAC
+quantization bit-resolutions are applied to restrict error propagation. As a result, we can see
+that 6 and 8-bit quantization both can prevent error accumulation after the third layer. Another
+observation is that Non-quantization (direct analog forwarding) makes the error even lower than
+8-bit.
+We further tested 4000 images from MNIST validation dataset with different quantization setting.
+Testing result is given in Table 6. With 8 bit quantization, final classification accuracy remaining at
+98.8%, which is less than 1% difference than the ideal (software) result (99.1%).
+We further implement the state-of-art CNN, ResNet on CIFAR-10[17] to explore the impact of
+error propagation in modern deep neural networks. ResNet-20, 32, and 56 all consist by following
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 15 ===
+Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+
+1:15
+
+Fig. 18. Mean/Worst relative error with different kernel types, data sparsities and crossbar sizes
+
+types of convolution layers: first a convolution layer connected with input has convolution kernel
+size 3*3*3*16 then a bunch of layers followed with kernel size 3*3*16*16, 3*3*32*32, and 3*3*64*64
+respectively. Second, additional convolution layer is added between different kernel size to match
+the matrix dimension. Its size depends on nearby convolution layers but with fixed convolution
+window(1 by 1) on feature map. The last convolution layer is the fully connected layer which has
+the kernel size 1*1*64*10. Besides the last FC layer and dimension match layer, convolution layers
+in ResNet use the same 3*3 convolution window in their every channel. It means for each channel,
+only nine memristors in the same column is needed to perform the convolution operation. Due to
+such small convolution kernel and few feature channels in ResNet, even in 56 layers, ResNet the
+largest crossbar needed is still the same in ResNet-20 (576×64).
+In table5, we give the convolution kernel sizes, corresponding crossbar sizes and the calibration
+signal amplitude for ResNets. In ResNet, some bypass branches use 1*1 convolution to match the
+matrix dimension. For those dimension match layer, since kernels are tiny, we use the 0.1 calibration
+signal for all cases. Although crossbar size in ResNet is much smaller than CNN we used with
+MNIST dataset, extra layers make it needs more crossbars for inference. Circuit simulation for
+ResNet is slower than the CNN mentioned above for MNIST.
+Limited by long circuit simulation time (Each test image takes about 5 minutes), We use a subset
+of CIFAR-10 which contains 150 images as our test set. In Table 6, our experiments show that
+8-bit quantization is a good balance between error suppression and information preservation, as it
+achieves even slightly better classification result than software. 4-bit quantization causes the error
+accumulates through all layers and leads to a significant drop in final classification accuracy.
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 16 ===
+1:16
+
+Fan Zhang and Miao Hu
+
+Table 4. Simple CNN convolution layer kernel size, crossbar size , and corresponding conversion signal
+amplitude
+
+Layer
+Conv1
+Conv2
+Conv3
+Conv4
+
+Kernel Size
+5*5*1*20
+5*5*20*50
+4*4*50*500
+1*1*500*10
+
+Crossbar Size
+25 * 20
+500 * 50
+800 * 500
+500 * 10
+
+Conversion signal
+0.1
+0.01
+0.001
+0.01
+
+Fig. 19. Error propagation along layers in a simple neural network(4 convolution layers) with MNIST dataset,
+solid lines represent mean error, dash lines represent worst error.
+
+Fig. 20. Error propagation along layers in ResNet, solid lines represent mean error, dash lines represent worst
+error. a) is ResNet-20, b) is ResNet-32, and c) is ResNet-56.
+
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 17 ===
+Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+
+1:17
+
+Table 5. ResNet kernel, crossbar size and conversional signal setting
+
+ResNet-20
+
+ResNet-32
+
+ResNet-56
+
+Conv1
+Conv2-7
+Conv8
+Conv9-13
+Conv14
+Conv15-19
+FC
+
+Conv1
+Conv2-11
+Conv12
+Conv13-21
+Conv22
+Conv23-31
+FC
+
+Conv1
+Conv2-19
+Conv20
+Conv21-37
+Conv38
+Conv37-55
+FC
+
+Kernel
+Size
+3*3*3*16
+3*3*16*16
+3*3*16*32
+3*3*32*32
+3*3*32*64
+3*3*64*64
+1*1*64*10
+
+Xbar
+Size
+27*16
+144*16
+144*32
+288*32
+288*64
+576*64
+64*10
+
+Conv.
+Sigal.
+0.1
+0.1
+0.1
+0.05
+0.05
+0.01
+0.1
+
+Table 6. Classification accuracy with different quantization levels
+
+Network
+ResNet-20 (CIFAR-10)
+ResNet-32 (CIFAR-10)
+ResNet-56 (CIFAR-10)
+LeNet (MNIST)
+4.4
+
+Software
+89.3%
+89.3%
+90%
+99.1%
+
+non quantization
+88.7%
+89.3%
+88%
+98.9%
+
+4 bit
+11.3%
+N/A
+N/A
+79.2%
+
+6 bit
+82.7%
+82%
+88%
+88.6%
+
+8 bit
+90.7%
+90%
+89.3%
+88.8%
+
+Impact of programming error
+
+We modelled the programming error as conductance variations following zero-mean Gaussian
+distributions with sigma ranges from 0 to 1 µS[14]. The devices’ conductance ranges from 3.3 µS
+(300k ohm) to 66.7 µS (15k ohm). We would like to emphasize that since crossbar-based computing
+is based on Ohm’s law and KCLs, computing result is carried by current. The error current is
+linearly proportional to the error in conductance, rather than error in resistance. Thus, a large
+resistance variation at high resistance state may not cause large computing error because the
+relative error in conductance is small. Fig. 21 shows that how programming error affects the final
+classification accuracy of ResNet-20 on CIFAR-10 with different quantization levels. To conduct the
+simulation, we generate the programming error pattern with different sigma settings and add them
+to the conductance matrices. Calibration step is then performed on the programming error noise
+contaminated conductance matrix and update the fitting parameter P. The above configurations
+are stored for all input test data to make sure they all use the same crossbar setting.
+When the programming error sigma <0.4µS, ResNet-20 could still maintain the accuracy higher
+than 80%. Since the 0.4µS is less than the 6-bit resolution under our configuration, the 6-bit
+quantization has minimal impact. While the non-quantization setting has the maximum accuracy
+degradation. As the programming error sigma increase, quantization step could not prevent such
+error propagating between layers and the classification accuracy drops dramatically.
+5
+
+CONCLUSIONS
+
+In this work, we investigate how modern CNN performs on crossbar-based architecture with
+end-to-end circuit simulations with careful consideration of parasitic resistances. By studying
+CNN layer by layer, we find CNNs’ characteristic like data sparsity cause existed crossbar-based
+optimization algorithm invalid. We propose dense mapping to achieve efficient convolution kernel
+to crossbar mapping. And we adapted and improved the original conversion algorithm for CNNs,
+which enables 0.25% mean relative error (∼ 8.6 bits) or 1.2% worst relative error (∼ 6.4 bits) for
+crossbar size 576 × 64. We performed a rigorous end-to-end circuit simulation for every convolution
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 18 ===
+1:18
+
+Fan Zhang and Miao Hu
+
+Fig. 21. Impact of programming error on classification accuracy.
+
+layer to give an accurate prediction of error propagation due to analog circuit errors. We find
+that 8-bit or even 6-bit ADC/DAC is necessary to prevent error accumulation in deep CNNs up
+to 50 layers, and maintains the final classification accuracy. Simulation result also shows that our
+method is independent of input data sparsity and kernel type. It would be applied to general CNNs
+to improve their accuracy performance on crossbar-based architecture.
+6
+
+ACKNOWLEDGEMENT
+
+This project is supported by HUAWEI with confirmation number HIRPO2017050311. Any Opinions,
+findings, and conclusions or recommendations expressed in this material are those of the authors
+and do not necessarily reflect the views of HUAWEI or its contractors.
+REFERENCES
+[1] Gina C. Adam, Brian D. Hoskins, Mirko Prezioso, Farnood Merrikh-Bayat, Bhaswar Chakrabarti, and Dmitri B. Strukov.
+2017. 3-D Memristor Crossbars for Analog and Neuromorphic Computing Applications. IEEE Transactions on Electron
+Devices 64, 1 (Jan. 2017), 312–318. https://doi.org/10.1109/TED.2016.2630925
+[2] Sapan Agarwal, Richard L Schiek, and Matthew J Marinella. 2017. Compensating for Parasitic Voltage Drops in
+Resistive Memory Arrays. In Memory Workshop (IMW), 2017 IEEE International. IEEE, 1–4.
+[3] Vijay Chandrasekhar, Jie Lin, Qianli Liao, Olivier MorÃĺre, Antoine Veillard, Lingyu Duan, and Tomaso Poggio.
+2017. Compression of Deep Neural Networks for Image Instance Retrieval. arXiv:1701.04923 [cs] (Jan. 2017). http:
+//arxiv.org/abs/1701.04923 arXiv: 1701.04923.
+[4] Jian Chen and Yupin Fong. 1999. High density non-volatile Flash memory without adverse effects of electric field
+coupling between adjacent floating gates. US Patent 5,867,429.
+[5] Pai-Yu Chen, Xiaochen Peng, and Shimeng Yu. 2018. NeuroSim: A Circuit-Level Macro Model for Benchmarking
+Neuro-Inspired Architectures in Online Learning. IEEE Transactions on Computer-Aided Design of Integrated Circuits
+and Systems (2018), 1–1. https://doi.org/10.1109/TCAD.2018.2789723
+[6] Albert Ciprut and Eby G Friedman. 2017. Modeling size limitations of resistive crossbar array with cell selectors. IEEE
+Transactions on Very Large Scale Integration (VLSI) Systems 25, 1 (2017), 286–293.
+[7] L. Gao, P. Chen, and S. Yu. 2016. Demonstration of Convolution Kernel Operation on Resistive Cross-Point Array.
+IEEE Electron Device Letters 37, 7 (July 2016), 870–873. https://doi.org/10.1109/LED.2016.2573140
+[8] Ligang Gao, Pai-Yu Chen, and Shimeng Yu. 2016. Demonstration of Convolution Kernel Operation on Resistive
+Cross-Point Array. IEEE Electron Device Letters 37, 7 (July 2016), 870–873. https://doi.org/10.1109/LED.2016.2573140
+[9] Suyog Gupta, Ankur Agrawal, Kailash Gopalakrishnan, and Pritish Narayanan. 2015. Deep Learning with Limited
+Numerical Precision. arXiv:1502.02551 [cs, stat] (Feb. 2015). http://arxiv.org/abs/1502.02551 arXiv: 1502.02551.
+[10] Song Han, Huizi Mao, and William J. Dally. 2015. Deep Compression: Compressing Deep Neural Networks with
+Pruning, Trained Quantization and Huffman Coding. arXiv:1510.00149 [cs] (Oct. 2015). http://arxiv.org/abs/1510.00149
+arXiv: 1510.00149.
+[11] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. 2015. Deep Residual Learning for Image Recognition.
+arXiv:1512.03385 [cs] (Dec. 2015). http://arxiv.org/abs/1512.03385 arXiv: 1512.03385.
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 19 ===
+Mitigate Parasitic Resistance in Resistive Crossbar-based Convolutional Neural Networks
+
+1:19
+
+[12] Zhezhi He, Jie Lin, Rickard Ewetz, Jiann-Shiun Yuan, and Deliang Fan. 2019. Noise Injection Adaption: End-to-End
+ReRAM Crossbar Non-ideal Effect Adaption for Neural Network Mapping. In Proceedings of the 56th Annual Design
+Automation Conference 2019 (DAC ’19). ACM, New York, NY, USA, Article 57, 6 pages. https://doi.org/10.1145/3316781.
+3317870
+[13] Nhut-Minh Ho and Weng-Fai Wong. 2017. Exploiting half precision arithmetic in Nvidia GPUs. IEEE, 1–7. https:
+//doi.org/10.1109/HPEC.2017.8091072
+[14] Miao Hu, Catherine E. Graves, Can Li, Yunning Li, Ning Ge, Eric Montgomery, Noraica Davila, Hao Jiang, R. Stanley
+Williams, J. Joshua Yang, Qiangfei Xia, and John Paul Strachan. 2018. Memristor-Based Analog Computation and
+Neural Network Classification with a Dot Product Engine. Advanced Materials 30, 9 (March 2018), 1705914. https:
+//doi.org/10.1002/adma.201705914
+[15] Miao Hu, R. Stanley Williams, John Paul Strachan, Zhiyong Li, Emmanuelle M. Grafals, Noraica Davila, Catherine
+Graves, Sity Lam, Ning Ge, and Jianhua Joshua Yang. 2016. Dot-product engine for neuromorphic computing:
+programming 1T1M crossbar to accelerate matrix-vector multiplication. ACM Press, 1–6. https://doi.org/10.1145/
+2897937.2898010
+[16] Yu Ji, Youyang Zhang, Xinfeng Xie, Shuangchen Li, Peiqi Wang, Xing Hu, Youhui Zhang, and Yuan Xie. 2019.
+FPSA: A Full System Stack Solution for Reconfigurable ReRAM-based NN Accelerator Architecture. arXiv preprint
+arXiv:1901.09904 (2019).
+[17] A. Krizhevsky and G. Hinton. 2009. Learning multiple layers of features from tiny images. Master’s thesis, Department
+of Computer Science, University of Toronto (2009).
+[18] Alex Krizhevsky, Ilya Sutskever, and Geoffrey E Hinton. 2012. ImageNet Classification with Deep Convolutional
+Neural Networks. In Advances in Neural Information Processing Systems 25, F. Pereira, C. J. C. Burges, L. Bottou, and
+K. Q. Weinberger (Eds.). Curran Associates, Inc., 1097–1105. http://papers.nips.cc/paper/4824-imagenet-classificationwith-deep-convolutional-neural-networks.pdf
+[19] Yann LeCun, Yoshua Bengio, and Geoffrey Hinton. 2015. Deep learning. Nature 521, 7553 (May 2015), 436–444.
+https://doi.org/10.1038/nature14539
+[20] Y. Lecun, L. Bottou, Y. Bengio, and P. Haffner. 1998. Gradient-based learning applied to document recognition. Proc.
+IEEE 86, 11 (Nov 1998), 2278–2324. https://doi.org/10.1109/5.726791
+[21] Can Li, Miao Hu, Yunning Li, Hao Jiang, Ning Ge, Eric Montgomery, Jiaming Zhang, Wenhao Song, Noraica DÃąvila,
+Catherine E. Graves, Zhiyong Li, John Paul Strachan, Peng Lin, Zhongrui Wang, Mark Barnell, Qing Wu, R. Stanley
+Williams, J. Joshua Yang, and Qiangfei Xia. 2018. Analogue signal and image processing with large memristor crossbars.
+Nature Electronics 1, 1 (Jan. 2018), 52–59. https://doi.org/10.1038/s41928-017-0002-z
+[22] Fengfu Li, Bo Zhang, and Bin Liu. 2016. Ternary Weight Networks. arXiv:cs.CV/1605.04711
+[23] Jilan Lin, Zhenhua Zhu, Yu Wang, and Yuan Xie. 2019. Learning the Sparsity for ReRAM: Mapping and Pruning Sparse
+Neural Network for ReRAM Based Accelerator. In Proceedings of the 24th Asia and South Pacific Design Automation
+Conference (ASPDAC ’19). ACM, New York, NY, USA, 639–644. https://doi.org/10.1145/3287624.3287715
+[24] Tao Liu, Wujie Wen, Lei Jiang, Yanzhi Wang, Chengmo Yang, and Gang Quan. 2019. A Fault-Tolerant Neural Network
+Architecture. In Proceedings of the 56th Annual Design Automation Conference 2019 (DAC ’19). ACM, New York, NY,
+USA, Article 55, 6 pages. https://doi.org/10.1145/3316781.3317742
+[25] Xiaoxiao Liu, Mengjie Mao, Beiye Liu, Boxun Li, Yu Wang, Hao Jiang, Mark Barnell, Qing Wu, Jianhua Yang, Hai
+Li, and Yiran Chen. 2016. Harmonica: A Framework of Heterogeneous Computing Systems With Memristor-Based
+Neuromorphic Computing Accelerators. IEEE Transactions on Circuits and Systems I: Regular Papers 63, 5 (May 2016),
+617–628. https://doi.org/10.1109/TCSI.2016.2529279
+[26] C. Mei, Z. Liu, Y. Niu, X. Ji, W. Zhou, and D. Wang. 2017. A 200MHZ 202.4GFLOPS@10.8W VGG16 accelerator in
+Xilinx VX690T. In 2017 IEEE Global Conference on Signal and Information Processing (GlobalSIP). 784–788. https:
+//doi.org/10.1109/GlobalSIP.2017.8309067
+[27] P. Merolla, J. Arthur, F. Akopyan, N. Imam, R. Manohar, and D. S. Modha. 2011. A digital neurosynaptic core using
+embedded crossbar memory with 45pJ per spike in 45nm. In 2011 IEEE Custom Integrated Circuits Conference (CICC).
+1–4. https://doi.org/10.1109/CICC.2011.6055294
+[28] Minsoo Rhu, Natalia Gimelshein, Jason Clemons, Arslan Zulfiqar, and Stephen W. Keckler. 2016. vDNN: Virtualized
+Deep Neural Networks for Scalable, Memory-Efficient Neural Network Design. arXiv:1602.08124 [cs] (Feb. 2016).
+http://arxiv.org/abs/1602.08124 arXiv: 1602.08124.
+[29] A. Shafiee, A. Nag, N. Muralimanohar, R. Balasubramonian, J. P. Strachan, M. Hu, R. S. Williams, and V. Srikumar. 2016.
+ISAAC: A Convolutional Neural Network Accelerator with In-Situ Analog Arithmetic in Crossbars. In 2016 ACM/IEEE
+43rd Annual International Symposium on Computer Architecture (ISCA). 14–26. https://doi.org/10.1109/ISCA.2016.12
+[30] Karen Simonyan and Andrew Zisserman. 2014. Very Deep Convolutional Networks for Large-Scale Image Recognition.
+arXiv:1409.1556 [cs] (Sept. 2014). http://arxiv.org/abs/1409.1556 arXiv: 1409.1556.
+
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.
+
+=== page 20 ===
+1:20
+
+Fan Zhang and Miao Hu
+
+[31] Dmitri B Strukov, Gregory S Snider, Duncan R Stewart, and R Stanley Williams. 2008. The missing memristor found.
+nature 453, 7191 (2008), 80.
+[32] Christian Szegedy, Wei Liu, Yangqing Jia, Pierre Sermanet, Scott Reed, Dragomir Anguelov, Dumitru Erhan, Vincent
+Vanhoucke, and Andrew Rabinovich. 2015. Going deeper with convolutions. IEEE, 1–9. https://doi.org/10.1109/CVPR.
+2015.7298594
+[33] Andrea Vedaldi and Karel Lenc. 2015. Matconvnet: Convolutional neural networks for matlab. In Proceedings of the
+23rd ACM international conference on Multimedia. ACM, 689–692.
+[34] wikichip. [n.d.]. MLU100 - Cambricon. https://en.wikichip.org/wiki/cambricon/mlu/mlu100, accessed 2018-10-31.
+[35] SA Wolf, DD Awschalom, RA Buhrman, JM Daughton, S Von Molnar, ML Roukes, A Yu Chtchelkanova, and DM Treger.
+2001. Spintronics: a spin-based electronics vision for the future. Science 294, 5546 (2001), 1488–1495.
+[36] H-S Philip Wong, Heng-Yuan Lee, Shimeng Yu, Yu-Sheng Chen, Yi Wu, Pang-Shiu Chen, Byoungil Lee, Frederick T
+Chen, and Ming-Jinn Tsai. 2012. Metal–oxide RRAM. Proc. IEEE 100, 6 (2012), 1951–1970.
+[37] H-S Philip Wong, Simone Raoux, SangBum Kim, Jiale Liang, John P Reifenberg, Bipin Rajendran, Mehdi Asheghi, and
+Kenneth E Goodson. 2010. Phase change memory. Proc. IEEE 98, 12 (2010), 2201–2227.
+[38] Lixue Xia, Boxun Li, Tianqi Tang, Peng Gu, Xiling Yin, Wenqin Huangfu, Pai-Yu Chen, Shimeng Yu, Yu Cao, Yu Wang,
+Yuan Xie, and Huazhong Yang. 2016. MNSIM: Simulation Platform for Memristor-based Neuromorphic Computing
+System. (2016), 6.
+[39] C. Yakopcic, M. Z. Alom, and T. M. Taha. 2016. Memristor crossbar deep network implementation based on a
+Convolutional neural network. In 2016 International Joint Conference on Neural Networks (IJCNN). 963–970. https:
+//doi.org/10.1109/IJCNN.2016.7727302
+[40] C. Yakopcic, R. Hasan, and T. M. Taha. 2015. Memristor based neuromorphic circuit for ex-situ training of multilayer neural network algorithms. In 2015 International Joint Conference on Neural Networks (IJCNN). 1–7. https:
+//doi.org/10.1109/IJCNN.2015.7280813
+[41] Shimeng Yu. 2018. Neuro-Inspired Computing With Emerging Nonvolatile Memorys. Proc. IEEE 106, 2 (Feb. 2018),
+260–285. https://doi.org/10.1109/JPROC.2018.2790840
+[42] Fan Zhang and Miao Hu. 2018. Memristor-based Deep Convolution Neural Network: A Case Study. arXiv preprint
+arXiv:1810.02225 (2018).
+[43] Shijin Zhang, Zidong Du, Lei Zhang, Huiying Lan, Shaoli Liu, Ling Li, Qi Guo, Tianshi Chen, and Yunji Chen. 2016.
+Cambricon-x: An accelerator for sparse neural networks. In The 49th Annual IEEE/ACM International Symposium on
+Microarchitecture. IEEE Press, 20.
+
+ACM J. Emerg. Technol. Comput. Syst., Vol. SI: Nanoelectronic Device, Circuit, Architecture Design, No. 1, Article 1.
+Publication date: December 2019.

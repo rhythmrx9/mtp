@@ -1,0 +1,1386 @@
+# RxNN: A Framework for Evaluating Deep Neural Networks on Resistive Crossbars
+# id: W2909715355 | key: 2020_Jain_RxNN_TCAD | TCAD 2020 | card: ../cards/2020_Jain_RxNN_TCAD.md
+
+
+=== page 1 ===
+1
+
+RxNN: A Framework for Evaluating Deep Neural
+Networks on Resistive Crossbars
+
+arXiv:1809.00072v3 [cs.ET] 2 Jun 2020
+
+Shubham Jain1 , Abhronil Sengupta2 , Kaushik Roy1 , Anand Raghunathan1
+1
+School of Electrical and Computer Engineering, Purdue University
+2
+School of Electrical Engineering and Computer Science, Penn State University
+{jain130,kaushik,raghunathan}@purdue.edu, sengupta@psu.edu
+
+Abstract—Resistive crossbars designed with non-volatile memory devices have emerged as promising building blocks for
+Deep Neural Network (DNN) hardware, due to their ability
+to compactly and efficiently realize vector-matrix multiplication
+(VMM), the dominant computational kernel in DNNs. However,
+a key challenge with resistive crossbars is that they suffer
+from a range of device and circuit level non-idealities such as
+driver resistance, sensing resistance, sneak paths, interconnect
+parasitics, non-linearities in the peripheral circuits, stochastic
+write operations, and process variations. These non-idealities
+can lead to errors in vector-matrix multiplications, eventually
+degrading the DNN’s accuracy. It is therefore critical to study
+the impact of crossbar non-idealities on the accuracy of largescale DNNs (with millions of neurons and billions of synaptic
+connections). However, this is challenging because existing device
+and circuit models are too slow to use in application-level
+evaluations.
+We present RxNN, a fast and accurate simulation framework
+to evaluate large-scale DNNs on resistive crossbar systems. RxNN
+splits and maps the computations involved in each DNN layer into
+crossbar operations, and evaluates them using a Fast Crossbar
+Model (FCM) that accurately captures the errors arising due to
+crossbar non-idealities while being four-to-five orders of magnitude faster than circuit simulation. FCM models a crossbarbased VMM operation using three stages - non-linear models
+for the input and output peripheral circuits (Digital-to-Analog
+and Analog-to-Digital converters), and an equivalent non-ideal
+conductance matrix for the core crossbar array. We implement
+RxNN by extending the Caffe machine learning framework and
+use it to evaluate a suite of six large-scale DNNs developed for
+the ImageNet Challenge (ILSVRC). Our experiments reveal that
+resistive crossbar non-idealities can lead to significant accuracy
+degradations (9.6%-32%) for these large-scale DNNs. To the best
+of our knowledge, this work is the first quantitative evaluation
+of the accuracy of large-scale DNNs on resistive crossbar based
+hardware. We also demonstrate that RxNN enables fast modelin-the-loop re-training of DNNs to partially mitigate the accuracy
+degradation.
+Index Terms—Resistive crossbar, Non-volatile memory, Crossbar modeling, Crossbar non-idealities, Deep Neural Networks,
+Vector-matrix multiplication, In-memory Computing, Analog
+Computing, Machine Learning, Artificial Intelligence
+
+I. Introduction
+Deep neural networks (DNNs) have transformed the field of
+artificial intelligence in the past decade, and are currently used
+This work was supported in part by C-BRIC, one of six centers in JUMP, a
+Semiconductor Research Corporation (SRC) program sponsored by DARPA.
+
+in several real-world products and services for speech recognition, image analysis, natural language processing, search
+engines, recommendation systems, and more [1], [2]. However, the large and rapidly growing computation and storage
+requirements of DNNs pose severe challenges to the systems
+on which they are deployed.
+Resistive crossbars have garnered significant interest in
+realizing DNNs due to their ability to perform the underlying computational kernel, viz. vector-matrix multiplication
+(VMM), efficiently. They may be designed using a range
+of emerging devices, including Resistive RAM (ReRAM),
+Phase Change Memory (PCM), and Spintronics [3]–[6]. These
+devices have several desirable characteristics such as high
+density, non-volatility, and low voltage operation, enabling
+highly compact and energy-efficient DNN implementations.
+Consequently, several research efforts have explored resistive
+crossbar based hardware at various levels of design abstraction [4], [7]–[37].
+A key challenge with resistive crossbars is that the performed operation is only an approximation of the desired
+vector-matrix multiplication. For example, consider the process where digital inputs are first converted to voltages and
+applied to the rows of the crossbar (which is programmed
+with the weights as conductances), and the resulting column
+currents are digitized to generate the digital outputs. Various
+device and circuit level non-idealities, viz., driver resistance,
+sensing resistance, sneak paths, interconnect parasitics, ADC
+and DAC non-linearity, stochastic write operations, and process variations may lead to errors in the computed vectormatrix multiplications. These errors can degrade the overall
+accuracy of a DNN realized on a resistive crossbar system.
+Although DNNs are resilient to some imprecision in their computations [38]–[40], this resilience is not unlimited. Therefore,
+it is necessary to evaluate the impact of resistive crossbars nonidealities at the application level in order to establish their
+feasibility as the building blocks of DNN hardware.
+Most previous efforts on resistive crossbar based DNN
+implementations either do not consider non-idealities or model
+non-idealities in a very limited manner (e.g., as limited precision). Moreover, they focus their analysis on very simple networks and datasets (e.g., MNIST). Thus, they leave open the
+question of how non-idealities impact the accuracy of largescale neural networks and more complex tasks. State-of-the-
+
+=== page 2 ===
+2
+
+art DNNs often contain tens to hundreds of layers, millions of
+neurons and billions of synaptic connections. Evaluating such
+networks requires a fast and scalable, yet accurate, model for
+resistive crossbars that can be integrated into state-of-the-art
+DNN software frameworks. Unfortunately, such a framework
+is currently unavailable. Device and circuit simulation (SPICE)
+models of resistive crossbars are accurate but extremely slow
+and infeasible for large-scale network evaluation. On the other
+hand, architectural models of resistive crossbars [27], [29]
+target design space exploration and use highly simplified error
+models that are reasonable for their context, but inadequate for
+evaluating application-level accuracy of DNNs. For example,
+these models do not consider error dependence on the crossbar
+inputs, programmed conductances, and the crossbar column
+performing the computation.
+We propose RxNN, a fast and accurate simulation framework to enable functional evaluation of large-scale DNNs
+on resistive crossbars. RxNN splits and maps the DNN’s
+computations into crossbar operations, and evaluates them
+using a Fast Crossbar Model (FCM) that accurately captures
+the errors arising due to crossbar non-idealities while being
+four-to-five orders of magnitude faster than circuit simulation.
+FCM models a crossbar-based VMM operation using three
+stages - non-linear models for the input and output peripheral
+circuits (Digital-to-Analog and Analog-to-Digital converters),
+and an equivalent non-ideal conductance matrix for the core
+crossbar array. The non-ideal conductance matrix for each
+crossbar array is derived by pre-solving the voltage-current
+equations (Kirchoff’s loop law and Ohm’s law) for the array,
+requiring only a vector-matrix multiplication to subsequently
+transform the input voltages to output currents.
+We realize FCM using the well-known BLAS (Basic Linear
+Algebra Subprograms) interface and develop RxNN based on
+the Caffe [41] deep learning framework. We use RxNN to evaluate six large-scale DNNs for classifying the ImageNet [42]
+dataset and three simpler networks for classifying the CIFAR10 and MNIST datasets. Our evaluation suggests that crossbar
+non-idealities impact accuracy much more significantly as we
+move from the smaller networks (LeNet and ConvNet) and
+simpler datasets to the larger networks (e.g., ResNet) and
+ImageNet, motivating the need for further research in crosslayer mitigation and compensation techniques.
+In summary, the key contributions of this work are:
+We study the cumulative effect of resistive crossbar nonidealities by characterizing the resulting errors in the realized vector-matrix multiplication operations. We find that
+the errors show significant data and hardware-instance
+dependence that should be considered for accurately
+modeling resistive crossbars.
+• We propose FCM, a fast and accurate functional crossbar
+model to capture the effects of crossbar non-idealities.
+• We develop RxNN, a software framework that can evaluate large-scale DNNs on resistive crossbar systems
+and help re-train to compensate for the effects of nonidealities.
+• We evaluate the application-level accuracy of 6 state-
+
+•
+
+of-the-art DNNs, viz. ResNet-50, VGG-16, GoogleNet,
+AlexNet, OverFeat, and NiN on a resistive crossbar based
+system. Our evaluation reveals that the degradation in
+accuracy due to non-idealities can be significant (9.6%32%) for large-scale DNNs. This degradation can be
+partially alleviated by re-training, but calls for further
+research in compensation techniques.
+The rest of the paper is organized as follows. Section II
+overviews the prior efforts related to this work. Section III
+provides the necessary background on resistive crossbars.
+Section IV discusses crossbar non-idealities and demonstrates
+their impact on vector-matrix multiplications realized using
+crossbars. Section V describes the proposed FCM models.
+Section VI presents the RxNN software framework. Section VII details the experimental methodology. We present
+experimental results in section VIII and conclude the paper
+in Section IX.
+
+II. Related Work
+Resistive crossbars have attracted significant interest in
+recent years due to their ability to efficiently realize vectormatrix multiplications, the key computational kernel in
+DNNs [43]–[46]. Prior efforts towards realizing DNNs on
+resistive crossbar systems can be broadly classified into specialized hardware accelerator designs [7]–[9], [11]–[13], nonideality mitigation schemes [14]–[18], [22]–[26], and design
+tools for resistive crossbar systems [27]–[30].
+Specialized hardware accelerators. Resistive crossbar based
+specialized hardware systems have been proposed for accelerating DNN inference [7]–[11] and training [12], [13]. These
+efforts focus on the evaluation of the proposed architecture
+using performance, energy, and area as their metrics, and either
+do not consider non-idealities or model only the quantized
+nature of crossbar-based VMM operations.
+Non-ideality mitigation schemes. Prior efforts have also
+proposed methods to mitigate the impact of crossbar nonidealities. These include (i) (re-)training [16]–[21], (ii) optimized weight to conductance conversion [14], (iii) rank
+clipping to reduce the effects of non-idealities by lowering
+crossbar dimensions [25], (iv) schemes to alleviate the effect
+of hard failures [26], and (vi) hardware solutions to address
+low-voltage induced drift [15], programming errors [23], and
+IR drop [24]. The focus of all these efforts is to evaluate
+and mitigate errors due to crossbar non-idealities. However,
+they are restricted to simple networks and small datasets.
+This limitation is in large part due to the lack of a scalable
+simulation framework. Further, many of these efforts also
+lack a detailed crossbar model and consider only a subset of
+crossbar non-idealities.
+RxNN complements the above efforts on hardware accelerators and non-ideality mitigation schemes. Moreover, it
+overcomes their limitations (such as considering only a limited
+set of non-idealities), and can accurately model crossbar-based
+
+=== page 3 ===
+3
+
+systems while maintaining very high simulation speed (several
+orders-of-magnitude faster than SPICE).
+Design tools. To aid design space exploration, prior efforts [27]–[30] have proposed circuit-level macro models to
+evaluate crossbar systems. These efforts include (i) MNSIM [27], a simulation platform to evaluate inference accelerators designed using resistive crossbars, (ii) NeuroSim [28],
+a framework to evaluate crossbars systems designed for onchip training, (iii) a technology exploration tool for resistive
+crossbars [29], and (iv) AutoNCS [30], a tool to optimize
+the utilization and efficiency of a resistive crossbar system.
+While the primary focus of these tools has been performance,
+energy, and area evaluation of resistive crossbar systems,
+they also include simplistic accuracy/error models that are
+reasonable for design space exploration, but inadequate for
+evaluating application-level accuracy of large-scale DNNs.
+RxNN complements these efforts by focusing on accurately
+and efficiently modeling crossbar non-idealities in the context
+of large-scale DNNs.
+
+Equation 1 specifies the ideal vector-matrix multiply operation for an MxN dimensional crossbar. Vinideal is a 1xM
+vector consisting of the input voltages, G is an MxN matrix
+comprising of the synaptic conductances, and Ioutideal is a 1xN
+vector containing the output currents.
+
+III. Preliminaries
+
+Ioutideal = Vinideal ∗ Gideal
+
+In this section, we provide a brief background on resistive
+crossbars and how they evaluate vector-matrix multiplication.
+Figure 1 presents a typical resistive crossbar array design for
+realizing vector-matrix multiplications. It consists of a 2D array of synaptic devices, Digital-to-Analog converters (DACs),
+and Analog-to-Digital converters (ADCs), and write peripheral
+circuitry. It supports two main operations: (i) Programming,
+i.e., a write operation performed sequentially on a subset of
+synaptic devices, and (ii) Evaluation, i.e., the vector-matrix
+multiply operation. The synaptic element at the intersection
+of each row and column is programmed by enabling the
+corresponding write circuits along the Write Wordline (WWL)
+and the bitline (BL), to apply the necessary current and set it
+to the desired conductance 1 . A vector-matrix multiplication
+is performed by using DACs to convert the digital inputs
+into voltages on the RWLs, and sensing the resulting current
+flowing through the BLs using ADCs.
+Synaptic devices are programmable resistors that are commonly realized using emerging non-volatile memory technologies such as PCM, ReRAM, and Spintronics [3]–[6]. Figure 1
+illustrates an example of a spintronic synaptic device [5]
+consisting of a Magnetic Tunneling Junction (MTJ) and an
+underlying Heavy Metal (HM) layer. The 3-terminal device
+is programmed though the HM layer and sensed through
+the MTJ. The position of the domain wall determines the
+conductance of the MTJ that lies between G MIN (when the
+domain wall is to the far right) and G MAX (when the domain
+wall is to the far left). The number of unique locations at
+which the domain wall can reside determines the precision
+of the device. Although we consider this spintronic synaptic
+device in our explanations, the RxNN framework is applicable
+to the wide range of resistive devices used to design crossbars.
+1 although not shown in the figure, in general, an access transistor or selector
+device may be required in addition to the synaptic device for write operations.
+
+Fig. 1: Resistive Crossbar array
+
+(1)
+
+IV. Crossbar Non-Idealities
+In this section, we analyze non-idealities in resistive crossbars
+and examine their impact on vector-matrix multiplications.
+A. Crossbar Non-idealities
+Figure 2(a) presents an equivalent circuit for the crossbar
+array and the peripherals (DACs and ADCs) that includes
+various non-idealities. The key sources of non-idealities are —
+1 wire resistances of the crossbar interconnects, 2 sensing
+resistances of the circuits that sense the output currents, 3
+driver resistances of the circuits that drive the crossbar
+rows, 4 sneak paths, 5 variance in synaptic conductance
+due to process variations and imperfect programming, and 6
+non-ideal DACs. While we consider all these non-idealities in
+subsequent sections, we select the non-idealities due to DACs
+and sneak paths for a more detailed treatment below, in order
+to illustrate the complexity of error modeling.
+Non-ideal DAC. Figure 2(a) shows the equivalent circuit for
+a DAC that is represented using a resistive divider circuit with
+an input determined resistance (RDAC ) and a fixed resistance
+(RPD ). An applied digital input determines the value of RDAC
+and subsequently decides the DAC’s output voltage (DACout ).
+Note that, DACout also depends on the effective resistive load
+(RLoad ), leading to deviations from the ideal value. RLoad is a
+function of the synaptic conductances within the crossbar array
+and therefore varies with the crossbar state (the values of all
+synaptic conductances). The equation in Figure 3(a) shows the
+error incurred due to DAC non-idealities which is a function of
+both applied inputs (RDAC ) and synaptic conductances (RLoad ).
+Figure 3(a) also plots the non-ideal DAC output for two load
+resistances, viz. 3.2kΩ and 32kΩ, respectively. As evident, the
+DAC output voltage varies significantly with the load for any
+given input.
+
+=== page 4 ===
+4
+
+Fig. 2: Crossbar non-idealities: (a) Resistive equivalent circuit for a crossbar, (b)-(c) Sensitivity to crossbar dimensions with
+all synaptic conductances programmed to G MIN and G MAX , respectively, (d) Sensitivity to synaptic conductances, (e)
+Sensitivity to applied inputs, and (f) Sensitivity to process variation and imperfect programming
+HSPICE simulations of non-ideal crossbar arrays with the
+ideal computations (Equation 1) and analyze the sensitivity
+of the errors to various parameters.
+
+Fig. 3: Example of non-idealities in resistive crossbar
+
+Sneak paths during vector-matrix multiplication. Ideally,
+currents in resistive crossbars would be expected to flow from
+left to right along the rows and from top to bottom through the
+columns. However, due to the non-idealities described above
+(specifically, wire resistances), internal node voltages within
+the crossbar may vary, resulting in additional current paths,
+which we refer to as sneak paths. Figure 3(b) illustrates sneaks
+paths during vector-matrix multiplications for a 3x2 crossbar
+array. We consider a crossbar state with all synaptic devices
+programmed to 20KΩ, and the applied input voltages at the
+rows are 0.2V, 0.01V and 0.2V, respectively. For this crossbar
+state, we observe that the direction of current between nodes
+a22 and b22 is flipped, i.e., the current flows from b22 towards
+the input (Vin2), instead of the expected direction. Sneak paths
+are a function of both the crossbar state and the applied inputs,
+and therefore further contribute to the overall dynamism in
+errors due to non-idealities.
+B. Errors due to Non-Idealities
+Next, we study the impact of non-idealities on the computational accuracy of the vector-matrix multiplication realized using resistive crossbars. To this end, we compare
+the outputs of vector-matrix multiplications obtained from
+
+Sensitivity to crossbar size. We first examine how the
+errors incurred due to individual non-idealities (WIRE,
+SENSE), combinations of non-idealities (DAC+DRIVER,
+WIRE+SENSE), and the cumulative effect of all non-idealities
+(ALL) vary with the crossbar dimension. Figures 2(b) and 2(c)
+show the errors incurred during the vector-matrix multiplication realized using crossbars, with all synaptic conductances
+programmed to G MIN and G MAX , respectively. In both graphs,
+the Y-axis represents the error in the last (N th ) column of
+an NxN crossbar, and the X-axis represents the crossbar
+dimension (N). In both cases, we observe that the errors
+due to all non-idealities (ALL), individual non-idealities, and
+subsets of non-idealities, increase with the crossbar dimension.
+This is expected because: (i) the overall wire resistances
+increase with crossbar array size, (ii) the sensing resistance
+contribution to the overall bitline resistance increases, and
+(iii) the DAC non-ideality increases due to a decrease in the
+effective load resistance 2 . Further, we also observe that for
+smaller crossbars, the non-ideality due to DAC is predominant,
+whereas, for larger crossbars, the wire and sensing resistance
+effect becomes equally significant.
+Sensitivity to crossbar state. Next, we characterize errors’
+dependence on the crossbar state, i.e., the conductances of all
+synaptic devices. To this end, we fix the inputs to a 64x64
+crossbar array and vary the conductances of the synaptic
+devices to obtain different crossbar states. Figure 2(d) shows
+the maximum (MAX), minimum (MIN), and average (AVG)
+errors across columns of the crossbar over 1000 random
+crossbar states. We observe that the errors show significant
+variation across these states. In Figure 2(d), we also plot the
+errors for a sample crossbar state (Sample-Run) to demonstrate
+2 Higher crossbar dimensions have more columns leading to increase in
+parallel paths, consequently lowering the effective load resistance
+
+=== page 5 ===
+5
+
+the variation of errors across crossbar columns. Note that this
+pattern is quite different from the patterns observed for MAX,
+MIN, and AVG errors.
+Sensitivity to crossbar inputs. To analyze the errors’ dependence on the applied inputs, we fixed the conductances of all
+synaptic devices and varied the inputs. Figure 2(e) shows the
+variations in errors across inputs. We observe that the variance
+across inputs (MAX and MIN) for a particular column is
+noticeable, but small in comparison to the variance across
+crossbar states.
+Sensitivity to crossbar columns. Figures 2(d-e) depicts how
+errors vary across crossbar columns. While there is a slight
+trend of increase in error as we go from the first to the
+last column, it is not always the last column that incurs the
+maximum error. Rather any column can incur the maximum
+error depending on the crossbar state and the applied inputs.
+Sensitivity to process variation and imperfect programming. Finally, we also evaluate the impact of variations
+by performing Monte-Carlo simulation on a sample set of
+10,000 crossbar states obtained by considering variations in
+synaptic conductances (σ/µ = 10%) [47]. Figure 2(f) shows the
+maximum, minimum, and average error observed on a 64x64
+crossbar array across these samples. The variations in synaptic
+conductances can occur due to two prominent reasons: (i)
+Process variations and (ii) Imperfect programming, i.e., errors
+during write operations.
+In summary, the non-idealities in resistive crossbars can
+have a significant impact on the computations that they perform. Furthermore, the errors due to non-idealities are highly
+dependent on various factors, including the conductances,
+applied inputs, crossbar column and process variations. Thus,
+a crossbar model should consider these factors in order to
+accurately capture the impact of non-idealities on applicationlevel accuracy.
+
+Fig. 4: FCM: Overview
+
+V. Crossbar Modeling
+In this section, we present a Fast Crossbar Model (FCM)
+that accurately captures the impact of resistive crossbars nonidealities on the performed vector-matrix multiplications.
+A. FCM Overview
+Figure 4 overviews the proposed fast crossbar model that
+consists of two phases: (i) Model generation and (ii) Model
+evaluation. Model generation is a one-time step for each
+DNN, whereas model evaluation is invoked to evaluate each
+inference operation using the DNN. The key idea FCM is
+to first abstract non-idealities in the core crossbar array by
+transforming a weight matrix (W) into a non-ideal conductance
+matrix (Gnon−ideal ). Subsequently, using the generated Gnon−ideal
+matrix and non-linear peripheral (ADC and DAC) models,
+FCM emulates the non-ideal vector matrix multiplications on
+resistive crossbars. We discuss these phases of FCM in detail
+below.
+Crossbar model generator. FCM uses a crossbar model
+generator to abstract the non-idealities arising due to process
+
+Fig. 5: Crossbar model generator: Details
+variations, the non-linear synaptic conductance characteristics,
+the sensing resistance, and the wire resistances. The model
+generator takes crossbar parameters and a weight matrix
+(W) as inputs and generates a non-ideal conductance matrix
+(Gnon−ideal ) as the output. Using a three-step transformation
+mechanism (listed in Figure 4), it converts W to Gnon−ideal
+based on crossbar parameters including synaptic device characteristics (Gmin , Gmax , precision), interconnect (RS ense , rrow ,
+rcol ), and circuit (crossbar size) parameters, and the chip
+variation profile. Figure 5 illustrates the model generation
+process in greater detail using an example, where we consider
+the mapping of a PxQ weight matrix to crossbars of size
+MxN. In step 1, the model generator slices the matrix W into
+fragments and maps them to specific crossbar instances. The
+fragment size is same as the crossbar dimension and to achieve
+this for all fragments the corners of the matrix W are zero
+
+=== page 6 ===
+6
+
+padded if required. Note that, we need t=ceil(P/M)*ceil(Q/N)
+crossbar instances, ‘P mod M’ zero-padded rows, and ‘Q
+mod N’ zero-padded columns. Next, in step 2 (described in
+Figure 6), weights are converted from digital floating-point
+(FP) values to conductances (G) considering device conductance characteristics, parameters (Gmin , Gmax , precision), and
+the variation profile. FCM supports synaptic devices with
+both linear [5], [48] and non-linear [18], [44] conductance
+characteristics, either using equations or lookup tables. We
+sample the variation profile to obtain a unique variation factor
+(VF) for each synaptic element within each crossbar instance.
+At the end of step 2, we obtain a conductance matrix (Gi )
+for each crossbar instance. Finally, in step 3, the generator
+abstracts interconnect non-idealities (R sense , rcol , rrow ) and
+transforms the conductance matrices (Gi ) to the corresponding
+non-ideal conductance matrices (Gnon−ideal−i ). Subsequently,
+these non-ideal conductance matrices (Gnon−ideal−i ) are merged
+to obtain one Gnon−ideal matrix corresponding to the weight
+matrix W. The transformation of Gi to Gnon−ideal−i is exact,
+and we provide the mathematical proof in Section V-B.
+
+of-magnitude speed-up over SPICE, without compromising
+on the modeling accuracy (in our experiments, FCM models
+are functionally within 0.28% of HSPICE). We note that
+achieving such simulation speed is not possible without some
+abstraction, and that FCM provides a good tradeoff between
+fidelity vs. simulation speed (detailed in section VIII-A).
+FCM further derives simulation speed by realizing algebraic
+operations using well-optimized BLAS (Basic Linear Algebra
+Subprograms) libraries.
+
+Fig. 7: Equivalent resistance circuit of MxN crossbar array
+B. Abstraction of interconnect non-idealities
+
+Fig. 6: Abstracting synaptic device non-idealities
+Peripheral (ADC & DAC) models. Figure 4 details the ADC
+and DAC models used by FCM to incorporate ADC and DAC
+non-idealities. The DAC model is composed of a resistive
+divider circuit with a digital input (Inp) dependent resistance
+(RDAC ) and a fixed resistance (RPD ). The resistive divider is
+connected to a variable effective load conductance (G Load )
+whose value is dependent on the crossbar state (synaptic
+conductances). FCM uses the equation shown in Figure 4
+to compute the non-ideal input voltages (Vin−non−ideal ). In the
+equation, RDAC is determined using the digital inputs (Inp),
+and G Load is computed using the Gnon−ideal matrix. We note that
+Vin−non−ideal captures the data-dependence of the errors arising
+due to a non-ideal DAC, since RDAC and G Load are dependent
+on the applied inputs and the crossbar state, respectively.
+Using matrices Gnon−ideal and Vin−non−ideal , FCM computes the
+non-ideal vector-matrix multiplication realized in crossbars
+to obtain non-ideal output currents (Iout−non−ideal ). The ADC
+model shown in Figure 4 (which can model non-linearity) is
+then used to convert the Iout−non−ideal to digital outputs (Out).
+In summary, FCM abstracts both device and circuit nonidealities into crossbar models that achieve several orders-
+
+In this section, we provide the mathematical formulation
+for the abstraction of interconnect non-idealities (Step 3 of
+crossbar model generation). We recall that in this step the
+generator abstracts interconnect non-idealities (R sense , rcol ,
+rrow ) and transform the conductance matrix (Gi ) associated
+with the ith crossbar instance to the corresponding non-ideal
+conductance matrix (Gnon−ideal−i ). We achieve this transformation by leveraging circuit laws (Kirchhoff’s loop laws and
+Ohm’s law) and linear algebraic operations (direct sum, row
+switching, vector concatenation, row reduction, etc.).
+We now explain the formulation using Figure 7 that shows
+the equivalent resistive circuit of an MxN crossbar array. Vini
+represents the input voltage at the ith row of the crossbar, Vai, j
+denotes the voltage at the node ai, j , and Vi, j is the voltage
+difference between the node ai, j and the node bi, j . Gi, j is
+the conductance of the synaptic device at the ith row and
+the jth column. R sense , rrow , and rcol depict the sensing and
+distributed wire resistances, respectively, and Iout j indicates
+the output current of the jth column. In figure 7, we refer
+vertical and horizontal slices of the crossbar array as Column
+Linear Systems (LSCols) and Row Linear Systems (LSRows),
+respectively. To demonstrate the formulation of Gnon−ideal , we
+employ 6 major steps involving Equations 2 to 14. We next
+describe these steps in turn below.
+Step 1: Formulate column linear systems. We first formulate
+column linear systems (LS Col1 to LS ColN ) using each vertical
+slice of the crossbar, shown in Figure 7. Let us consider the jth
+
+=== page 7 ===
+7
+
+vertical slice corresponding to the LS Col j system (Equations
+2 to 4). Using Kirchhoff’s Current Law (KCL) at all nodes
+bi, j present in the jth column, we obtain Equations 2 and 3.
+Equations 2 and 3 are then combined to obtain the linear
+system in Equation 4. In the case of an MxN crossbar, we
+have N such linear systems (LS Col1 to LS ColN ).
+
+7 which represents the LS row j system. In case of an MxN
+crossbar, we have M such row linear systems (LS row1 to
+LS row M ).
+
+Aj ∗ Vcolj = VAcolj − J ∗ Iout j
+
+
+
+Gi,2
+Gi,3
+...
+Gi,N 
+Gi,1
+
+G
+ i,1 Gi,2 ∗ 2 Gi,3 ∗ 2 . . . Gi,N ∗ 2 
+
+
+Bi = Gi,1 Gi,2 ∗ 2 Gi,3 ∗ 3 . . . Gi,N ∗ 3  ∗ rrow ,
+
+ .
+.
+.
+.
+.
+..
+..
+..
+..
+
+ ..
+
+
+Gi,1 Gi,2 ∗ 2 Gi,3 ∗ 3 . . . Gi,N ∗ N
+
+
+
+
+
+
+Vini 
+ Vai,1 
+ Vi,1 
+Vin 
+ Va 
+ V 
+ i
+ i,2 
+ i,2 
+Vrowi =  .  , VArowi =  .  , VrowINi =  . 
+.
+.
+ .. 
+ . 
+ . 
+
+
+
+
+
+
+Vini
+Vai,N
+Vi,N
+
+Iout j =
+
+x=M
+X
+
+G x, j V x, j
+
+(2)
+(3)
+
+x=1
+
+(Aj + J ∗ Kj )Vcolj = VAcolj
+
+(4)
+
+where,
+
+
+−1 G2, j rcol 2 ∗ G3, j rcol . . . (M − 1) ∗ G M, j rcol 
+ 0
+−1
+G3, j rcol
+. . . (M − 2) ∗ G M, j rcol 
+
+
+
+0
+−1
+. . . (M − 3) ∗ G M, j rcol  ,
+Aj =  0
+
+ .
+..
+..
+..
+..
+
+ ..
+.
+.
+.
+.
+
+
+0
+0
+0
+...
+−1
+
+
+
+
+
+
+ V1, j 
+ Va1, j 
+R sense + (M − 1) ∗ rcol 
+ V 
+ Va 
+R
+
+ 2, j 
+ 2, j 
+ sense + (M − 2) ∗ rcol 
+Vcolj =  .  , VAcolj =  .  , J = 
+
+..
+ .. 
+ .. 
+
+
+.
+
+
+
+
+
+
+V M, j
+Va M, j
+R sense
+h
+i
+Kj = G1, j G2, j . . . G M, j
+Step 2: Merge column linear systems. Next, the column
+linear systems (LS Col1 to LS ColN ) are merged to form a
+larger Column Linear System (merged-LSCol) as shown in
+Equation 5 and 6. We achieve this by using the direct sum (⊕)
+matrix operation on matrices (Aj + J*Kj ) and Kj to obtain
+block matrices COLmat and Gmat, respectively. In Equation
+5, CVcol and CVAcol are vectors formed by concatenating
+Vcolj and VAcolj vectors, respectively. Note that, the vectors
+Vcolj and VAcolj are obtained in Step 1 (Equations 2 and 4).
+Further, Ioutnon-ideal in Equation 6 is a vector representing the
+output currents.
+COLmat ∗ CVcol = CVAcol
+
+(5)
+
+Gmat ∗ CVcol = (Ioutnon-ideal )T
+
+(6)
+
+where,
+COLmat =
+
+⊕
+j∈1,2,..,N
+
+(Aj + J ∗ Kj )
+
+Gmat = ⊕ (Kj )
+j∈1,2,..,N
+h
+i
+Ioutnon-ideal = Iout1 Iout2 . . . IoutN
+h
+iT
+CVcol = VcolT1 VcolT2 . . . VcolTN
+h
+iT
+CVAcol = VAcolT1 VAcolT2 . . . VAcolTN
+Step 3: Formulate row linear systems. Similar to Step 1,
+the row linear systems (LS row1 to LS row M ) are formulated
+considering horizontal slices of the crossbar. We use KCL at
+nodes ai, j present in the ith horizontal slice to obtain Equation
+
+Bi ∗ Vrowi = VrowINi − VARowi
+
+(7)
+
+where,
+
+Step 4: Merge row linear systems. Next, the row linear
+systems obtained in Step 3 are merged to obtain a larger
+Row Linear System (merged-LSrow) as shown in Equation
+8. ROWmat is a block matrix obtained by performing the
+direct sum (⊕) matrix operation on the matrix (Bi ). Moreover,
+CVrowIN, CVrow, and CVArow are vectors formed by
+concatenating vectors (obtained in Step 3) VrowINi , VArowi ,
+and Vrowi , respectively.
+CVrowIN − ROWmat ∗ CVrow = CVArow
+
+(8)
+
+where,
+ROWmat = ⊕ (Bi )
+i∈1,2,..,M
+h
+iT
+CVrow = VrowT1 VrowT2 . . . VrowTN
+h
+iT
+CVArow = VArowT1 VArowT2 . . . VArowTN
+h
+iT
+CVrowIN = VrowINT1 VrowINT2 . . . VrowINTN
+Step 5: Eliminate internal variables. Next, the vectors
+CVAcol and CVcol comprising of internal variables Vai, j
+and Vi, j , respectively, are eliminated. In order to eliminate
+these variables, we use the merged-LScol and merged-LSrow
+systems obtained in Step 2 and 4, respectively. However,
+the merged-LScol and merged-LSrow equations cannot be
+used directly due to the mismatch in their Right-Hand Sides
+(RHS) (CVAcol , CVArow). We resolve this mismatch by
+performing elementary row operations on Equation 8 to obtain
+Equation 9. Note that, the CVrowINA vector and the ROWmatA matrix are obtained by performing row switching, i.e.,
+an elementary row operation, on the CVrowIN vector and
+the ROWmat matrix, respectively. Next, the CVAcol vector
+is eliminated using Equations 5 and 9 to obtain Equation 10.
+Subsequently, the CVcol vector is eliminated using Equations
+6 and 10 to yield Equation 11. Note that, Equation 12 details
+the NETmat matrix introduced in Equation 11.
+CVrowINA − ROWmatA ∗ CVcol = CVAcol
+
+(9)
+
+=== page 8 ===
+8
+
+(COLmat + ROWmatA) ∗ CVcol = CVrowINA
+
+(10)
+
+(Ioutnon-ideal ) = NETmat ∗ CVrowINA
+
+(11)
+
+NETmat = Gmat ∗ (COLmat + ROWmatA)−1
+
+(12)
+
+T
+
+Step 6: Reduce matrix dimension. Finally, we reduce the
+size of matrices NETmat and CVrowINA by leveraging
+a key property of the CVrowINA vector, i.e., it contains
+repeated elements. Recall that, the CVrowIN vector is formed
+by concatenating the VrowINi vectors (Step 4), and the
+CVrowINA vector is obtained by performing row switching
+operations on the CVrowIN vector. Since the VrowINi vector
+(Step 3) has repeated elements, consequently, the vectors
+CVrowIN and CVrowINA also have repeated elements. Exploiting this property, the columns of the NETmat matrix
+that are to be multiplied by same elements in CVrowINA
+can be summed using elementary column operations to yield
+a compressed NETmatC matrix (shown in Equation 13).
+Moreover, removing redundancies in vector CVrowINA leads
+to the Vinnon-ideal T vector. Further, Equation 13 can be rewritten as Equation 14 to obtain the Gnon-ideal matrix. Note
+that, Gnon-ideal is a function of (G, R sense , rcol , and rrow ), and
+therefore can be constructed using the intermediate matrices
+COLmat, ROWmat, and Gmat.
+(Ioutnon-ideal )T = NETmatC ∗ (Vinnon-ideal )T
+
+(13)
+
+Ioutnon-ideal = Vinnon-ideal ∗ Gnon-ideal
+
+(14)
+
+where,
+h
+Vinnon-ideal = Vin1
+
+Vin2
+
+...
+
+Vin M
+
+i
+
+Gnon-ideal = NETmatCT = f (G, R sense , rrow , Rcol )
+VI. RxNN Framework
+In this section, we present the overall RxNN framework that
+enables evaluation of large-scale DNNs on resistive crossbar systems. RxNN is a functional simulator obtained by
+modifying the Caffe [41] deep learning framework to mimic
+non-ideal vector-matrix multiplications realized on resistive
+crossbars. Caffe models the convolution and fully-connected
+layers of DNNs as matrix-matrix and vector-matrix multiplications. RxNN maps these matrix-matrix and vector-matrix
+multiplications to a resistive crossbar system and evaluates
+application-level accuracy of DNN inference operations. It
+takes the trained DNN network and weights, resistive crossbar
+system description and crossbar parameters as inputs, and
+evaluates the DNN inference operation using FCM models.
+RxNN’s primary objective is to evaluate the application-level
+accuracy of DNNs, however, it is also capable of generating
+execution traces to enable performance and energy estimation.
+RxNN can also be used for model-in-the-loop re-training to
+improve DNN inference accuracy in the presence of nonidealities.
+Figure 8 depicts the RxNN flow that consists of 3 steps.
+In step 1 , RxNN maps the neural network to the specified
+
+Fig. 8: RxNN Overview
+target architecture. The weights are read from the trained
+Caffe model and virtually programmed into the crossbar array
+instances. Subsequently, the conductance matrices (G) corresponding to each resistive crossbar instance are generated,
+which are then transformed into the non-ideal conductance matrices (Gnon−ideal ) by abstracting crossbar non-idealities. Next,
+in step 2 , the Gnon−ideal matrices associated with each DNN
+layer are incorporated back into the Caffe’s original weight
+data structure. RxNN transparently utilizes Caffe’s underlying
+data structures and optimized BLAS libraries, which is key
+to its performance and scalability. We note that steps 1 2 are performed only once for a given DNN and crossbarbased architecture. Thereafter, in step 3 , RxNN evaluates
+the DNN for the given set of test inputs using embedded
+Gnon−ideal matrices and peripheral (ADC and DAC) models.
+During network evaluation, the DAC/ADC models are invoked
+as pre- and post-processing steps on the inputs/outputs of each
+convolutional and fully-connected layer.
+Next, we describe re-training with RxNN to improve the
+inference accuracy of DNNs on resistive crossbar systems.
+The major challenges that arise during DNN re-training for
+crossbar systems are: (i) the data-structures (inputs, outputs,
+weights) should abide by the range and resolution constraints
+at all times, and (ii) errors and gradients computed during
+back-propagation should be appropriately scaled to ensure
+network convergence 3 . RxNN meets these constraints by
+utilizing a crossbar-based forward pass and a floating-point
+based backward pass. It appropriately converts and scales
+the data-structures between forward and backward passes to
+ensure that the network re-trains with minimal impact on the
+overall training time, which is extremely critical in the context
+of large-scale DNNs.
+VII. Experimental Methodology
+In this section, we describee the experimental setup used to
+evaluate the RxNN framework.
+Device/Circuit simulation. We use an in-house device model
+of the synaptic element [5] that is based on the solution of
+Landau-Lifshitz-Gilbert (LLG) magnetization dynamics and
+Non-Equilibrium-Green’s Function (NEGF) electron transport.
+3 The stochastic-gradient descent solver assumes the forward and backward
+passes to be contiguous and differentiable. However, crossbar abstraction of
+vector-matrix multiplication does not ensure these conditions.
+
+=== page 9 ===
+9
+
+Fig. 9: Device and Technology Parameters
+Circuit-level simulations are performed in HSPICE using the
+45nm bulk CMOS technology and the synaptic device model.
+Our simulations use the ADC and DAC circuits proposed
+in [49], [50]. The interconnect parasitics (rrow , rcol ) are extracted using the device and crossbar array layouts. Figure 9
+shows these layouts that are performed using the design rules
+specified in [51]. The table in Figure 9 details the device,
+technology [52], and variation parameters [47] assumed in
+our experiments. We also characterize a resistive crossbar
+array to compute energy at the crossbar-level which is used
+as a technology parameter in RxNN to estimate system-level
+energy consumption.
+TABLE I: Benchmark DNN Applications
+
+Fig. 10: Computation Errors observed in crossbar for various
+crossbar models
+viz., HSPICE, FCM, and MNSIM [27]. The X-axis represents
+the crossbar column, and the Y-axis depicts the error incurred
+due to non-idealities in the vector-matrix multiplication. We
+observe that the simple error model (MNSIM) deviates considerably from the HSPICE model. This is expected, as it does not
+consider the dependence of errors on several factors including
+the applied inputs, the crossbar state, and the crossbar column.
+In contrast, the FCM model considers these dynamic factors
+and is therefore able to closely match the HSPICE model. The
+maximum deviation between the errors estimated by MNSIM
+and the errors computed using HSPICE is about 3.51%. In the
+case of FCM, the maximum deviation is found to be 0.28%,
+which is significantly smaller.
+Speedup. To evaluate the speedup of FCM over HSPICE, we
+measure the execution time of FCM and HSPICE for various
+crossbar sizes. Figure 11 details the speedup achieved using
+FCM over HSPICE. We observe a speedup of about 5 orders
+in magnitude. Moreover, as expected, the speedup increases
+for larger crossbar arrays.
+
+Application-Level simulation. We evaluated the applicationlevel accuracy and energy of several popular DNNs on the
+resistive crossbar system using RxNN. Table I provides details
+of the benchmark DNNs, including the number of convolution
+and fully-connected layers, the targeted data-set, and the
+number of neurons and synaptic connections. We also present
+the relative model size to highlight the difference between
+these benchmark DNNs. To evaluate energy consumption, we
+use an architecture similar to [7].
+
+Model generation overhead. Recall that FCM’s crossbar
+model generator transforms the weight matrix (W) to a nonideal conductance matrix (Gnon−ideal ), which incurs a one-time
+overhead. In our evaluation, we found the modeling overhead
+to be 0.038, 1.2, and 61 seconds for 16x16, 32x32, and 64x64
+crossbar arrays, respectively. While considerable for larger
+crossbars, these one-time overheads are amortized over a large
+number of inference operations typically processed by RxNN.
+
+VIII. Results
+We now present the experimental results to demonstrate the
+modeling accuracy and speedups achieved by FCM over circuit
+simulation. We also evaluate the application-level accuracy
+of large-scale DNNs on non-ideal resistive crossbar systems
+using RxNN.
+A. FCM: Crossbar-level Evaluation
+Modeling Accuracy. Figure 10 shows the errors in vectormatrix multiplications realized using a 64x64 non-ideal crossbar. We compute errors using three different crossbar models,
+
+Fig. 11: FCM speedup over HPSICE
+B. RxNN: Application-Level Evaluation
+Next, we apply RxNN to evaluate the accuracy degradation due to crossbar non-idealities at the application-level
+for the benchmark DNNs. We implement three different
+resistive crossbar systems designed using crossbars of size
+16x16 (Cross16), 32x32 (Cross32), and 64x64 (Cross64).
+Figure 12(a) shows the accuracy degradation for these designs
+
+=== page 10 ===
+10
+
+with respect to our baseline, i.e., an ideal crossbar with no
+device and circuit-level non-idealities. We first compare the
+accuracy degradation of the Cross64 design across DNNs.
+We observe that for simple networks (LeNet and ConvNet)
+the accuracy degradation due to non-idealities is quite small.
+For example, LeNet and ConvNet networks suffer accuracy
+degradation of 0.05% and 2.2%, respectively. In contrast, the
+accuracy loss due to non-idealities is considerable for largescale DNNs. For instance, VGG-16, OverFeat, and Resnet-50
+networks incur accuracy losses of 25.6%, 27.8%, and 32%,
+respectively. We observe similar accuracy degradation trend
+across simple and large-scale DNNs for the Cross16 and
+Cross32 designs as well.
+Next, we compare the accuracy degradation across designs
+with different crossbar sizes (Cross16, Cross32, and Cross64).
+As evident from Figure 12(a), the accuracy degradation for
+the Cross16 design is less than the Cross32 design, which is
+in turn less than the Cross64 design. This trend is expected
+as the impact of non-idealities is lower for smaller crossbar
+arrays (Section IV-B). However, smaller crossbar arrays are not
+desirable in terms of energy efficiency. Figure 12(b) depicts
+the normalized energy consumption per image for the Cross16,
+Cross32, and Cross64 designs. The Cross16 design consumes
+higher energy than the Cross32 design, which in turn consumes
+higher energy than the Cross64 design for most cases. Since
+the major components of the energy consumed in resistive
+crossbar systems are peripherals (ADCs and DACs),larger
+crossbar arrays that amortize the energy cost of ADCs and
+DACs over more columns and rows have superior energy
+efficiency. Note that, for the LeNet and ConvNet DNNs, the
+energy of the Cross64 design is higher than the Cross32
+design. This is because the crossbars in the Cross64 design
+are under-utilized in case of these relatively small networks.
+Therefore, Cross64 suffers from energy overheads due to redundant computations performed in the unused rows/columns.
+
+Fig. 12: Application-Level evaluation using RxNN
+We next present the energy breakdown of three networks, viz., VGG-16, GoogleNet, and AlexNet realized on
+the Cross64 design. Figure 13 shows the energy breakdown
+of these networks considering – read energy for inputs
+(CMOS-Mem-Read), write energy for outputs (CMOS-Mem-
+
+Write), and computation energy for vector-matrix multiplications (Cross-Computation). We observe that the major energy component is the vector-matrix multiplications (CrossComputation) which is in turn dominated by the ADCs and
+DACs.
+
+Fig. 13: Energy Breakdown for Cross64 implementation
+In summary, there exists a fundamental trade-off between
+the application-level accuracy and the system energy which
+needs to be examined, in order to determine the architectures
+for future resistive crossbar systems. RxNN intends to drive
+these decisions by providing a software platform that can
+precisely evaluate crossbar architectures executing large-scale
+DNNs.
+RxNN speed vs. Caffe. We also evaluated the slowdown of
+RxNN with respect to the baseline Caffe framework (without
+any crossbar modeling), and found that it amounts to 2.5X
+and 2.75X for inference and re-training, respectively, across
+our benchmark applications. We believe this is a reasonable
+overhead given the highly optimized nature of Caffe, and the
+fact that much like Caffe, RxNN can also leverage multi-cores,
+GPUs, and clusters for increased processing throughput.
+C. Sensitivity of accuracy to non-idealities
+To further illustrate the impact of non-idealities on the
+application-level accuracy, we present a sensitivity analysis
+in Figure 14. We plot the accuracies of 6 large-scale networks, viz., AlexNet, VGG-16, GoogleNet, NiN, Overfeat,
+and ResNet-50 for implementations differing in their degree
+of non-idealities. The implementations that we use are: (i)
+floating-point implementation realized on an x86 CPU architecture (FP32), (ii) 6-bit ideal crossbar design (Cross6) without
+any crossbar non-idealities, and (iii) 6-bit non-ideal crossbar
+based designs with and without variations (NI-Cross6-64x64).
+Note that the FP32 CPU-based software implementation does
+not use crossbars and hence does not suffer from any nonidealities. As shown in Figure 14, the accuracy drops from left
+to right as more non-idealities are incorporated. We observe
+two significant accuracy drops, one between FP32 and Cross6
+implementations, and other between Cross6 and NI-Cross664x64 implementations. The degradation between FP32 and
+Cross6 is due to the limited precision of the synaptic devices,
+ADCs, and DACs. In contrast, the drop in accuracy from
+Cross6 to NI-Cross6-64x64 is due to the device and circuitlevel non-idealities.
+D. Re-training DNNs using RxNN
+Next, we show the effectiveness of RxNN in re-training
+large-scale DNNs for resistive crossbar systems. To that end,
+
+=== page 11 ===
+11
+
+Fig. 14: Accuracy’s sensitivity to non-idealities
+we re-trained three networks, viz., AlexNet, VGG-16, and
+GoogleNet, as shown in Figure 15. Our experiments show
+that with only 150 iterations of re-training RxNN can achieve
+∼9%, ∼8%, ∼26% improvement in accuracy for AlexNet,
+VGG-16, and GoogleNet, respectively. Notwithstanding these
+improvements, there is still a substantial drop in accuracy that
+cannot be recovered by re-training alone, calling for additional
+error mitigation and compensation techniques.
+
+Fig. 16: Visual demonstration of errors using ConvNet
+realized on resistive crossbars. Using FCM, we construct
+RxNN, a software simulation framework to evaluate largescale DNNs on resistive crossbar systems. Our experiments
+with RxNN indicate that accuracy degradation due to nonidealities is a significant concern for large-scale DNNs. Retraining can only partly restore the accuracy lost, necessitating
+a need for further error mitigation and compensation schemes.
+References
+
+Fig. 15: Re-training using RxNN
+E. Visualizing the impact of non-idealities
+To provide further insights into the impact of non-idealities
+at the application-level, Figure 16 compares the output features
+obtained from an ideal resistive crossbar system and a nonideal resistive crossbar system for two convolution layers
+(Conv1 and Conv3) of the ConvNet network executing on
+the CIFAR-10 dataset. Some of the significant distortions
+in features are highlighted in the figure using circles. We
+observe that the impact of non-idealities increases considerably as we go deeper into the network (Conv3 layer outputs
+show increased artefacts compared to Conv1 layer outputs
+in Figure 16). This is consistent with the observation from
+Figure 12(a) that deeper DNNs show greater degradation in
+accuracy due to crossbar non-idealities.
+In summary, our results underscore the utility of RxNN
+in evaluating and re-training large-scale DNNs on resistive
+crossbar architectures. They also motivate the need for further
+research into techniques to mitigate and compensate the effects
+of crossbar non-idealities in the context of large-scale DNNs.
+IX. Conclusion
+Resistive crossbars realized using non-volatile meemory devices promise to enable compact, energy-efficient hardware for
+DNNs. In this work, we evaluate the impact of various device
+and circuit non-idealities that are present in crossbars on the
+overall accuracy of large-scale DNNs. We propose FCM, a fast
+and accurate model to evaluate vector-matrix multiplications
+
+[1] R. Parloff. The AI Revolution: Why Deep Learning Is Suddenly Changing Your Life. http://fortune.com/ai-artificial-intelligence-deep-machinelearning/ .
+[2] C. Metz. Google, Facebook and Microsoft are remaking themselves
+around AI. https://www.wired.com/2016/11/google-facebook-microsoftremaking-around-ai/.
+[3] Sung Hyun Jo, Ting Chang, Idongesit Ebong, Bhavitavya B Bhadviya,
+Pinaki Mazumder, and Wei Lu. Nanoscale memristor device as synapse
+in neuromorphic systems. Nano letters, 10(4):1297–1301, 2010.
+[4] W. H. Chen, W. S. Khwa, J. Y. Li, W. Y. Lin, H. T. Lin, Y. Liu,
+Y. Wang, Huaqiang Wu, Huazhong Yang, and M. F. Chang. Circuit
+design for beyond von Neumann applications using emerging memory:
+From nonvolatile logics to neuromorphic computing. In 2017 18th
+International Symposium on Quality Electronic Design (ISQED), pages
+23–28, March 2017.
+[5] Abhronil Sengupta, Yong Shim, and Kaushik Roy. Proposal for an
+All-Spin Artificial Neural Network: Emulating neural and synaptic
+functionalities through domain wall motion in ferromagnets. IEEE
+transactions on biomedical circuits and systems, 10(6):1152–1160, 2016.
+[6] D. Fan, Y. Shim, A. Raghunathan, and K. Roy. STT-SNN: A SpinTransfer-Torque Based Soft-Limiting Non-Linear Neuron for LowPower Artificial Neural Networks. IEEE Transactions on Nanotechnology, 14(6):1013–1023, Nov 2015.
+[7] S. G. Ramasubramanian, R. Venkatesan, M. Sharad, K. Roy, and
+A. Raghunathan. SPINDLE: SPINtronic Deep Learning Engine for
+large-scale neuromorphic computing. In Low Power Electronics and
+Design (ISLPED), 2014 IEEE/ACM International Symposium on, pages
+15–20, Aug 2014.
+[8] P. Chi, S. Li, C. Xu, T. Zhang, J. Zhao, Y. Liu, Y. Wang, and
+Y. Xie. PRIME: A Novel Processing-in-Memory Architecture for
+Neural Network Computation in ReRAM-Based Main Memory. In
+2016 ACM/IEEE 43rd Annual International Symposium on Computer
+Architecture (ISCA), pages 27–39, June 2016.
+[9] X. Liu, M. Mao, B. Liu, H. Li, Y. Chen, B. Li, Yu Wang, Hao Jiang,
+M. Barnell, Qing Wu, and Jianhua Yang. RENO: A high-efficient
+reconfigurable neuromorphic computing accelerator design. In 2015
+52nd ACM/EDAC/IEEE Design Automation Conference (DAC), pages
+1–6, June 2015.
+[10] Ali Shafiee, Anirban Nag, Naveen Muralimanohar, Rajeev Balasubramonian, John Paul Strachan, Miao Hu, R. Stanley Williams, and Vivek
+Srikumar. ISAAC: A Convolutional Neural Network Accelerator with
+In-Situ Analog Arithmetic in Crossbars. In Proc. ISCA, pages 14–26,
+June 2016.
+
+=== page 12 ===
+12
+
+[11] M. Hu, H. Li, Q. Wu, and G. S. Rose. Hardware realization of BSB recall
+function using memristor crossbar arrays. In DAC Design Automation
+Conference 2012, pages 498–503, June 2012.
+[12] X. Liu, M. Mao, B. Liu, B. Li, Y. Wang, H. Jiang, M. Barnell, Q. Wu,
+J. Yang, H. Li, and Y. Chen. Harmonica: A Framework of Heterogeneous
+Computing Systems With Memristor-Based Neuromorphic Computing
+Accelerators. IEEE Transactions on Circuits and Systems I: Regular
+Papers, 63(5):617–628, May 2016.
+[13] Ming Cheng, Lixue Xia, Zhenhua Zhu, Yi Cai, Yuan Xie, Yu Wang,
+and Huazhong Yang. TIME: A Training-in-memory Architecture for
+Memristor-based Deep Neural Networks. In Proceedings of the 54th
+Annual Design Automation Conference 2017, DAC ’17, pages 26:1–
+26:6, New York, NY, USA, 2017. ACM.
+[14] M. Hu, J. P. Strachan, Z. Li, E. M. Grafals, N. Davila, C. Graves,
+S. Lam, N. Ge, J. J. Yang, and R. S. Williams. Dot-product engine for
+neuromorphic computing: Programming 1T1M crossbar to accelerate
+matrix-vector multiplication. In 2016 53nd ACM/EDAC/IEEE Design
+Automation Conference (DAC), pages 1–6, June 2016.
+[15] B. Yan, J. Yang, Q. Wu, Y. Chen, and H. Li. A closed-loop design to
+enhance weight stability of memristor based neural network chips. In
+2017 IEEE/ACM International Conference on Computer-Aided Design
+(ICCAD), pages 541–548, Nov 2017.
+[16] L. Chen, J. Li, Y. Chen, Q. Deng, J. Shen, X. Liang, and L. Jiang.
+Accelerator-friendly neural-network training: Learning variations and
+defects in RRAM crossbar. In Design, Automation Test in Europe
+Conference Exhibition (DATE), 2017, pages 19–24, March 2017.
+[17] Irina Kataeva, Farnood Merrikh-Bayat, Elham Zamanidoost, and Dmitri
+Strukov. Efficient training algorithms for neural networks based on
+memristive crossbar circuits. In Neural Networks (IJCNN), 2015
+International Joint Conference on, pages 1–8. IEEE, 2015.
+[18] Pai-Yu Chen, Binbin Lin, I-Ting Wang, Tuo-Hung Hou, Jieping Ye,
+Sarma Vrudhula, Jae-sun Seo, Yu Cao, and Shimeng Yu. Mitigating Effects of Non-ideal Synaptic Device Characteristics for On-chip
+Learning. In Proceedings of the IEEE/ACM International Conference
+on Computer-Aided Design, ICCAD ’15, pages 194–199, Piscataway,
+NJ, USA, 2015. IEEE Press.
+[19] T. Gokmen et al. Acceleration of deep neural network training with
+resistive cross-point devices: Design considerations. Frontiers in Neuroscience, 10:333, 2016.
+[20] T. Gokmen et al. Training deep convolutional neural networks with
+resistive cross-point devices. Frontiers in Neuroscience, 11:538, 2017.
+[21] Indranil Chakraborty, Deboleena Roy, and Kaushik Roy. Technology
+aware training in memristive neuromorphic systems for nonideal synaptic crossbars. IEEE Transactions on Emerging Topics in Computational
+Intelligence, 2(5):335–344, 2018.
+[22] B. Li, Y. Wang, Y. Wang, Y. Chen, and H. Yang. Training itself: Mixedsignal training acceleration for memristor-based neural network. In 2014
+19th Asia and South Pacific Design Automation Conference (ASP-DAC),
+pages 361–366, Jan 2014.
+[23] Beiye Liu, M. Hu, Hai Li, Zhi-Hong Mao, Yiran Chen, Tingwen Huang,
+and Wei Zhang. Digital-assisted noise-eliminating training for memristor
+crossbar-based analog neuromorphic computing engine. In Design
+Automation Conference (DAC), 2013 50th ACM/EDAC/IEEE, pages 1–6,
+May 2013.
+[24] B. Liu, H. Li, Y. Chen, X. Li, T. Huang, Q. Wu, and M. Barnell. Reduction and IR-drop compensations techniques for reliable neuromorphic
+computing systems. In 2014 IEEE/ACM International Conference on
+Computer-Aided Design (ICCAD), pages 63–70, Nov 2014.
+[25] Yandan Wang, Wei Wen, Beiye Liu, Donald M. Chiarulli, and Hai Helen
+Li. Group scissor: Scaling neuromorphic computing design to big neural
+networks. CoRR, abs/1702.03443, 2017.
+[26] C. Liu, M. Hu, J. P. Strachan, and H. Li. Rescuing memristor-based
+neuromorphic design with high defects. In 2017 54th ACM/EDAC/IEEE
+Design Automation Conference (DAC), pages 1–6, June 2017.
+[27] L. Xia, B. Li, T. Tang, P. Gu, X. Yin, W. Huangfu, P. Y. Chen, S. Yu,
+Y. Cao, Y. Wang, Y. Xie, and H. Yang. MNSIM: Simulation platform
+for memristor-based neuromorphic computing system. In 2016 Design,
+Automation Test in Europe Conference Exhibition (DATE), pages 469–
+474, March 2016.
+[28] P. Chen, X. Peng, and S. Yu. Neurosim: A circuit-level macro model
+for benchmarking neuro-inspired architectures in online learning. IEEE
+Transactions on Computer-Aided Design of Integrated Circuits and
+Systems, pages 1–1, 2018.
+[29] Peng Gu, Boxun Li, Tianqi Tang, S. Yu, Yu Cao, Y. Wang, and H. Yang.
+Technological exploration of RRAM crossbar array for matrix-vector
+
+multiplication. In The 20th Asia and South Pacific Design Automation
+Conference, pages 106–111, Jan 2015.
+[30] W. Wen, C. R. Wu, X. Hu, B. Liu, T. Y. Ho, X. Li, and Y. Chen.
+An EDA framework for large scale hybrid neuromorphic computing
+systems. In 2015 52nd ACM/EDAC/IEEE Design Automation Conference
+(DAC), pages 1–6, June 2015.
+[31] Beiye Liu, Wei Wen, Yiran Chen, Xin Li, Chi-Ruo Wu, and TsungYi Ho. EDA Challenges for Memristor-Crossbar Based Neuromorphic
+Computing. In Proceedings of the 25th Edition on Great Lakes
+Symposium on VLSI, GLSVLSI ’15, pages 185–188, New York, NY,
+USA, 2015. ACM.
+[32] Y. Ji, Y. Zhang, S. Li, P. Chi, C. Jiang, P. Qu, Y. Xie, and W. Chen.
+NEUTRAMS: Neural network transformation and co-design under
+neuromorphic hardware constraints. In 2016 49th Annual IEEE/ACM
+International Symposium on Microarchitecture (MICRO), pages 1–13,
+Oct 2016.
+[33] Seyoung Kim, Tayfun Gokmen, Hyung-Min Lee, and Wilfried E.
+Haensch. Analog CMOS-based Resistive Processing Unit for Deep
+Neural Network Training. CoRR, abs/1706.06620, 2017.
+[34] Tianjian Li, Xiangyu Bi, Naifeng Jing, Xiaoyao Liang, and Li Jiang.
+Sneak-Path Based Test and Diagnosis for 1R RRAM Crossbar Using
+Voltage Bias Technique. In Proceedings of the 54th Annual Design
+Automation Conference 2017, DAC ’17, pages 38:1–38:6, New York,
+NY, USA, June, 2017. ACM.
+[35] Ashish Ranjan, Shubham Jain, Jacob R. Stevens, Dipankar Das, Bharat
+Kaul, and Anand Raghunathan. X-mann: A crossbar based architecture
+for memory augmented neural networks. In Proceedings of the 56th
+Annual Design Automation Conference 2019, DAC 19, New York, NY,
+USA, 2019. Association for Computing Machinery.
+[36] S. Jain, A. Ankit, I. Chakraborty, T. Gokmen, M. Rasch, W. Haensch,
+K. Roy, and A. Raghunathan. Neural network accelerator design
+with resistive crossbars: Opportunities and challenges. IBM Journal
+of Research and Development, 63(6):10:1–10:13, 2019.
+[37] Shubham Jain and Anand Raghunathan. Cxdnn: Hardware-software
+compensation methods for deep neural networks on resistive crossbar
+systems. ACM Trans. Embed. Comput. Syst., 18(6), November 2019.
+[38] Swagath Venkataramani, Ashish Ranjan, Kaushik Roy, and Anand
+Raghunathan. AxNN: Energy-efficient Neuromorphic Systems Using
+Approximate Computing. In Proceedings of the 2014 International
+Symposium on Low Power Electronics and Design, ISLPED ’14, pages
+27–32, New York, NY, USA, 2014. ACM.
+[39] Suyog Gupta, Ankur Agrawal, Kailash Gopalakrishnan, and Pritish
+Narayanan. Deep Learning with Limited Numerical Precision. CoRR,
+abs/1502.02551, 2015.
+[40] Hokchhay Tann, Soheil Hashemi, Iris Bahar, and Sherief Reda.
+Hardware-Software Codesign of Accurate, Multiplier-free Deep Neural
+Networks. CoRR, abs/1705.04288, 2017.
+[41] Yangqing Jia, Evan Shelhamer, Jeff Donahue, Sergey Karayev, Jonathan
+Long, Ross Girshick, Sergio Guadarrama, and Trevor Darrell. Caffe:
+Convolutional Architecture for Fast Feature Embedding. arXiv preprint
+arXiv:1408.5093, 2014.
+[42] J. Deng, W. Dong, R. Socher, L. J. Li, Kai Li, and Li Fei-Fei. ImageNet:
+A large-scale hierarchical image database. In 2009 IEEE Conference on
+Computer Vision and Pattern Recognition, pages 248–255, June 2009.
+[43] Catherine D. Schuman, Thomas E. Potok, Robert M. Patton, J. Douglas
+Birdwell, Mark E. Dean, Garrett S. Rose, and James S. Plank. A survey
+of neuromorphic computing and neural networks in hardware. CoRR,
+abs/1705.06963, 2017.
+[44] Sung Hyun Jo, Ting Chang, Idongesit Ebong, Bhavitavya B. Bhadviya,
+Pinaki Mazumder, and Wei Lu. Nanoscale memristor device as synapse
+in neuromorphic systems. Nano Letters, 10(4):1297–1301, 2010. PMID:
+20192230.
+[45] H. S Philip Wong, Heng Yuan Lee, Shimeng Yu, Yu Sheng Chen, Yi Wu,
+Pang Shiu Chen, Byoungil Lee, Frederick T. Chen, and Ming Jinn Tsai.
+Metal-oxide rram. Proceedings of the IEEE, 100(6):1951–1970, 6 2012.
+[46] Mrigank Sharad, Georgios Panagopoulos, and Kaushik Roy. Spin neuron
+for ultra low power computational hardware. 70th Device Research
+Conference, pages 221–222, 2012.
+[47] A. F. Vincent, J. Larroque, N. Locatelli, N. Ben Romdhane, O. Bichler,
+C. Gamrat, W. S. Zhao, J. O. Klein, S. Galdin-Retailleau, and D. Querlioz. Spin-Transfer Torque Magnetic Memory as a Stochastic Memristive
+Synapse for Neuromorphic Systems. IEEE Transactions on Biomedical
+Circuits and Systems, 9(2):166–174, April 2015.
+[48] Ligang Gao, I-Ting Wang, Pai-Yu Chen, Sarma Vrudhula, Jae-sun Seo,
+Yu Cao, Tuo-Hung Hou, and Shimeng Yu. Fully parallel write/read in
+
+=== page 13 ===
+13
+
+resistive synaptic array for accelerating on-chip learning. Nanotechnology, 26:455204, 10 2015.
+[49] J. Li, C. I. Wu, S. C. Lewis, J. Morrish, T. Y. Wang, R. Jordan, T. Maffitt,
+M. Breitwisch, A. Schrott, R. Cheek, H. L. Lung, and C. Lam. A Novel
+Reconfigurable Sensing Scheme for Variable Level Storage in Phase
+Change Memory. In 2011 3rd IEEE International Memory Workshop
+(IMW), pages 1–4, May 2011.
+[50] Jintao Zhang, Zhuo Wang, and Naveen Verma. A machine-learning
+classifier implemented in a standard 6T SRAM array. In VLSI Circuits
+(VLSI-Circuits), 2016 IEEE Symposium on, pages 1–2. IEEE, June 2016.
+[51] Design Rules. Mosis scalable cmos (scmos).
+[52] Peter Moon, Vinay Chikarmane, Kevin Fischer, Rohit Grover, Tarek A
+Ibrahim, Doug Ingerly, Kevin J Lee, Chris Litteken, Tony Mule, and
+Sarah Williams. Process and Electrical Results for the On-die Interconnect Stack for Intel’s 45nm Process Generation. Intel Technology
+Journal, 12(2), 2008.
+
+Shubham Jain is currently a research staff member
+at IBM T.J. Watson Research Center, Yorktown
+Heights, New York. He has a B.Tech (Hons.) degree in Electronics and Electrical Communication
+Engineering from the Indian Institute of Technology,
+Kharagpur, India, in 2012, and a Ph.D. degree in
+Electrical and Computer Engineering from Purdue
+University, West Lafayette, Indiana, in 2019. His
+primary research interests include AI hardware, architecture for post-CMOS devices, in-memory computing, and approximate computing. Previously, he
+worked as a design engineer in the Bangalore Design Center, Qualcomm,
+Bangalore, India from 2012 to 2014. He also worked as a summer intern
+at IBM T.J Watson Research Center, Yorktown Heights, in 2017 and 2018.
+He has received the Mitacs Globalink scholarship from Mitacs, in 2011, the
+Andrews Fellowship from Purdue University, in 2014, and the A. Richard
+Newton Young Student Fellowship from DAC in 2015. His research has
+received the best technical paper award in DAC 2018, and a best-in session
+award in TECHCON 2016.
+
+Abhronil Sengupta is an Assistant Professor in
+the School of Electrical Engineering and Computer
+Science at Penn State University. He received the
+PhD degree in Electrical and Computer Engineering
+from Purdue University in 2018 and the B.E. degree
+from Jadavpur University, India in 2013. He worked
+as a DAAD (German Academic Exchange Service)
+Fellow at the University of Hamburg, Germany in
+2012, and as a graduate research intern at Circuit
+Research Labs, Intel Labs in 2016 and Facebook
+Reality Labs in 2017.
+Prof. Sengupta is pursuing an inter-disciplinary research agenda at the
+intersection of hardware and software across the stack of sensors, devices,
+circuits, systems and algorithms for enabling low-power event-driven cognitive intelligence. He has published over 45 articles in referred journals
+and conferences and holds 4 granted/pending US patents. He serves on
+the Technical Program Committee of Design Automation Conference (DAC
+2019), International Symposium on Quality Electronic Design (ISQED 2019)
+and ACM Great Lakes Symposium on VLSI (GLSVLSI 2019). He has
+been awarded the IEEE SiPS Best Paper Award (2018), Schmidt Science
+Fellows Award nominee (2017), Bilsland Dissertation Fellowship (2017),
+CSPIN Student Presenter Award (2015), Birck Fellowship (2013) and the
+DAAD WISE Fellowship (2012).
+
+Kaushik Roy received the BTech degree in electronics and electrical communications engineering
+from the Indian Institute of Technology, Kharagpur,
+India, and the PhD degree from the Department
+of Electrical and Computer Engineering, University
+of Illinois at Urbana-Champaign in 1990. He was
+with the Semiconductor Process and Design Center of Texas Instruments, Dallas, where he worked
+on FPGA architecture development and low-power
+circuit design. He joined the electrical and computer engineering faculty at Purdue University, West
+Lafayette, IN, in 1993, where he is currently Edward G. Tiedemann Jr.
+Distinguished Professor. His research interests include spintronics, devicecircuit co-design for nano-scale Silicon and non-Silicon technologies, lowpower electronics for portable computing and wireless communications, and
+new computing models enabled by emerging technologies. He has published
+more than 600 papers in refereed journals and conferences, holds 15 patents,
+graduated 60 PhD students, and is coauthor of two books on Low Power
+CMOS VLSI Design (Wiley & McGraw Hill). He received the US National Science Foundation Career Development Award in 1995, IBM faculty
+partnership award, ATT/Lucent Foundation award, 2005 SRC Technical
+Excellence Award, SRC Inventors Award, Purdue College of Engineering
+Research Excellence Award, Humboldt Research Award in 2010, 2010 IEEE
+Circuits and Systems Society Technical Achievement Award, Distinguished
+Alumnus Award from Indian Institute of Technology, Kharagpur, FulbrightNehru Distinguished Chair, and Best Paper Awards at 1997 International Test
+Conference, IEEE 2000 International Symposium on Quality of IC Design,
+2003 IEEE Latin American Test Workshop, 2003 IEEE Nano, 2004 IEEE
+International Conference on Computer Design, 2006 IEEE/ACM International
+Symposium on Low Power Electronics & Design, and 2005 IEEE Circuits
+and System Society Outstanding Young Author Award (Chris Kim), 2006
+IEEE Transactions on VLSI Systems Best Paper Award, 2012 ACM/IEEE
+International Symposium on Low Power Electronics and Design Best Paper
+Award, 2013 IEEE Transactions on VLSI Best Paper Award. He was a Purdue
+University Faculty scholar (1998-2003). He was a Research Visionary board
+member of Motorola Labs (2002) and held the M.K. Gandhi Distinguished
+Visiting faculty at Indian Institute of Technology (Bombay). He has been in
+the editorial board of IEEE Design and Test, IEEE Transactions on Circuits
+and Systems, IEEE Transactions on VLSI Systems, and IEEE Transactions
+on Electron Devices. He was the guest editor for Special Issue on Low-Power
+VLSI in the IEEE Design and Test (1994) and IEEE Transactions on VLSI
+Systems (June 2000), IEE Proceedings—Computers and Digital Techniques
+(July 2002), and IEEE Journal on Emerging and Selected Topics in Circuits
+and Systems (2011). He is a fellow of the IEEE
+Anand Raghunathan is a Professor of Electrical
+and Computer Engineering and Chair of the VLSI
+area at Purdue University, where he directs research
+in the Integrated Systems Laboratory. His current
+areas of research include domain-specific architecture, system-on-chip design, computing with postCMOS devices, and heterogeneous parallel computing. Previously, he was a Senior Research Staff
+Member at NEC Laboratories America, where he led
+projects on system-on-chip architecture and design
+methodology. He has also held the Gopalakrishnan
+Visiting Chair in the Department of Computer Science and Engineering at the
+Indian Institute of Technology, Madras.
+Prof. Raghunathan has co-authored a book, eight book chapters, and over
+200 refereed journal and conference papers, and holds 21 U.S patents. His
+publications received eight best paper awards and five best paper nominations.
+He received a Patent of the Year Award and two Technology Commercialization Awards from NEC, and was chosen among the MIT TR35 (top
+35 innovators under 35 years across various disciplines of science and
+technology) in 2006.
+Prof. Raghunathan has been a member of the technical program and
+organizing committees of several leading conferences and workshops, chaired
+premier IEEE/ACM conferences (CASES, ISLPED, VTS, and VLSI Design),
+and served on the editorial boards of various IEEE and ACM journals in
+his areas of interest. He received the IEEE Meritorious Service Award and
+Outstanding Service Award. He is a Fellow of the IEEE and Golden Core
+Member of the IEEE Computer Society. Prof. Raghunathan received the B.
+Tech. degree from the Indian Institute of Technology, Madras, and the M.A.
+and Ph.D. degrees from Princeton University.

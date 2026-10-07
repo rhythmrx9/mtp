@@ -1,0 +1,311 @@
+# Papers by year
+
+## 2025 (47)
+
+- [2025_Leroux_GainCellAnalogAttention_NatCompSci](../cards/2025_Leroux_GainCellAnalogAttention_NatCompSci.md) — Gain-cell (capacitor) analog IMC arrays store the KV cache and compute both attention dot products with ADC-free charge-to-pulse HardSigmoid
+- [2025_Chen_ALBERTOn14nmAnalogAIChip_NatCommun](../cards/2025_Chen_ALBERTOn14nmAnalogAIChip_NatCommun.md) — First fully weight-stationary analog-hardware demonstration of a meaningfully large Transformer: ALBERT-base fully-connected layers (7.1M un
+- [2025_Buchel_AnalogFoundationModels_NeurIPS](../cards/2025_Buchel_AnalogFoundationModels_NeurIPS.md) — Distillation-based hardware-aware training on 20B self-generated tokens makes Phi-3-mini-4k-instruct and Llama-3.2-1B-Instruct robust to PCM
+- [2025_Buchel_MoE3DAnalogInMemoryComputing_NatCompSci](../cards/2025_Buchel_MoE3DAnalogInMemoryComputing_NatCompSci.md) — Simulating decoder-only MoE and dense LLMs on an abstract 3D-NVM analog in-memory computing accelerator shows MoEs form the throughput/energ
+- [2025_Hou_NORA_DATE](../cards/2025_Hou_NORA_DATE.md) — First systematic sensitivity study of LLMs to analog CIM noise (LLMs resilient to weight noise but sensitive to ADC/DAC quantization and add
+- [2025_Dhingra_Atleus_TCAD](../cards/2025_Dhingra_Atleus_TCAD.md) — Atleus is a 3D heterogeneous edge accelerator that keeps frozen pre-trained transformer weights on ReRAM crossbars and runs dynamic attentio
+- [2025_Tsai_AnalogAILLMAccelerators_IMW](../cards/2025_Tsai_AnalogAILLMAccelerators_IMW.md) — Short IBM IMW 2025 overview of PCM-based analog in-memory computing for LLM inference: three 14 nm PCM chips/architectures (9.76 and 12.4 TO
+- [2025_Burr_AnalogAILowLatencyLM_CICC](../cards/2025_Burr_AnalogAILowLatencyLM_CICC.md) — Invited overview from IBM arguing that Fully-Weight-Stationary (F-FWS) analog NVM accelerators give up to 9.75x lower latency, 5.21x better 
+- [2025_Xu_FeRAMKVCache3D_IEDM](../cards/2025_Xu_FeRAMKVCache3D_IEDM.md) — First experimental ferroelectric KV cache: a fabricated 3D 3x32x32 HZO FeCap array (~10 ns switching, 10-year retention, 1e16 extrapolated e
+- [2025_Lammie_LionHeart_TETC](../cards/2025_Lammie_LionHeart_TETC.md) — LionHeart greedily decides, layer by layer under a user-set accuracy-drop threshold (with hardware-aware retraining and PCM drift), which DN
+- [2025_Song_HyFlexPIM_ISCA](../cards/2025_Song_HyFlexPIM_ISCA.md) — HyFlexPIM maps static transformer weights onto reconfigurable SLC/2-bit-MLC analog RRAM (digital PIM for dynamic attention) and uses SVD-bas
+- [2025_Chen_EdramRramZoFinetune_IMW](../cards/2025_Chen_EdramRramZoFinetune_IMW.md) — Reliability-aware analog MLC eDRAM-RRAM CIM for zeroth-order LM fine-tuning, with 12x bit density over prior MLC eDRAM and further 5x densit
+- [2025_Xu_UniCAIM_DAC](../cards/2025_Xu_UniCAIM_DAC.md) — FeFET-based unified CAM/CIM array performing O(1) dynamic top-k KV-cache selection, charge-domain static eviction and current-domain exact a
+- [2025_Qin_NVCiMPT_DATE](../cards/2025_Qin_NVCiMPT_DATE.md) — NVCiM-PT stores per-sample optimal prompt-tuning virtual tokens (OVTs) in NVM crossbars with noise-aware training and retrieves them by an i
+- [2025_Lammie_InherentAdversarialRobustnessAIMC_NatCommun](../cards/2025_Lammie_InherentAdversarialRobustnessAIMC_NatCommun.md) — Experiments on the IBM HERMES PCM AIMC chip show that intrinsic stochastic noise lowers adversarial success rate (PGD, Square, OnePixel) ver
+- [2025_Singh_AIMCTileDesign_NatElectron](../cards/2025_Singh_AIMCTileDesign_NatElectron.md) — Nature Electronics Perspective from IBM dissecting non-volatile memristive AIMC tile design (weight/input/output encoding, ADC families, dev
+- [2025_Khwa_MixedPrecisionMemristorSRAMCIM_Nature](../cards/2025_Khwa_MixedPrecisionMemristorSRAMCIM_Nature.md) — A TSMC/NTHU 22 nm edge AI processor with 64 Mb foundry memristor CIM plus 1 Mb SRAM-CIM and tiny-digital units partitions layers/kernels by 
+- [2025_Zhao_RACE-IT_ICCD](../cards/2025_Zhao_RACE-IT_ICCD.md) — RACE-IT uses reprogrammable RRAM analog content-addressable memory (ACAM) arrays to compute activations, Softmax and data-dependent matmuls 
+- [2025_Lammie_AIMCSoftwareStacks_NatRevElectrEng](../cards/2025_Lammie_AIMCSoftwareStacks_NatRevElectrEng.md) — Perspective explaining why standard DL compiler stacks do not transfer to heterogeneous AIMC+DPU accelerators (weight stationarity, inter-la
+- [2025_Li_CIMLLMDataflow_ISVLSI](../cards/2025_Li_CIMLLMDataflow_ISVLSI.md) — Proposes a Compute-in-Memory dataflow and memory hierarchy that performs LLM attention-score and feed-forward computation directly in CIM in
+- [2025_Hou_SAGE_ICCAD](../cards/2025_Hou_SAGE_ICCAD.md) — SAGE is a training-free channel-reordering strategy for LLM fully-connected layers on analog compute-in-memory hardware that reduces output 
+- [2025_Sun_DuoPIM_TCAD](../cards/2025_Sun_DuoPIM_TCAD.md) — DuoPIM is a hybrid RRAM+DRAM processing-in-memory architecture for LLM decoding that maps weight-heavy FC layers to batch-insensitive RRAM i
+- [2025_Xiong_ASMA_ICCD](../cards/2025_Xiong_ASMA_ICCD.md) — ASMA is a memristor-based CIM accelerator for LLM FFN layers that exploits the 'anisotropic' (additive/concatenative/sequential) scaling str
+- [2025_Wang_HybridReRamNmcSramCim_COOLCHIPS](../cards/2025_Wang_HybridReRamNmcSramCim_COOLCHIPS.md) — Splits activations so <1% go to SRAM-CiM and the rest to ReRAM-NMC, keeping Llama2-7B perplexity increase under 2 for Gaussian and shift ReR
+- [2025_Malhotra_ReTern_TVLSI](../cards/2025_Malhotra_ReTern_TVLSI.md) — ReTern combines fault-aware column sign flips (FAST) with zero-weight bitcell reprogramming (zero-fix) to tolerate stuck-at faults in ternar
+- [2025_Malekar_PimLlm_MWSCAS](../cards/2025_Malekar_PimLlm_MWSCAS.md) — PIM-LLM partitions 1-bit LLMs between analog RRAM crossbars (1-bit-weight projection layers) and a digital 8-bit systolic array (attention M
+- [2025_Dong_TopkimaFormer_TCAS-I](../cards/2025_Dong_TopkimaFormer_TCAS-I.md) — Topkima merges top-k selection into a ramp in-memory ADC on the SRAM Q.K^T macro so only k=5 scores reach softmax, giving a ~15x faster soft
+- [2025_Kim_HASTILY_TCASAI](../cards/2025_Kim_HASTILY_TCASAI.md) — HASTILY is an 8T-SRAM analog-CIM transformer accelerator whose arrays double as exponential lookup tables (UCLMs), plus multi-core softmax r
+- [2025_Fu_CrossTypeMappedDataflow_ISLPED](../cards/2025_Fu_CrossTypeMappedDataflow_ISLPED.md) — Flat-NoC heterogeneous RRAM analog-CIM plus SRAM digital-CIM ViT accelerator whose Hybrid Dataflow reuses idle cross-type CIMs for static VM
+- [2025_Bommana_COMET3D_TCAD](../cards/2025_Bommana_COMET3D_TCAD.md) — COMET-3D is a 3D heterogeneous compute-in-memory accelerator that pairs SRAM- and ReRAM-based CIM arrays with a logic die (digital MAC + sof
+- [2025_Huang_VQTCiM_DAC](../cards/2025_Huang_VQTCiM_DAC.md) — VQT-CiM is a FeFET-based CiM design that eliminates the runtime write operations dynamic attention VMMs otherwise require, by vector-quantiz
+- [2025_Mai_CIMWise_ICCAD](../cards/2025_Mai_CIMWise_ICCAD.md) — CIMWise is an IREE/MLIR-based end-to-end compiler for CIM processors whose auto-tuner searches hardware parameters and dataflow characterist
+- [2025_Zhang_ASiM_TVLSI](../cards/2025_Zhang_ASiM_TVLSI.md) — ASiM is an open-source PyTorch framework modelling ADC quantisation, bit-parallel encoding and analog noise of charge-domain SRAM analog CiM
+- [2025_Rhe_ETA_APCCAS](../cards/2025_Rhe_ETA_APCCAS.md) — ETA is a mapping strategy for transformer attention on ReRAM-based CIM that overlaps computation with the frequent memory writes attention r
+- [2025_Park_COMPASS_DATE](../cards/2025_Park_COMPASS_DATE.md) — COMPASS is a compiler that partitions DNNs larger than on-chip crossbar capacity into sequentially executed, weight-reloaded partitions usin
+- [2025_Zhao_CMSwitch_ASPLOS](../cards/2025_Zhao_CMSwitch_ASPLOS.md) — CMSwitch is a CIM compiler that treats each array's compute/memory mode as a compile-time decision (DP network segmentation + MIP array allo
+- [2025_Krestinskaya_CIMNAS_TCASAI](../cards/2025_Krestinskaya_CIMNAS_TCASAI.md) — CIMNAS jointly searches NN architecture, quantization and CIM device/circuit/architecture parameters (9.9e85 combinations) with an evolution
+- [2025_CuberoCascante_CIMFlow_TECS](../cards/2025_CuberoCascante_CIMFlow_TECS.md) — CIMFlow is a timed cyclo-static dataflow simulator for fully-weight-stationary multi-core CIM accelerators that shows cross-layer pipelined 
+- [2025_Zhu_PIMapping_TCAD](../cards/2025_Zhu_PIMapping_TCAD.md) — PIMapping is an analytical framework for tile-based PIM accelerators that uses a tile-level dataflow IR, a data-proximity mapping method and
+- [2025_Li_HARMONY_TCAD](../cards/2025_Li_HARMONY_TCAD.md) — HARMONY is a CIM compiler built on a hardware IR unifying compute and memory abstractions; it automatically identifies CIM-offloadable opera
+- [2025_Yousuf_LayerEnsembleAveraging_NatCommun](../cards/2025_Yousuf_LayerEnsembleAveraging_NatCommun.md) — Layer ensemble averaging maps the same pre-trained ternary network onto redundant crossbar blocks and averages (outlier-suppressed) currents
+- [2025_Haidar_CSPCMVisionSystem_ISCAS](../cards/2025_Haidar_CSPCMVisionSystem_ISCAS.md) — An energy-efficient edge vision system combining compressed sensing for on-sensor dimensionality reduction with a single-layer ANN on PCM cr
+- [2025_Haidar_DriftAwarePCMRegularization_AICAS](../cards/2025_Haidar_DriftAwarePCMRegularization_AICAS.md) — A drift-aware regularization framework with attention-based feature prioritization, layered on top of hardware-aware training, cuts a simula
+- [2025_Martemucci_FeCapMemristorHM_NatElectron](../cards/2025_Martemucci_FeCapMemristorHM_NatElectron.md) — A single BEOL HfO2:Si/Ti stack in 130-nm CMOS serves as both ferroelectric capacitor (FeCAP, 10-bit hidden weights) and memristor (analogue 
+- [2025_Zhou_IMCsim_DAC](../cards/2025_Zhou_IMCsim_DAC.md) — IMCsim is a full-system in-memory-computing simulator with software runtime libraries, ISA extensions for tensor operators, and flexible map
+- [2025_Guo_NIPA_ICCAD](../cards/2025_Guo_NIPA_ICCAD.md) — Proposes an error-injected robustness metric and a Non-Ideal PIM Accuracy (NIPA) model that unifies diverse analog-PIM error sources into a 
+- [2025_Jeon_OptiRange_ICCAD](../cards/2025_Jeon_OptiRange_ICCAD.md) — OptiRange is a ReRAM PIM accelerator that lowers ADC resolution/energy without hurting accuracy or throughput by rebalancing crossbar cell v
+
+## 2023 (39)
+
+- [2023_Rasch_HWATrainingLargeScaleAIMC_NatCommun](../cards/2023_Rasch_HWATrainingLargeScaleAIMC_NatCommun.md) — Defines a standard PCM-calibrated AIMC crossbar model (fixed I/O/weight ranges, 8-bit DAC/ADC, per-column digital scales, programming noise,
+- [2023_Sridharan_X-Former_TVLSI](../cards/2023_Sridharan_X-Former_TVLSI.md) — X-Former is a hybrid ReRAM/8T-SRAM in-memory Transformer accelerator that keeps static weights in ReRAM crossbars and computes dynamic QK^T/
+- [2023_LeGallo_IBMHERMESChip_NatElectron](../cards/2023_LeGallo_IBMHERMESChip_NatElectron.md) — IBM HERMES Project Chip: a 14nm CMOS, 64-core (256x256) PCM analog in-memory chip with on-chip digital activation/LSTM units that runs ResNe
+- [2023_Ambrogio_IBMAnalogAISpeechChip_Nature](../cards/2023_Ambrogio_IBMAnalogAISpeechChip_Nature.md) — A 14nm chip with 34 PCM tiles (35M devices) and a parallel 2D-mesh duration-format fabric achieves software-equivalent end-to-end keyword sp
+- [2023_Li_CPSAA_TCAD](../cards/2023_Li_CPSAA_TCAD.md) — CPSAA is a ReRAM-crossbar PIM sparse-attention accelerator that hides crossbar write latency, prunes in-memory, and runs SDDMM/SpMM by coupl
+- [2023_Burr_AnalogAITransformers_IEDM](../cards/2023_Burr_AnalogAITransformers_IEDM.md) — IBM invited review of PCM analog-AI accelerators for Transformer language models (architecture, wafer-scale testing, chip demos, HWA trainin
+- [2023_Liu_HARDSEA_TVLSI](../cards/2023_Liu_HARDSEA_TVLSI.md) — HARDSEA is a hybrid analog-ReRAM/digital-SRAM compute-in-memory accelerator for dynamic sparse self-attention in transformers, using product
+- [2023_Sun_AIMCvsDIMC_ICCAD](../cards/2023_Sun_AIMCvsDIMC_ICCAD.md) — A silicon-validated analytical cost model for SRAM-based analog (AIMC) and digital (DIMC) in-memory macros, integrated into ZigZag, shows DI
+- [2023_Andrulis_RAELLA_ISCA](../cards/2023_Andrulis_RAELLA_ISCA.md) — RAELLA cuts ReRAM-PIM ADC cost without retraining by shaping column-sum distributions (Center+Offset signed weights on 2T2R, per-layer adapt
+- [2023_Li_H3DAtten_TVLSI](../cards/2023_Li_H3DAtten_TVLSI.md) — H3DAtten is a heterogeneous 3D-integrated accelerator for vision-transformer multi-head self-attention that stacks a 40nm RRAM analog-CIM ti
+- [2023_Kang_MGen_TC](../cards/2023_Kang_MGen_TC.md) — MGen is a framework that generates reduced-redundancy multi-task BERT models and schedules their execution order to cut the energy (not just
+- [2023_LeGallo_AIHWKit_APLMachLearn](../cards/2023_LeGallo_AIHWKit_APLMachLearn.md) — Tutorial on the open-source IBM Analog Hardware Acceleration Kit (AIHWKit), a PyTorch-based functional simulator of analog in-memory trainin
+- [2023_Sun_PIMCOMP_DAC](../cards/2023_Sun_PIMCOMP_DAC.md) — PIMCOMP is a universal four-stage compiler (node partitioning, weight replicating, core mapping, dataflow scheduling) for NVM-crossbar PIM a
+- [2023_Zhu_MNSIM20_TCAD](../cards/2023_Zhu_MNSIM20_TCAD.md) — MNSIM 2.0 is a behavior-level PIM modeling/simulation tool with a unified analog+digital memory-array model, PIM-aware NN training/quantizat
+- [2023_Frank_PCMDriftEnergyAccuracyImpact_IRPS](../cards/2023_Frank_PCMDriftEnergyAccuracyImpact_IRPS.md) — IBM invited IRPS paper showing that projection-liner PCM with a two-pairs-of-varying-significance weight mapping keeps BERT accuracy loss mi
+- [2023_Lu_RIME_TVLSI](../cards/2023_Lu_RIME_TVLSI.md) — RIME is an RRAM in-memory floating-point architecture (single-cycle NOR/NAND/minority logic) with pipelined MatMul and softmax, giving a tra
+- [2023_Ye_WH2T1RRRAMCIM_JSSC](../cards/2023_Ye_WH2T1RRRAMCIM_JSSC.md) — A 28nm 2T1R RRAM compute-in-memory macro with a weighted hybrid cell array, redundant-sub-array MSB mapping, and a reference-subtracting cur
+- [2023_Zheng_ReconfigurableSparseAttentionNVPIM_DAC](../cards/2023_Zheng_ReconfigurableSparseAttentionNVPIM_DAC.md) — A reconfigurable ReRAM PIM bank adds inner-product and scalar-vector-multiply primitives (reusing readout circuitry) so dynamic unstructured
+- [2023_Wang_IMCPELevelMappingBenchmark_JETCAS](../cards/2023_Wang_IMCPELevelMappingBenchmark_JETCAS.md) — A systematic loop-unrolling-based taxonomy of processing-element-level DNN-to-crossbar mapping methods, paired with a mapping-oriented archi
+- [2023_Gao_StaticWeightProgScheduling_TECS](../cards/2023_Gao_StaticWeightProgScheduling_TECS.md) — Static (offline) weight-to-operation-unit mapping framework for area-constrained ReRAM PIM that cuts runtime weight-reprogramming latency vi
+- [2023_Bhattacharjee_BatchnormFinetuningIMCNoise_GLSVLSI](../cards/2023_Bhattacharjee_BatchnormFinetuningIMCNoise_GLSVLSI.md) — Fine-tuning only the digital batchnorm gamma/beta (5 epochs, conv weights frozen on crossbars) recovers accuracy lost to read noise, drift a
+- [2023_Sun_Gibbon_TCAD](../cards/2023_Sun_Gibbon_TCAD.md) — Gibbon co-searches NN topology/quantisation and memristor-PIM hardware (crossbar size, ADC/DAC bits, cell precision) with an evolutionary se
+- [2023_Benmeziane_AnalogNAS_EDGE](../cards/2023_Benmeziane_AnalogNAS_EDGE.md) — AnalogNAS combines an XGBoost ranking surrogate trained on ~1,000 HWA-trained ResNet-like networks with evolutionary search to find drift-ro
+- [2023_Antolini_PCMDriftHWSWMitigation_JETCAS](../cards/2023_Antolini_PCMDriftHWSWMitigation_JETCAS.md) — A combined hardware/software approach mitigates PCM conductance drift in an analog in-memory-computing MAC prototype (90nm STMicroelectronic
+- [2023_Smagulova_ResistiveNeuralHardwareAccelerators_ProcIEEE](../cards/2023_Smagulova_ResistiveNeuralHardwareAccelerators_ProcIEEE.md) — Survey of many-core ReRAM crossbar DNN accelerators (ISAAC, PRIME, AEPE, PipeLayer, AtomLayer, Newton, CASCADE, PUMA/PANTHER) and fabricated
+- [2023_Cui_ARES_ICCAD](../cards/2023_Cui_ARES_ICCAD.md) — ARES is a general mapping framework for deploying DNNs on diverse processing-in-memory (PIM) architectures using a hardware-abstraction and 
+- [2023_Li_CrossbarAllocationOpt_TODAES](../cards/2023_Li_CrossbarAllocationOpt_TODAES.md) — Mathematical framework plus dynamic-programming solver that picks per-layer crossbar duplication counts for ReRAM CNN accelerators under cro
+- [2023_Kim_INCA_HPCA](../cards/2023_Kim_INCA_HPCA.md) — INCA is the first input-stationary RRAM crossbar accelerator (2T1R cells in 3D RRAM storing activations, streaming weights), giving up to 20
+- [2023_PerezBoschQuesada_MultilevelRRAMVMMAssessment_TED](../cards/2023_PerezBoschQuesada_MultilevelRRAMVMMAssessment_TED.md) — Programs two 8x8 1T1R RRAM subarrays with different conductance-level distributions and subjects them to 1000 consecutive identical vector-m
+- [2023_Pelke_MultiCoreCNNMapping_VLSI-SoC](../cards/2023_Pelke_MultiCoreCNNMapping_VLSI-SoC.md) — Decentralized, register-based linear and cyclic synchronization lets cores of a multi-core RRAM CIM system compute partial sums of one conv2
+- [2023_Bruschi_AIMCResNet18Manycore_DATE](../cards/2023_Bruschi_AIMCResNet18Manycore_DATE.md) — A 512-cluster RISC-V (PULP) + PCM AIMC many-core is simulated running end-to-end ResNet-18 (batch 16, 256x256 images) at up to 20.2 TOPS, 6.
+- [2023_Diware_MappingAwareBiasedTraining_AICAS](../cards/2023_Diware_MappingAwareBiasedTraining_AICAS.md) — Constrains the weights of the most hardware-important crossbar columns during training so their bit-slices land only in low-error RRAM condu
+- [2023_Cao_RRAMPoolFormer_ISCAS](../cards/2023_Cao_RRAMPoolFormer_ISCAS.md) — A 16-block, 0.26M-weight PoolFormer (pooling token mixer, LayerNorm replaced by channel scaling) is trained with RRAM non-idealities in the 
+- [2023_Parvaresh_NlpAimcResilience_NANOARCH](../cards/2023_Parvaresh_NlpAimcResilience_NANOARCH.md) — Evaluates NLP networks (GRU, LSTM, CNN) under analog in-memory computing non-idealities with and without hardware-aware training; GRU is mos
+- [2023_Jang_VECOM_ICCAD](../cards/2023_Jang_VECOM_ICCAD.md) — VECOM re-biases 8-bit weights (bias 64 instead of 128) with redundant mapping of the [5:4] bits so high-significance MLC cells sit at low-co
+- [2023_Ma_SAFVariationTolerantMapping_JETC](../cards/2023_Ma_SAFVariationTolerantMapping_JETC.md) — A retraining-free sort-based weight-to-crossbar remapping that groups similar-valued weights into the same crossbar, keeping a 3-layer MNIST
+- [2023_Bai_CIMQ_TCAD](../cards/2023_Bai_CIMQ_TCAD.md) — CIMQ is a hardware-aware quantization framework for CIM accelerators that jointly quantizes activations (bit-sparsity aware), weights (array
+- [2023_Liu_ERABS_TC](../cards/2023_Liu_ERABS_TC.md) — ERA-BS exploits fine-grained bit-level sparsity in both static weights (via an adaptive bit-flip + exponent-based quantization scheme) and d
+- [2023_Saxena_ADCLessCiMPartialSumQuant_ISLPED](../cards/2023_Saxena_ADCLessCiMPartialSumQuant_ISLPED.md) — By quantizing crossbar partial sums down to binary (1-bit, sense-amplifier-only, 'ADC-Less') or ternary (1.5-bit, two-comparator, 'near ADC-
+
+## 2022 (34)
+
+- [2022_Wan_NeuRRAM_Nature](../cards/2022_Wan_NeuRRAM_Nature.md) — NeuRRAM is a 130-nm, 48-core, 3M-RRAM CIM chip with a voltage-mode neuron/ADC and bidirectional transposable array that achieves 1.6-2.3x lo
+- [2022_Jain_AnalogAI2DMesh_TVLSI](../cards/2022_Jain_AnalogAI2DMesh_TVLSI.md) — IBM's heterogeneous, programmable compute-in-memory accelerator architecture combines spatially distributed analog CIM tiles for weight-stat
+- [2022_Khaddam-Aljameh_HERMES-Core_JSSC](../cards/2022_Khaddam-Aljameh_HERMES-Core_JSSC.md) — A 256x256 8T4R PCM in-memory compute core in 14-nm CMOS with 256 linearized CCO-based ADCs at 4-um pitch and an LDPU measures 1.008 TOPS, 1.
+- [2022_Zhou_TransPIM_HPCA](../cards/2022_Zhou_TransPIM_HPCA.md) — TransPIM maps Transformer inference onto HBM with a token-based data-sharding dataflow plus per-bank auxiliary compute units and ring-broadc
+- [2022_Mackin_WeightProgrammingOptimisation_NatCommun](../cards/2022_Mackin_WeightProgrammingOptimisation_NatCommun.md) — IBM's network-agnostic weight-programming optimiser (Differential Weight Evolution over six discretised weight points, a 4D+2 search space, 
+- [2022_Li_40nmMLCRRAMCIMMacro_JSSC](../cards/2022_Li_40nmMLCRRAMCIMMacro_JSSC.md) — A fabricated 40-nm RRAM compute-in-memory macro combines multi-level-cell (MLC) RRAM, sparsity-aware input control, on-chip write-verify wit
+- [2022_Okazaki_PCM14nmAnalogAccelerator_ISCAS](../cards/2022_Okazaki_PCM14nmAnalogAccelerator_ISCAS.md) — 14nm chip with multiple 512x512 PCM arrays gives software-equivalent accuracy on MNIST and LSTM using drift/noise compensation, and the pape
+- [2022_Yang_FullCircuitMemristorTransformer_TCASI](../cards/2022_Yang_FullCircuitMemristorTransformer_TCASI.md) — An all-analog, full-circuit memristor implementation of the Transformer network -- crossbar VMM plus dedicated analog circuit modules for so
+- [2022_Yang_AERO_JETCAS](../cards/2022_Yang_AERO_JETCAS.md) — AERO is a design-space-exploration framework for hierarchical (accelerator/cluster/tile-PE/AIMC) CNN mapping on hybrid digital-analog multi-
+- [2022_Xiao_AnalogAccuracyStudy_CASMag](../cards/2022_Xiao_AnalogAccuracyStudy_CASMag.md) — A systematic simulation study on ResNet50/ImageNet shows that making analog quantities proportional to weight/dot-product values (differenti
+- [2022_Krishnan_HybridRRAMSRAM_TCAD](../cards/2022_Krishnan_HybridRRAMSRAM_TCAD.md) — A parallel digital SRAM+MAC macro with a programmable shifter compensates RRAM multilevel-cell variation, improving post-mapping accuracy by
+- [2022_Shanbhag_IMCBenchmarking_OJSSCS](../cards/2022_Shanbhag_IMCBenchmarking_OJSSCS.md) — Proposes a compositional benchmarking methodology and metric set for in-memory-computing (IMC) chips, then applies it to a database of more 
+- [2022_Huang_HWAwareQuantMappingCIM_TODAES](../cards/2022_Huang_HWAwareQuantMappingCIM_TODAES.md) — A system-level design-space study of how quantization (fixed-point vs dynamic fixed-point), signed-number mapping (2's complement, different
+- [2022_Cao_NonIdealitiesAwareCoDesign_JETCAS](../cards/2022_Cao_NonIdealitiesAwareCoDesign_JETCAS.md) — Presents a unified software-hardware co-design/training framework that jointly models device-level (conductance variation, quantization, D2D
+- [2022_Klein_ALPINE_TC](../cards/2022_Klein_ALPINE_TC.md) — ALPINE integrates PCM-based AIMC tiles into ARMv8 multi-core CPUs via custom ISA instructions and a gem5-X simulator plus AIMClib, showing u
+- [2022_Kim_PIMCircuitsOverview_JETCAS](../cards/2022_Kim_PIMCircuitsOverview_JETCAS.md) — JETCAS overview of SRAM-, DRAM- and ReRAM-based processing-in-memory circuits for AI, highlighting that data converters dominate ReRAM PIM c
+- [2022_Qu_CoordinatedPruningMapping_TCAD](../cards/2022_Qu_CoordinatedPruningMapping_TCAD.md) — Jointly co-designs bit-wise pruning and crossbar mapping for RRAM DNN accelerators, using two's-complement bit-matrix decoupling and an RL-d
+- [2022_Zheng_PIMulatorNN_TCAD](../cards/2022_Zheng_PIMulatorNN_TCAD.md) — PIMulator-NN is an event-driven, cross-level simulator for PIM-based neural network accelerators that couples architecture-level event simul
+- [2022_Garofalo_HeterogeneousIMCCluster_JETCAS](../cards/2022_Garofalo_HeterogeneousIMCCluster_JETCAS.md) — Couples a 256x256 PCM in-memory accelerator (IMA) with 8 RISC-V cores and a digital depth-wise engine in a PULP cluster (22nm FDX, post-P&R)
+- [2022_Joksas_NonidealityAwareTraining_AdvSci](../cards/2022_Joksas_NonidealityAwareTraining_AdvSci.md) — Nonideality-aware ex-situ training that models I-V nonlinearity in the layer function, maps non-negative weights to individual conductances 
+- [2022_Kim_FeTFTSynapticCIM_SciAdv](../cards/2022_Kim_FeTFTSynapticCIM_SciAdv.md) — Fabricated 4x9 IZO/HfZrOx ferroelectric thin-film-transistor synaptic arrays with column/row-parallel program-inhibit programming and measur
+- [2022_Shin_FaultFree_TC](../cards/2022_Shin_FaultFree_TC.md) — Proposes an offline-compilation plus lightweight online-compensation framework (Fault-Free) that mitigates stuck-at-fault errors in low-reso
+- [2022_Haensch_CIMNVMCodesignReview_AdvMater](../cards/2022_Haensch_CIMNVMCodesignReview_AdvMater.md) — Co-design review linking NVM material properties (PCM, RRAM, MRAM, ECRAM, FeFET/FTJ) to crossbar CIM sub-system requirements for digital-sto
+- [2022_Amin_XbarPartitioning_JETCAS](../cards/2022_Amin_XbarPartitioning_JETCAS.md) — Proposes horizontal/vertical partitioning of fully-analog in-memory-computing crossbars to limit interconnect-parasitic and noise degradatio
+- [2022_Chen_WRAP_DATE](../cards/2022_Chen_WRAP_DATE.md) — WRAP is a subarray-based, thermal-aware weight remapping and processing framework that maps DNN weights onto RRAM subarrays (rather than ind
+- [2022_Amin_ParasiticsPartitioning_ISCAS](../cards/2022_Amin_ParasiticsPartitioning_ISCAS.md) — SPICE study showing interconnect RC parasitics collapse MNIST accuracy of a 400x120x84x10 MLP to about 15% on fully-analog IMC (MVM plus sig
+- [2022_Kim_ExtremePartialSumQuant_JETC](../cards/2022_Kim_ExtremePartialSumQuant_JETC.md) — Data-driven, layer-wise partial-sum quantization with a zero-treading quantizer plus retraining cuts ADC resolution to 3 levels for CIFAR-10
+- [2022_GarciaRedondo_SACA_DCIS](../cards/2022_GarciaRedondo_SACA_DCIS.md) — SACA is a system-level simulation framework for host+CIM-accelerator TinyML systems that models device- and periphery-level non-idealities (
+- [2022_Gao_BRoCoM_TCAD](../cards/2022_Gao_BRoCoM_TCAD.md) — BRoCoM is a unified Bayesian-inference framework that folds memristor process-variation and noise statistics into a prior weight distributio
+- [2022_Lin_DNAT_JETCAS](../cards/2022_Lin_DNAT_JETCAS.md) — D-NAT trains DNNs against a MAC-error model measured on a fabricated 7-bit-DAC SRAM-based CIM macro (plus a statistical gradient estimator a
+- [2022_Jiang_ENNA_TCAS-I](../cards/2022_Jiang_ENNA_TCAS-I.md) — ENNA is an ADC-free compute-in-memory accelerator with a taped-out TSMC 40nm RRAM subarray prototype that performs inter-array data processi
+- [2022_Lee_OfflineTrainingIRDropMitigation_TCAD](../cards/2022_Lee_OfflineTrainingIRDropMitigation_TCAD.md) — Two neural-network IR-drop predictor models, trained to match SPICE-level 'golden' validation, are incorporated into DNN training (with incr
+- [2022_Wen_RRAMReadDisturb_DFT](../cards/2022_Wen_RRAMReadDisturb_DFT.md) — Measures RRAM read-disturb-induced conductance drift at the device level and simulates its impact on LeNet-5/VGG-7 inference accuracy, findi
+- [2022_Liu_IVQ_TCAD](../cards/2022_Liu_IVQ_TCAD.md) — IVQ reorganizes crossbar-based processing-in-memory to natively support mixed/varied weight-quantization schemes by bit-aligning weights of 
+
+## 2020 (31)
+
+- [2020_Sebastian_MemoryDevicesInMemoryComputing_NatNanotechnol](../cards/2020_Sebastian_MemoryDevicesInMemoryComputing_NatNanotechnol.md) — IBM Zurich Nature Nanotechnology review of charge-based (SRAM/DRAM/Flash) and resistance-based (RRAM/PCM/MRAM) memories for in-memory comput
+- [2020_Yao_FullyHardwareMemristorCNN_Nature](../cards/2020_Yao_FullyHardwareMemristorCNN_Nature.md) — First fully hardware-implemented five-layer memristor CNN: eight 2,048-cell (128x16) 1T1R TiN/TaOx/HfOx/TiN arrays with hybrid ex-situ plus 
+- [2020_Yang_ReTransformer_ICCAD](../cards/2020_Yang_ReTransformer_ICCAD.md) — ReRAM-PIM Transformer accelerator that decomposes Q*K^T into (Q*W_K^T)*X^T so intermediate K is never written to crossbars, adds an in-memor
+- [2020_Joshi_PCMNoiseInject_NatCommun](../cards/2020_Joshi_PCMNoiseInject_NatCommun.md) — Gaussian weight-noise-injection training plus a batch-norm statistics recalibration (AdaBS) gives ResNet-32 93.75% CIFAR-10 accuracy with al
+- [2020_Liu_FullyIntegratedAnalogReRAMCIM_ISSCC](../cards/2020_Liu_FullyIntegratedAnalogReRAMCIM_ISSCC.md) — A 130nm, 158.8kb analog ReRAM CIM chip runs a complete 784-100-10 MLP on-chip using a sign-weighted 2T2R array and a resolution-adjustable r
+- [2020_Xue_22nm2MbReRAMCIM_ISSCC](../cards/2020_Xue_22nm2MbReRAMCIM_ISSCC.md) — A 22-nm 2-Mb ReRAM CIM macro, the first 4b-input nvCIM, reaching 9.8-18.3 ns access time and 121.3-28.9 TOPS/W from binary to 4b-in/4b-W/11b
+- [2020_Jia_ProgrammableIMCMicroprocessor_JSSC](../cards/2020_Jia_ProgrammableIMCMicroprocessor_JSSC.md) — A 65 nm programmable microprocessor integrating a 590 kb charge-domain SRAM in-memory-computing unit with a near-memory digital datapath and
+- [2020_Wan_TransposableRRAMNeurosynapticCore_ISSCC](../cards/2020_Wan_TransposableRRAMNeurosynapticCore_ISSCC.md) — A 130-nm CMOS/RRAM CIM core with runtime-reconfigurable dataflow and in-situ transposable weight access, reaching 74 TMACS/W, the highest re
+- [2020_Peng_DNNNeuroSimV2_TCAD](../cards/2020_Peng_DNNNeuroSimV2_TCAD.md) — DNN+NeuroSim V2.0 extends the PyTorch-wrapped NeuroSim benchmark to on-chip training by modelling weight-update nonlinearity, asymmetry, dev
+- [2020_Jain_RxNN_TCAD](../cards/2020_Jain_RxNN_TCAD.md) — RxNN is a Caffe-based functional simulator built on a Fast Crossbar Model (FCM) that is 4-5 orders of magnitude faster than HSPICE and shows
+- [2020_Li_TIMELY_ISCA](../cards/2020_Li_TIMELY_ISCA.md) — TIMELY cuts input/Psum data-movement and DAC/ADC energy in ReRAM PIM with analog local buffers, time-domain interfaces and only-once-input-r
+- [2020_Chakraborty_GENIEx_DAC](../cards/2020_Chakraborty_GENIEx_DAC.md) — GENIEx trains a neural network on HSPICE crossbar data to emulate data-dependent (nonlinear) memristive crossbar non-idealities, with 7x and
+- [2020_Xiao_AnalogArchitecturesNVM_ApplPhysRev](../cards/2020_Xiao_AnalogArchitecturesNVM_ApplPhysRev.md) — Sandia review that organizes analog NVM crossbar DNN accelerators by design-hierarchy level (devices, peripherals, inference and training ar
+- [2020_Chakraborty_ResistiveCrossbarsApproximateHW_ProcIEEE](../cards/2020_Chakraborty_ResistiveCrossbarsApproximateHW_ProcIEEE.md) — Proceedings of the IEEE tutorial/review that frames NVM resistive crossbars as inherently approximate MVM engines, covering devices, periphe
+- [2020_Qu_RaQu_DAC](../cards/2020_Qu_RaQu_DAC.md) — RaQu is an AutoML-based, array-aware mixed-precision quantization and mapping framework that uses a two-stage learning and array-aware group
+- [2020_Nandakumar_PCMWeightPrecision_IEDM](../cards/2020_Nandakumar_PCMWeightPrecision_IEDM.md) — Derives analytically that the precision achievable when iteratively programming PCM conductance states with closed-loop feedback is fundamen
+- [2020_Guo_ATT_ICCD](../cards/2020_Guo_ATT_ICCD.md) — ATT is a pipelined ReRAM-crossbar accelerator for attention-based NNs (Transformer, BERT, XLNet, XLM) with NuXG, a sparsity-aware non-unifor
+- [2020_Ankit_PANTHER_TC](../cards/2020_Ankit_PANTHER_TC.md) — PANTHER is an ISA-programmable ReRAM training accelerator whose bit-sliced crossbars perform high-precision matrix-vector and outer-product-
+- [2020_Song_ITTRNA_TCAD](../cards/2020_Song_ITTRNA_TCAD.md) — ITT-RNA combines an accelerator-friendly off-device training method (exploiting NN self-healing to avoid mapping large weights onto imperfec
+- [2020_Charan_KDRSA_JXCDC](../cards/2020_Charan_KDRSA_JXCDC.md) — Combines knowledge-distillation variation-aware training with random sparse adaptation (a small SRAM array retrained after mapping) to recov
+- [2020_Sun_EnergyEfficientQuantReg_ASPDAC](../cards/2020_Sun_EnergyEfficientQuantReg_ASPDAC.md) — A training framework for RRAM PIM combining a non-uniform activation quantization scheme (implemented by non-linear ADCs plus MUXes) that cu
+- [2020_Ma_TinyButAccurate_ASPDAC](../cards/2020_Ma_TinyButAccurate_ASPDAC.md) — ADMM-based structured pruning plus 8-bit distillation quantization with Network Purification and Unused Path Removal (P-RM) reaches 231.82x 
+- [2020_Fouda_IRQNNFramework_IEEEAccess](../cards/2020_Fouda_IRQNNFramework_IEEEAccess.md) — IR-QNN is a fast offline training/validation framework that incorporates interconnect IR-drop into quantized DNN training using a fabricated
+- [2020_Fei_XBSIM_TST](../cards/2020_Fei_XBSIM_TST.md) — XB-SIM* is a configurable architecture-level simulation framework for ReRAM-crossbar CNN accelerators, bundling a ReRAM-aware training algor
+- [2020_Shin_TOPAR_ICCAD](../cards/2020_Shin_TOPAR_ICCAD.md) — TOPAR lowers ReRAM accelerator temperature through offline weight decomposition, column reordering and weight adjustment (up to 2.39x endura
+- [2020_Joksas_CommitteeMachines_NatCommun](../cards/2020_Joksas_CommitteeMachines_NatCommun.md) — Ensemble-averaging committees of independently trained memristor-based networks, simulated using measured data from three RRAM technologies,
+- [2020_Zhang_ParasiticResistanceMitigationCNN_JETC](../cards/2020_Zhang_ParasiticResistanceMitigationCNN_JETC.md) — Dense kernel-to-crossbar mapping plus a conductance conversion and calibration algorithm that compensates wire/IO parasitic resistance in fu
+- [2020_Lu_CIMAreaConstraintBenchmark_TVLSI](../cards/2020_Lu_CIMAreaConstraintBenchmark_TVLSI.md) — This benchmarking study designs and evaluates compute-in-memory DNN accelerators under realistic chip-area constraints (rather than assuming
+- [2020_Ji_FPSAReducedArchitecture_TC](../cards/2020_Ji_FPSAReducedArchitecture_TC.md) — Inspired by RISC design, the Field Programmable Synapse Array (FPSA) keeps ReRAM-crossbar hardware compact (reconfigurable logic, wires and 
+- [2020_Jiang_MINT_ISCAS](../cards/2020_Jiang_MINT_ISCAS.md) — MINT splits DNN weights into MSBs (processed by transposable RRAM compute-in-memory arrays for forward/backward propagation) and LSBs (store
+- [2020_Zhang_RepresentableMatrices_ASPDAC](../cards/2020_Zhang_RepresentableMatrices_ASPDAC.md) — A five-step crossbar mapping flow jointly optimizes a peripheral scaling factor alpha and memristor conductances/state variables (via Newton
+
+## 2021 (29)
+
+- [2021_Narayanan_FullyOnChipMAC14nmPCM_TED](../cards/2021_Narayanan_FullyOnChipMAC14nmPCM_TED.md) — IBM's 14 nm all-analog PCM inference test chip with 512x512-weight tiles (4 PCMs per weight), ADC-free duration-format 2-D mesh and row-wise
+- [2021_Kang_AreaEfficientMultiTaskBERT_ICCAD](../cards/2021_Kang_AreaEfficientMultiTaskBERT_ICCAD.md) — A training-free framework that stores one shared BERT base model plus heavily compressed task-specific deltas (near-ternary quantisation + o
+- [2021_Kang_WindowSelfAttentionReRAM_TCAD](../cards/2021_Kang_WindowSelfAttentionReRAM_TCAD.md) — Proposes window self-attention plus a window-size search algorithm to resolve the pipeline-hazard bottleneck of running transformer-based la
+- [2021_Yu_CIMChipsDeepLearning_CASMag](../cards/2021_Yu_CIMChipsDeepLearning_CASMag.md) — Review of silicon-demonstrated SRAM- and RRAM-based CIM macros for DNNs, their common design challenges (ADC bottleneck, analog variation, d
+- [2021_Rasch_AIHWKIT_AICAS](../cards/2021_Rasch_AIHWKIT_AICAS.md) — IBM Analog Hardware Acceleration Kit (aihwkit) is an open-source PyTorch toolkit with a C++/CUDA analog-tile core that simulates analog cros
+- [2021_Yuan_FORMS_ISCA](../cards/2021_Yuan_FORMS_ISCA.md) — FORMS trains CNNs with ADMM so that weights in each small crossbar sub-array column share one sign (polarization), removing the dual-crossba
+- [2021_Kariyappa_NoiseResilientDNN_TED](../cards/2021_Kariyappa_NoiseResilientDNN_TED.md) — Proposes two training-time techniques -- drift regularization (DR) and multiplicative noise training (MNT) -- to make DNNs mapped onto PCM-b
+- [2021_Chen_CAP-RAM_JSSC](../cards/2021_Chen_CAP-RAM_JSSC.md) — CAP-RAM is a 65 nm charge-domain in-memory-computing macro built on standard 6T SRAM with a semi-parallel 8-cells-per-MAC-circuit structure,
+- [2021_Siemieniuk_OCC_TCAD](../cards/2021_Siemieniuk_OCC_TCAD.md) — OCC is an MLIR-based multilevel-rewriting compiler that automatically detects GEMM-like motifs (contractions via TTGT, convolutions via Im2C
+- [2021_Yu_RRAMforCIMInferenceToTraining_TCAS-I](../cards/2021_Yu_RRAMforCIMInferenceToTraining_TCAS-I.md) — Review of RRAM-based CIM that adds measured multilevel RRAM data from a test vehicle, a scalability/monolithic-3D benchmark of RRAM CIM infe
+- [2021_Roy_TxSim_TVLSI](../cards/2021_Roy_TxSim_TVLSI.md) — TxSim is a PyTorch/BLAS-based functional simulator that models crossbar non-idealities in forward, backward and weight-update phases of DNN 
+- [2021_Han_PolyhedralPIMCompiler_JETC](../cards/2021_Han_PolyhedralPIMCompiler_JETC.md) — A polyhedral (isl/pet) source-to-source compiler that detects MV/MM/CONV and fused operators in C code, maps them to memristor-crossbar acce
+- [2021_Song_BRAHMS_DAC](../cards/2021_Song_BRAHMS_DAC.md) — BRAHMS eliminates redundant analog-to-digital conversions in RRAM-based CNN accelerators by fusing post-MAC operations (shift-add, pooling, 
+- [2021_Yang_CFMESMO_ICCAD](../cards/2021_Yang_CFMESMO_ICCAD.md) — ReSNA trains DNNs against thermal, shot, RTN and programming noise of ReRAM crossbars (+2.57% accuracy on ResNet20/CIFAR-10 on average) and 
+- [2021_Bhattacharjee_NEAT_TCAD](../cards/2021_Bhattacharjee_NEAT_TCAD.md) — NEAT clips and iteratively retrains DNN weights so they stay in the linear conductance regime of a 1T-1R crossbar cell (set by transistor ga
+- [2021_Pedretti_ConductanceVariationsIMC_IRPS](../cards/2021_Pedretti_ConductanceVariationsIMC_IRPS.md) — A reliability-physics perspective on RRAM conductance variation in in-memory computing: characterizes conductance variation/stability and it
+- [2021_Milo_RRAMProgramVerify_TED](../cards/2021_Milo_RRAMProgramVerify_TED.md) — Compares three multilevel-cell program/verify algorithms (ISPVA, IGVVA-100, IGVVA-10) on a measured 4-kbit 1T1R HfO2 RRAM array and shows fi
+- [2021_Huang_MixedPrecisionQuant_ASP-DAC](../cards/2021_Huang_MixedPrecisionQuant_ASP-DAC.md) — Jointly quantizes weights, inputs and ADC partial sums per layer for ReRAM inference accelerators using a deep-RL search, cutting LeNet infe
+- [2021_Liu_BitTransformer_ICCAD](../cards/2021_Liu_BitTransformer_ICCAD.md) — Bit-Transformer combines power-of-two quantization, 3-D inter-crossbar bit-wise mapping and a retraining-free bit-flip-and-compensation sche
+- [2021_Sun_UnaryOptimalMapping_TCAD](../cards/2021_Sun_UnaryOptimalMapping_TCAD.md) — Replaces binary weight coding in multilevel-cell ReRAM crossbars with unary coding plus a variation-aware optimal mapping (exhaustive search
+- [2021_Yuan_TinyADC_DATE](../cards/2021_Yuan_TinyADC_DATE.md) — TinyADC is a weight-pruning framework for ReRAM-based mixed-signal DNN accelerators that is explicitly aware of peripheral ADC circuit cost,
+- [2021_Azamat_Quarry_ICCAD](../cards/2021_Azamat_Quarry_ICCAD.md) — Quarry uses advanced quantization techniques (no hardware changes) to shrink the ADC resolution/size needed in ReRAM crossbar DNN accelerato
+- [2021_Huang_IRDropFaultMitigation_JEDS](../cards/2021_Huang_IRDropFaultMitigation_JEDS.md) — Proposes two circuit-level mitigation methods -- an additional tunable RRAM row and a trans-impedance-amplifier (TIA) based RRAM scheme -- t
+- [2021_Yuan_PruningDifferentialMapping_ISQED](../cards/2021_Yuan_PruningDifferentialMapping_ISQED.md) — Combines ADMM unstructured weight pruning (hierarchical progressive search for best ratio) with a differential two-cell weight mapping so st
+- [2021_Zhang_RobustTrainableQuantizer_ASPDAC](../cards/2021_Zhang_RobustTrainableQuantizer_ASPDAC.md) — A learnable non-uniform weight quantizer, trained with an EM-style clustering that penalises levels at high-variation (high-conductance) reg
+- [2021_Cao_NeuralPIM_TC](../cards/2021_Cao_NeuralPIM_TC.md) — Neural-PIM replaces ADCs and digital shift-and-add in RRAM PIM with small RRAM-crossbar neural approximators and an analog-accumulation data
+- [2021_Li_RaQu_TCAD](../cards/2021_Li_RaQu_TCAD.md) — RaQu is an AutoML-based quantization framework for RRAM-based PIM that generates a fine-grained, hardware-structure-aware quantization strat
+- [2021_Huang_NvcimAccuracyOpt_TCAS-I](../cards/2021_Huang_NvcimAccuracyOpt_TCAS-I.md) — Proposes the nvCIM framework for systematically analyzing how RRAM device, array, and ADC parameters affect DNN classification accuracy in c
+- [2021_Nikam_PassiveRRAMLSTM_TED](../cards/2021_Nikam_PassiveRRAMLSTM_TED.md) — Simulation of in-situ Manhattan-rule training of a small LSTM on a selector-less (passive) 64x64 Pt/Al2O3/TiO2-x RRAM crossbar reports ~6.5x
+
+## 2024 (29)
+
+- [2024_Luo_H3DTransformer_TODAES](../cards/2024_Luo_H3DTransformer_TODAES.md) — Heterogeneous 3D interposer design pairing mixed-signal CIM cubes and digital TPUs for transformer MatMuls reaches 10 TOPS/W on BERT/GPT-2, 
+- [2024_Qin_RoCR_ICCAD](../cards/2024_Qin_RoCR_ICCAD.md) — RoCR trains a sentence-embedding model with contrastive learning and noise-aware training so that CiM-based max-inner-product retrieval for 
+- [2024_Wen_MemristorSRAMCIMFusion_Science](../cards/2024_Wen_MemristorSRAMCIMFusion_Science.md) — Fabricated 22-nm TSMC chip fusing foundry RRAM memristor CIM with digital SRAM CIM (MSB/LSB weight split, per-layer mode selection) plus on-
+- [2024_Wang_LLMOnMemristorCrossbar_TPAMI](../cards/2024_Wang_LLMOnMemristorCrossbar_TPAMI.md) — A two-crossbar architecture (small resistor-based computation crossbars plus large dense memory-style RRAM crossbars) decomposes all LLM ope
+- [2024_Lammie_AIMCPostTrainingOpt_ISCAS](../cards/2024_Lammie_AIMCPostTrainingOpt_ISCAS.md) — Two post-training procedures that set per-tile DAC input range and per-column conductance range cut HWA-training complexity: on a PCM-calibr
+- [2024_Yu_AESHA_ICCAD](../cards/2024_Yu_AESHA_ICCAD.md) — AESHA rewrites attention via eigen-decomposition of W_Q W_K^T so static RRAM crossbars do sparse feature transformation and an SRAM systolic
+- [2024_Aguirre_MemristorANNHWReview_NatCommun](../cards/2024_Aguirre_MemristorANNHWReview_NatCommun.md) — A Nature Communications review (Aguirre et al., 2024) walking through every block of a memristor-based ANN (devices, crossbars, DAC/ADC and 
+- [2024_Qu_CIMMLC_ASPLOS](../cards/2024_Qu_CIMMLC_ASPLOS.md) — CIM-MLC is a multi-level compilation stack with a hierarchical hardware abstraction (chip/core/crossbar) that schedules DNNs at computing-gr
+- [2024_Yoshioka_CRCIM_JSSC](../cards/2024_Yoshioka_CRCIM_JSSC.md) — A 65nm charge-domain SRAM CIM macro reuses its compute capacitor array as the 10-bit C-DAC of a SAR ADC, reaching 45 dB SQNR / 31 dB CSNR, 8
+- [2024_Moitra_TReX_TETC](../cards/2024_Moitra_TReX_TETC.md) — TReX removes the attention block from selected ViT encoders and reuses the previous encoder's attention output through a small transformatio
+- [2024_Boybat_HeterogeneousPCMAimcNPU_IEDM](../cards/2024_Boybat_HeterogeneousPCMAimcNPU_IEDM.md) — IBM and STMicroelectronics propose a heterogeneous embedded NPU architecture for edge AI that pairs PCM-based AIMC tiles (for matrix-vector 
+- [2024_Andrulis_CiMLoop_ISPASS](../cards/2024_Andrulis_CiMLoop_ISPASS.md) — CiMLoop is an open-source full-stack CiM modeling tool (YAML container-hierarchy spec plus statistical data-value-dependent energy model) wi
+- [2024_Sun_PIMCOMP_TCAD](../cards/2024_Sun_PIMCOMP_TCAD.md) — PIMCOMP is an end-to-end DNN compiler for crossbar PIM accelerators using an abstract hardware template with pseudo-instructions, genetic-al
+- [2024_Bhattacharjee_ClipFormer_TCAD](../cards/2024_Bhattacharjee_ClipFormer_TCAD.md) — Shows that write noise on dynamically written K and V matrices makes pre-trained ViTs (DeiT-S) fragile on RRAM crossbars and proposes ClipFo
+- [2024_Cai_MemristorLSHAttention_ISCAS](../cards/2024_Cai_MemristorLSHAttention_ISCAS.md) — Proposes performing locality-sensitive-hashing (LSH) self-attention using stochastic vector-matrix multiplication on low-resolution, semi-pa
+- [2024_Han_CoMN_TCAD](../cards/2024_Han_CoMN_TCAD.md) — CoMN is a GUI-based algorithm-hardware co-design platform for NVM-based CIM CNN accelerators, providing an automatic CNN-to-chip mapper, joi
+- [2024_Bai_eFlashIMCSoC_TCAD](../cards/2024_Bai_eFlashIMCSoC_TCAD.md) — Presents an end-to-end circuit-toolchain-system co-design framework (QAT quantization, operator optimization, and ILP-based mapping) for a 4
+- [2024_Xu_ReCAT_TODAES](../cards/2024_Xu_ReCAT_TODAES.md) — ReCAT cascades pairs of ReRAM crossbars with transimpedance amplifiers so attention intermediates (K^T, V) are written directly in the analo
+- [2024_Pan_PRIMATE_ASP-DAC](../cards/2024_Pan_PRIMATE_ASP-DAC.md) — PRIMATE is an HBM2E bit-serial PIM framework for dynamic token-pruning Transformers that adds near-channel Top-k Engines and a pipelined mem
+- [2024_Lv_NonIdealPIMFineTuning_TCAD](../cards/2024_Lv_NonIdealPIMFineTuning_TCAD.md) — The paper recasts model-accuracy recovery on multilevel RRAM (one-to-one weight-cell mapping, no precise programming) as a non-ideal PIM dev
+- [2024_Gu_VariationTolerantOUFramework_TCASI](../cards/2024_Gu_VariationTolerantOUFramework_TCASI.md) — A hardware-friendly variation-tolerant framework combines unary-based non-uniform weight quantization with a variation-aware Operation-Unit 
+- [2024_Xu_ReHarvest_TACO](../cards/2024_Xu_ReHarvest_TACO.md) — ReHarvest decouples ADCs from fixed crossbar arrays via a many-to-many crossbar-ADC resource pool plus multi-tile matrix mapping, improving 
+- [2024_Rasch_cTTv2AGADTraining_NatCommun](../cards/2024_Rasch_cTTv2AGADTraining_NatCommun.md) — Two in-memory training algorithms, Chopped-TTv2 and Analog Gradient Accumulation with Dynamic reference (AGAD), remove Tiki-Taka v2's need f
+- [2024_Chowdhury_MELISO_ICONS](../cards/2024_Chowdhury_MELISO_ICONS.md) — MELISO is a Python/Cython wrapper over MLP+NeuroSim that benchmarks error propagation in RRAM vector-matrix multiplication across four devic
+- [2024_Wu_BWQ_TCAD](../cards/2024_Wu_BWQ_TCAD.md) — BWQ combines block-wise mixed-precision quantization (BWQ-A) with a precision-aware OU-based ReRAM accelerator (BWQ-H), giving 6.08x average
+- [2024_Ahsan_SPICEenvmACIMFramework_ICCAD](../cards/2024_Ahsan_SPICEenvmACIMFramework_ICCAD.md) — A scalable SPICE-based simulation framework automates SPICE-level netlist generation for eNVM analog compute-in-memory (ACIM) DNN accelerato
+- [2024_Li_MemristorCiMLLM_IoTJ](../cards/2024_Li_MemristorCiMLLM_IoTJ.md) — Analyses memristor mobility and drive-frequency effects on state transitions and discusses implications for analog vs digital CiM in LLMs fo
+- [2024_Zhao_LightCIM_TCAD](../cards/2024_Zhao_LightCIM_TCAD.md) — Light-CIM is a lightweight RRAM CIM accelerator built from fully analog tiles (1T1R arrays plus all-analog peripheral circuits) that elimina
+- [2024_Wang_LearningInMemoryReview_NeuromorphComputEng](../cards/2024_Wang_LearningInMemoryReview_NeuromorphComputEng.md) — Review of how to realise all three deep-learning operations (forward VMM, error backpropagation, weight update) in memristor crossbars, conc
+
+## 2026 (20)
+
+- [2026_Li_AHWA-LoRA_NeuromorphComputEng](../cards/2026_Li_AHWA-LoRA_NeuromorphComputEng.md) — AHWA-LoRA keeps pretrained transformer weights fixed on PCM AIMC tiles and trains only digital LoRA adapters under simulated hardware noise,
+- [2026_Wu_HaLoRA_TODAES](../cards/2026_Wu_HaLoRA_TODAES.md) — HaLoRA maps frozen pretrained LLM weights to noisy RRAM CIM and the LoRA branch to noise-free digital SRAM CIM, and trains the LoRA branch w
+- [2026_Dong_ReramOnLogicSpecDecodeLlm_ISSCC](../cards/2026_Dong_ReramOnLogicSpecDecodeLlm_ISSCC.md) — A 55 nm speculative-decoding LLM accelerator with face-to-face bonded ReRAM-on-logic stacking (8 MB ReRAM, 25.6 GB/s) that reaches 14.08-135
+- [2026_Dong_RsLpu_JSSC](../cards/2026_Dong_RsLpu_JSSC.md) — Journal extension of the ReRAM-on-logic stacked LLM accelerator with co-designed weight compression and speculative decoding (title only; de
+- [2026_Wu_DeviceSpecMethodology_AdvIntellSyst](../cards/2026_Wu_DeviceSpecMethodology_AdvIntellSyst.md) — Maps the coupled PCM specification space (memory window, noise scale, drift scale, inference time) that keeps ResNet-32, LSTM and BERT-base 
+- [2026_Xiao_RoboPIM_TCAD](../cards/2026_Xiao_RoboPIM_TCAD.md) — RoboPIM is a ReRAM accelerator with mixed 128x128 and 16x16 crossbars, dynamic task slicing and two-stage scheduling for LLM-based robotics,
+- [2026_Wang_JADE_JETCAS](../cards/2026_Wang_JADE_JETCAS.md) — JADE is a Python framework that co-explores architecture (IMC/NMC organisation, mesh/H-tree topology) and dataflow (matrix-multiplication un
+- [2026_Hu_HyPIM_TECS](../cards/2026_Hu_HyPIM_TECS.md) — HyPIM is a monolithic-3D hybrid architecture that puts static linear layers on ReRAM slices and attention matmuls on SRAM slices, plus a sof
+- [2026_Suzuki_KVCacheSLCMLC_JJAP](../cards/2026_Suzuki_KVCacheSLCMLC_JJAP.md) — Splitting quantized KV values into upper bits in SLC and lower bits in MLC ReRAM gives 49.1% fewer cells with perplexity kept low across LLM
+- [2026_Zhao_NLDPE_TCAD](../cards/2026_Zhao_NLDPE_TCAD.md) — NL-DPE pairs RRAM crossbars with RRAM analog CAM (ACAM) decision-tree engines to compute non-linear functions and data-dependent matmuls in 
+- [2026_Park_HINT_DATE](../cards/2026_Park_HINT_DATE.md) — Hybrid SRAM-MRAM ternary bitcell and sparsity-skipping SAR-ADC give 1.85x bitcell density and up to 2.67x energy efficiency on BitNet b1.58 
+- [2026_Sharma_HatFi_VTS](../cards/2026_Sharma_HatFi_VTS.md) — Hardware-aware training to make LLM inference on RRAM compute-in-memory tolerant to faults (title only; no abstract available).
+- [2026_Cong_AnalogLLMCoDesign_IGSC](../cards/2026_Cong_AnalogLLMCoDesign_IGSC.md) — Simulation-guided algorithm-hardware co-design exploring Transformer inference on RRAM analog IMC with reduced-complexity attention.
+- [2026_Rahman_AttentionUnderAttack_ACL](../cards/2026_Rahman_AttentionUnderAttack_ACL.md) — AIHWKIT (PCM-calibrated) simulation of pretrained NLP transformers shows 1-3 point drops on SST-2/MNLI, 3-6 point drops on SQuAD, and identi
+- [2026_Zheng_InterfaceKVQ_ICCAD](../cards/2026_Zheng_InterfaceKVQ_ICCAD.md) — A randomized-Hadamard-rotation plus shared-codebook 4-bit KV quantizer matched to fixed-range NVM read converters gives 3.1-3.6x lower model
+- [2026_Jiang_HighAccuracyMemristorCIM_NatMater](../cards/2026_Jiang_HighAccuracyMemristorCIM_NatMater.md) — Nature Materials review that dissects computing-error sources in memristor analogue CIM across device, array, architecture and algorithm lev
+- [2026_Vasilopoulos_AIMCforLLMInference_IMW](../cards/2026_Vasilopoulos_AIMCforLLMInference_IMW.md) — Perspective from IBM Research arguing that AIMC suits the static, high-reuse MVMs of LLMs (weights programmed once in dense, 3D NVM) but its
+- [2026_Holla_ROSETTA_JETCAS](../cards/2026_Holla_ROSETTA_JETCAS.md) — ROSETTA is a 3T-2R STT-MRAM compute-in-memory array using series-resistance sensing with time-to-digital conversion and palindromic input/we
+- [2026_Zuo_Harmony_ISQED](../cards/2026_Zuo_Harmony_ISQED.md) — Harmony is a hardware-mapping co-exploration framework for hybrid CIM-based vision transformer accelerators that uses a knowledge-guided gri
+- [2026_Wang_TriCIM_TVLSI](../cards/2026_Wang_TriCIM_TVLSI.md) — TriCIM splits the CIM dataflow space into model-, layer- and tile-stationary regions based on CIM capacity vs. model size and applies region
+
+## 2019 (18)
+
+- [2019_Ankit_PUMA_ASPLOS](../cards/2019_Ankit_PUMA_ASPLOS.md) — PUMA is a programmable spatial memristor-crossbar inference accelerator with an ISA and compiler that reaches 577 GOPS/s/mm2 and 837 GOPS/s/
+- [2019_Xue_1MbMultibitReRAMCIM_ISSCC](../cards/2019_Xue_1MbMultibitReRAMCIM_ISSCC.md) — A 55nm 1Mb 1T1R SLC ReRAM CIM macro, the first supporting multibit input/weight/output MAC for CNNs, achieving 14.6 ns tMAC (2b-in, 3b-weigh
+- [2019_Peng_DNNNeuroSim_IEDM](../cards/2019_Peng_DNNNeuroSim_IEDM.md) — Introduces DNN+NeuroSim, an open-source Python/PyTorch-TensorFlow wrapper around the NeuroSim macro model that benchmarks CIM accelerators (
+- [2019_Peng_WeightMappingDataflowPIM_TCAS-I](../cards/2019_Peng_WeightMappingDataflowPIM_TCAS-I.md) — A kernel-splitting weight-mapping and dataflow scheme that assigns input data to processing elements by spatial location (instead of unrolli
+- [2019_He_NoiseInjectionAdaption_DAC](../cards/2019_He_NoiseInjectionAdaption_DAC.md) — PytorX (PyTorch crossbar simulator) plus a one-time digital SAF error-correction and an IR-drop Noise Injection Adaption training method; SA
+- [2019_Xia_MemristiveCrossbarArrays_NatMater](../cards/2019_Xia_MemristiveCrossbarArrays_NatMater.md) — Nature Materials review of memristive crossbar arrays as accelerators for deep neural networks and as building blocks for spiking networks, 
+- [2019_Zhu_MultiPrecisionRRAMCNN_DAC](../cards/2019_Zhu_MultiPrecisionRRAMCNN_DAC.md) — A layer-wise, RRAM-overhead-aware quantization plus a reconfigurable architecture that stores multi-bit weights across single-bit RRAM cross
+- [2019_Chou_CASCADE_MICRO](../cards/2019_Chou_CASCADE_MICRO.md) — CASCADE cascades MAC RRAM arrays into buffer RRAM arrays through TIAs so partial sums are buffered and accumulated in analog (R-Mapping), cu
+- [2019_Imani_FloatPIM_DAC](../cards/2019_Imani_FloatPIM_DAC.md) — FloatPIM is a fully digital ReRAM PIM architecture that performs floating-point (bfloat16/fp32) CNN training and inference with in-memory NO
+- [2019_Ambrogio_PCMDriftInference_IEDM](../cards/2019_Ambrogio_PCMDriftInference_IEDM.md) — IBM builds a statistical PCM conductance-drift model (including cycle-to-cycle variability of the drift coefficient nu) from large-array mea
+- [2019_Nandakumar_PCMDeviceModels_ICECS](../cards/2019_Nandakumar_PCMDeviceModels_ICECS.md) — Statistically accurate PCM device models, built from characterization of over 10,000 devices and capturing state-dependent conductance updat
+- [2019_Liu_XB-Sim_CAL](../cards/2019_Liu_XB-Sim_CAL.md) — Presents XB-Sim, a unified open-source framework combining ReRAM-aware NN training, a CNN-oriented mapper, and a micro-architecture simulato
+- [2019_Lin_SparseReRAMMapping_ASP-DAC](../cards/2019_Lin_SparseReRAMMapping_ASP-DAC.md) — K-means column-clustering maps sparse NN weights onto small ReRAM crossbars and crossbar-grained pruning removes low-utilization crossbars, 
+- [2019_Cai_LBCNN_TCAD](../cards/2019_Cai_LBCNN_TCAD.md) — Proposes a low bit-width RRAM crossbar CNN (LB-CNN) accelerator with a matrix-splitting strategy for oversized weight matrices, a line-buffe
+- [2019_Yuan_ADMMMemristorPruning_ISLPED](../cards/2019_Yuan_ADMMMemristorPruning_ISLPED.md) — A three-step ADMM framework (regularised optimisation, masked mapping, retraining) jointly applies crossbar-structured pruning and memristor
+- [2019_Han_ERALSTM_TPDS](../cards/2019_Han_ERALSTM_TPDS.md) — ERA-LSTM uses ReRAM-based analog approximate computing for LSTM's element-wise operations alongside crossbar dot products, plus a multi-tile
+- [2019_Zhang_MTFramework_TCAD](../cards/2019_Zhang_MTFramework_TCAD.md) — The MT framework tolerates stuck-at faults in memristor crossbars by transforming weight matrices (row flipping, permutation, value-range re
+- [2019_Angizi_AnalogVsDigitalPIM_ISVLSI](../cards/2019_Angizi_AnalogVsDigitalPIM_ISVLSI.md) — Bottom-up NVSim/CACTI-based comparison of analog ReRAM-crossbar PIM against digital bulk-bitwise PIM (SOT-/STT-MRAM, ReRAM, SRAM, DRAM) at i
+
+## 2018 (17)
+
+- [2018_Ielmini_IMCResistiveSwitchingDevices_NatElectron](../cards/2018_Ielmini_IMCResistiveSwitchingDevices_NatElectron.md) — Nature Electronics (2018) review of in-memory computing with two-terminal resistive switching devices (RRAM, PCM, MRAM, FeRAM), organised as
+- [2018_Chen_65nm1MbReRAMMacro_ISSCC](../cards/2018_Chen_65nm1MbReRAMMacro_ISSCC.md) — First megabit nonvolatile ReRAM computing-in-memory macro (65nm 1T1R, 512k ternary weights, up to 8k MACs per CIM cycle) with a distance-rac
+- [2018_Hu_DotProductEngine_AdvMater](../cards/2018_Hu_DotProductEngine_AdvMater.md) — Hardware demonstration of a 128x64 1T1M Ta/HfO2 memristor crossbar (Dot Product Engine) with closed-loop analog tuning to ~180 conductance l
+- [2018_Yu_NeuroInspiredComputingENVM_ProcIEEE](../cards/2018_Yu_NeuroInspiredComputingENVM_ProcIEEE.md) — Proc. IEEE review of emerging-NVM synaptic devices (PCM, RRAM, ferroelectric, floating-gate) and crossbar architectures for neuro-inspired c
+- [2018_Ambrogio_PCUAnalogueMemoryTraining_Nature](../cards/2018_Ambrogio_PCUAnalogueMemoryTraining_Nature.md) — Mixed hardware-software training with up to 204,900 synapses (PCM for long-term storage, capacitors for near-linear updates, polarity invers
+- [2018_LeGallo_MixedPrecisionInMemoryComputing_NatElectron](../cards/2018_LeGallo_MixedPrecisionInMemoryComputing_NatElectron.md) — Mixed-precision in-memory computing: an imprecise PCM crossbar performs the bulk matrix-vector products inside a Krylov inner solver while a
+- [2018_Li_InSituMemristorLearning_NatCommun](../cards/2018_Li_InSituMemristorLearning_NatCommun.md) — First multilayer in-situ trained memristor network on a 128x64 Ta/HfO2/Pt 1T1R array integrated on a foundry transistor array: a 64-54-10 ML
+- [2018_Zhu_MISCA_ICCAD](../cards/2018_Zhu_MISCA_ICCAD.md) — MISCA combines mixed-size RRAM crossbars with an Overlapped Mapping Method (OMM) that maps a kernel to several staggered columns to reuse id
+- [2018_Feinberg_DataAwareABNCodes_HPCA](../cards/2018_Feinberg_DataAwareABNCodes_HPCA.md) — First error-correction scheme for in-situ memristive MVM: data-aware AN (ABN) arithmetic codes correct random-telegraph-noise and stuck-at e
+- [2018_Long_ReRAMRnnPim_TVLSI](../cards/2018_Long_ReRAMRnnPim_TVLSI.md) — A ReRAM-based processing-in-memory architecture redesigned specifically for recurrent neural networks (rather than reused CNN-oriented desig
+- [2018_Haensch_AnalogComputingDeepLearning_ProcIEEE](../cards/2018_Haensch_AnalogComputingDeepLearning_ProcIEEE.md) — IBM Proc. IEEE perspective that NVM crossbars can execute deep-learning matrix operations in constant time, deriving from RPU simulations th
+- [2018_Lin_DLRSIM_ICCAD](../cards/2018_Lin_DLRSIM_ICCAD.md) — DL-RSIM is a two-module simulator that computes per-bitline sum-of-products error rates from lognormal ReRAM resistance variation, operation
+- [2018_Liang_CrossbarAwarePruning_IEEEAccess](../cards/2018_Liang_CrossbarAwarePruning_IEEEAccess.md) — An L0-constrained gradient descent pruning framework produces crossbar-grain and column-grain sparsity on top of semi-folded CNN mapping, sa
+- [2018_Deng_SemiMap_TCAD](../cards/2018_Deng_SemiMap_TCAD.md) — SemiMap folds convolution mapping along the feature-map row dimension and unfolds along the column dimension on a many-crossbar architecture
+- [2018_Marinella_MultiscaleCoDesignReRAMTraining_JETCAS](../cards/2018_Marinella_MultiscaleCoDesignReRAMTraining_JETCAS.md) — Circuit-level (14/16 nm PDK) design and co-simulation of a 1024x1024 analog ReRAM crossbar block for VMM, MVM and outer-product update shows
+- [2018_Cheng_TIME_TCAD](../cards/2018_Cheng_TIME_TCAD.md) — TIME is a Training-in-Memory RRAM architecture and peripheral-circuit design supporting backpropagation and weight update (not just inferenc
+- [2018_Kim_NonlinearIVAwareDNN_JETC](../cards/2018_Kim_NonlinearIVAwareDNN_JETC.md) — Replaces the perceptron's weighted-sum transfer function with the RRAM's own sinh I-V model (sum of w_i*sinh(B x_i)) and trains the network 
+
+## 2017 (6)
+
+- [2017_Song_PipeLayer_HPCA](../cards/2017_Song_PipeLayer_HPCA.md) — PipeLayer is a simulated ReRAM PIM accelerator that supports both CNN training and inference via intra-/inter-layer pipelining and weight re
+- [2017_Chen_AcceleratorFriendlyTraining_DATE](../cards/2017_Chen_AcceleratorFriendlyTraining_DATE.md) — Fault/variation-aware off-device training for 1R RRAM crossbars: a weighted bipartite-matching weight-to-memristor mapping plus retraining t
+- [2017_Xia_MNSIM_TCAD](../cards/2017_Xia_MNSIM_TCAD.md) — MNSIM is a behavior-level simulator for memristor-crossbar neuromorphic accelerators with hierarchical architecture, area/power/latency mode
+- [2017_Liu_DefectRescuing_DAC](../cards/2017_Liu_DefectRescuing_DAC.md) — Defect-rescuing flow for memristor crossbars (weight-significance classification, defect-aware retraining, remapping of the worst defects to
+- [2017_Ankit_TraNNsformer_ICCAD](../cards/2017_Ankit_TraNNsformer_ICCAD.md) — TraNNsformer interleaves magnitude pruning with size-constrained spectral clustering during training so surviving FC weights form dense cros
+- [2017_Jerry_FeFETAnalogSynapse_IEDM](../cards/2017_Jerry_FeFETAnalogSynapse_IEDM.md) — Demonstrates a 5-bit ferroelectric-FET (FeFET) analog synapse with symmetric potentiation/depression and a 45x tunable conductance range usi
+
+## 2015 (2)
+
+- [2015_Prezioso_MemristorPerceptron_Nature](../cards/2015_Prezioso_MemristorPerceptron_Nature.md) — First experimental demonstration of a transistor-free 12x12 Al2O3/TiO2-x memristor crossbar trained in situ (Manhattan update rule) as a 10x
+- [2015_Burr_PCM165kSynapseNetwork_TED](../cards/2015_Burr_PCM165kSynapseNetwork_TED.md) — IBM demonstrates a three-layer perceptron with 164,885 synapses, each a pair of phase-change memory devices, trained in situ with a backprop
+
+## 2016 (2)
+
+- [2016_Shafiee_ISAAC_ISCA](../cards/2016_Shafiee_ISAAC_ISCA.md) — ISAAC is the first full-fledged memristor-crossbar CNN accelerator, combining an inter-layer pipeline, bit-serial inputs, 2-bit cells and a 
+- [2016_Chi_PRIME_ISCA](../cards/2016_Chi_PRIME_ISCA.md) — PRIME turns part of a ReRAM main memory (full-function subarrays) into morphable NN accelerators, reporting ~2360x speedup and ~895x energy 

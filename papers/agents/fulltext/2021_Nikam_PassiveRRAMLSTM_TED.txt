@@ -1,0 +1,588 @@
+# Long Short-Term Memory Implementation Exploiting Passive RRAM Crossbar Array
+# id: W3211973280 | key: 2021_Nikam_PassiveRRAMLSTM_TED | TED 2021 | card: ../cards/2021_Nikam_PassiveRRAMLSTM_TED.md
+
+
+=== page 1 ===
+1
+
+Long Short-Term Memory Implementation
+Exploiting Passive RRAM Crossbar Array
+
+arXiv:2111.04588v1 [cs.ET] 8 Nov 2021
+
+Honey Nikam, Siddharth Satyam, and Shubham Sahay, Member, IEEE
+
+Abstract— The ever-increasing demand to extract temporal correlations across sequential data and perform
+context-based learning in this era of big data has led to the
+development of long short-term memory (LSTM) networks.
+Furthermore, there is an urgent need to perform these timeseries data-dependent applications including speech/video
+processing and recognition, language modelling and translation, etc. on compact internet-of-things (IoT) edge devices
+with limited energy. To this end, in this work, for the first
+time, we propose an extremely area- and energy-efficient
+LSTM network implementation exploiting the passive resistive random access memory (RRAM) crossbar array.
+We developed a hardware-aware LSTM network simulation
+framework and performed an extensive analysis of the
+proposed LSTM implementation considering the non-ideal
+hardware artifacts such as spatial (device-to-device) and
+temporal variations, non-linearity, noise, etc. utilizing an
+experimentally calibrated comprehensive phenomenological model for passive RRAM crossbar array. Our results
+indicate that the proposed passive RRAM crossbar-based
+LSTM network implementation not only outperforms the
+prior digital and active 1T-1R crossbar-based LSTM implementations by more than three orders of magnitude in
+terms of area and two orders of magnitude in terms of
+training energy for identical network accuracy, but also
+exhibits robustness against spatial and temporal variations
+and noise, and a faster convergence rate. Our work may
+provide the incentive for experimental realization of LSTM
+networks on passive RRAM crossbar arrays.
+Index Terms— Long short-term memory, Recurrent neural networks, Passive RRAM crossbar, in-situ training.
+
+I. I NTRODUCTION
+
+T
+
+HE development of recurrent neural networks (RNNs)
+has led to the recent breakthroughs in the field of
+machine intelligence while analysing the patterns in the sequential/temporal data and performing efficient time series
+predictions for applications including speech and video processing and recognition, character-level language modelling
+and translation, ECG signal processing, image captioning,
+stock market modelling, air pollutant modelling, modelling
+active cases for COVID-19, etc. Unlike the feed-forward deep
+neural networks (DNNs), an RNN allows the past observations
+to be used as inputs for predicting the output at a later time
+Honey Nikam and Siddharth Satyam are with the Department of
+Mechanical Engineering, Indian Institute of Technology Kanpur, Kanpur
+208016, India (e-mail: honeyn@iitk.ac.in).
+Shubham Sahay is with the Department of Electrical Engineering,
+Indian Institute of Technology Kanpur, Kanpur 208016, India (e-mail:
+ssahay@iitk.ac.in).
+
+instance [1]. However, the vanishing gradient problem limits
+the capability of RNNs in maintaining long-term dependencies
+[1]. To circumvent this issue, long short-term memory (LSTM)
+networks, a special class of RNNs, which are capable of learning long-term dependencies as the information is propagated
+along with the time flow were proposed [1]-[2].
+However, the conventional implementation of LSTM networks on digital platforms with von-Neumann architecture
+such as general-purpose CPUs, or more advanced GPUs, or
+FPGAs incur a significantly high energy dissipation and a large
+inference latency due to the frequent exchange of data between
+the memory and the processor [3]-[8]. Since vector-by-matrix
+multiplication (VMM) is the prominent operation in LSTMs
+[1]-[2], their energy consumption can be reduced significantly
+by exploiting the massive parallelism and the inherent ability
+of the resistive random-access memory (RRAM) crossbar
+arrays to perform extremely energy-efficient VMM using the
+physical (Ohm’s and Kirchoff’s) laws [9]-[11]. However, the
+active 1T-1R crossbar arrays lead to a large area overhead since
+the select transistor has to sustain the forming/programming
+currents/voltages of the RRAM attached to their drain terminal, which are significantly high as compared to the typical
+operating currents/voltages of the advanced logic transistor
+technologies and restricts their incessant scaling. Considering
+the inherent scaling benefits of the passive RRAM crossbar
+arrays (which do not require a selector device) [12]-[14], it
+becomes imperative to explore their potential for implementation of compact and ultra-low power LSTM networks.
+To this end, in this work, for the first time, we explore the
+possibility of performing the core computational tasks of the
+LSTM network i.e. vector-by-matrix multiplication (VMM)
+and in-situ training (using the Manhattan learning rule) on
+a passive RRAM crossbar array. We perform an extensive
+investigation of the impact of non-idealities of RRAM devices
+including spatial (device-to-device) and temporal variations,
+noise, etc. on the LSTM implementation utilizing an experimentally calibrated comprehensive phenomological model.
+Our results indicate that the passive RRAM crossbar arraybased LSTM implementation converges to the optimal accuracy faster and exhibits a significant improvement in the area
+by ∼6.5x103 times and training energy by ∼51.7 times as
+compared to the active 1T-1R crossbar-based LSTM implementation [10]. Moreover, the memory density of the passive
+RRAM crossbars may be further upscaled with the help of
+3D-integration [15] for accommodating the large number of
+LSTM parameters required for practical applications such as
+
+=== page 2 ===
+2
+
+Fig. 1. The schematic view of an LSTM cell.
+
+speech recognition and processing, language processing, video
+surveillance, etc.
+The manuscript is organized as follows: sections I.A and I.B
+provide a brief introduction to the LSTM networks and the
+passive RRAM crossbar arrays, respectively. The developed
+LSTM simulation framework and the comprehensive compact
+model utilised for passive RRAM crossbar arrays in this work
+are discussed in section II. The performance metrics of the
+proposed passive RRAM crossbar-based LSTM network implementation such as accuracy, area and energy are highlighted
+in section III and conclusions are drawn in section IV.
+
+Fig. 2. 3D view of a passive RRAM crossbar array. RRAM devices
+arranged in a crossbar configuration perform efficient VMM. At each
+cross-point, the RRAM current is the product of voltage (input) and
+the RRAM conductance-state (weight), following Ohm’s law. The total
+current flowing through the column is the summation of the RRAM
+currents (VMM) following the Kirchhoff’s current law.
+
+A. Long Short-Term Memory Networks (LSTMs)
+RNNs may be perceived as DNNs with a feedback loop
+which allows the outputs at a previous time step to be used
+as inputs at a later time step. LSTM is a powerful variant
+of the RNNs suited for sequence prediction problems [1][2]. A typical LSTM consists of a repeating module or cell
+as shown in Fig. 1 that retains (and transmits) the temporal
+information in the form of a cell state htc . The information
+carried by the cell-state can be modulated by the different
+gates (which are neural network themselves) in the LSTM
+cell. At any time step t, the LSTM cell is fed with a present
+input vector (xt ), and the hidden state (ht−1 ) and the cell
+state (ht−1
+c ) corresponding to the previous time step (t − 1).
+Each gate computes an output as a function of xt , ht−1 ,
+associated weights Wf , Wa , Wi , and Wo and biases, bf , ba ,
+bi , bo corresponding to the forget gate, activation gate, input
+gate and output gate respectively. The forget gate facilitates
+removal of irrelevant pieces of information from the cell-state
+as denoted by equation (1):
+htf = σ(Wf · [ht−1 , xt ] + bf ).
+
+(1)
+
+The input gate decides which pieces of information need to
+be updated in the cell-state based on the present input (xt ) and
+the previous hidden-state (ht−1 ) and is governed by equations
+(2) and (3):
+hta = tanh (Wa · [ht−1 , xt ] + ba )
+
+(2)
+
+hti = σ(Wi · [ht−1 , xt ] + bi )
+
+(3)
+
+The cell-state of the LSTM is modified by first removing
+the irrelevant information via point-wise multiplication with
+
+Fig. 3. Schematic of the 1T1R active crossbar array
+
+the forget gate output and then performing point-wise addition
+of the input gate output before propagating to the next cell
+following equation (4):
+htc = hti · hta + htf · ht−1
+c
+
+(4)
+
+Now, based on the information provided by the present input
+(xt ), the previous hidden-state (ht−1 ) and the modified cell
+state (htc ), the output gate determines the next hidden-state
+which is fed to the next cell following equations (5) and (6):
+hto = σ(Wo · [ht−1 , xt ] + bo )
+t
+
+h
+
+= hto · tanh (htc ).
+
+(5)
+(6)
+
+Fig. 1 shows the typical flow of information through an LSTM
+network.
+B. Passive RRAM crossbar arrays
+Resistive RAMs (RRAMs) are metal-insulator-metal (MIM)
+stacks in which an insulator layer (typically a transition
+metal oxide such as HfOx , TiOx , TaOx , etc.) is sandwiched
+between two metal electrodes. Filamentary RRAMs not only
+exhibit a reversible resistive switching between two extreme
+resistance-states known as high-resistance state (HRS) and
+low-resistance state (LRS), but can also be tuned to any
+intermediate resistance-state with the aid of ultra-fast electrical
+pulses (< 100 ns) [12]-[17]. RRAMs are available in two
+configurations: (a) active 1T-1R crossbar in which the RRAMs
+
+=== page 3 ===
+3
+
+Fig. 4. The RNN implemented using passive RRAM crossbar array in
+this work. It consists of an LSTM layer feeding a dense fully-connected
+layer.
+
+are embedded on the drain electrode of the select transistor
+and exhibit enhanced tuning accuracy due to precise control
+of RRAM current with the help of gate electrode of the select
+transistor and (b) passive crossbar array in which the RRAM
+devices are realised at the intersection of two perpendicular
+metal (top and bottom) electrodes as shown in Fig. 2.
+The passive RRAM crossbars can be scaled incessantly to
+the ultimate scaling limits as they do not require a selector
+device for operation and can also be monolithically integrated
+in the back-end-of-line (BEOL) [12]-[17]. Although it is
+relatively difficult to precisely control the current through the
+RRAMs in a passive crossbar configuration due to absence of
+the selector device, prior studies have shown the possibility of
+tuning the resistance (or conductance)-state with a precision
+> 7 bits using program-verify algorithm [17]. This unique
+conductance tuning capability allows RRAM crossbars to
+mimic the biological synapses and perform vector-by-matrixmultiplication in the analog domain if the inputs are encoded
+as voltages and weights are stored as conductance-states of
+the RRAMs using Ohm’s law and Kirchoff’s law [13]-[14]
+as shown in Fig. 2. The von-Neumann bottleneck is circumvented in such VMM implementations since the feed-forward
+propagation (VMM) is performed in-situ at the same location
+where the neural network parameters (weights) are stored
+[18]-[20]. Therefore, passive RRAM crossbars are promising
+candidates for realizing extremely area- and energy-efficient
+VMM engines.
+II. S IMULATION F RAMEWORK AND M ODELING
+A PPROACH
+Considering the inherent scaling benefits and the efficacy of
+the passive RRAM crossbar arrays while performing energyefficient VMM operation, we explored their potential for
+implementation of compact and ultra-low power LSTM-based
+RNNs. For proof of concept demonstration and a fair comparison, similar to [10], a multi-layer LSTM-based RNN was
+considered in this work with 15 LSTM units as shown in Fig.
+4. Moreover, the output of the LSTM layer is fed to a dense
+fully-connected layer.
+We encoded the LSTM network parameters (weights)
+shared across the different time steps as the conductancestates of a passive RRAM crossbar array to perform insitu computations. A comprehensive phenomological model
+
+Fig. 5. The simulation framework consists of a hybrid of computations
+performed in the digital domain and on the passive RRAM crossbar
+array (analog domain). Data sampling, forward pass, loss computation
+and backward pass were performed in the software digitally while the
+vector-by-matrix-multiplication and update of the conductance-states
+were performed on the passive RRAM crossbar array using the experimentally calibrated comprehensive compact model considering the
+hardware imperfections [16].
+
+for the static characteristics including noise and dynamic
+behavior considering spatial (device-to-device) and temporal
+variations of the passive RRAM crossbar array-based on the
+Pt/Al2 O3 /TiO2−x /Ti/Pt stack [16] which is validated against
+more than 2 million experimentally characterized data points
+and 324 RRAMs has been utilised in this work. For extracting
+optimal performance from the proposed LSTM network implementation, the conductance range of RRAMs was restricted
+between 100 µS to 300 µS in this work based on the unique
+dynamic behavior of the passive RRAM crossbar array [16].
+For the implementation of the recurrent-LSTM network, the
+(64 × 64) passive RRAM crossbar array [12] was partitioned
+as follows: a 34 × 60 array stores the weight analogues for the
+LSTM layer while a 32×1 matrix stores the weight analogues
+for the fully-connected dense layer as differential pairs of
+conductance-states to account for both positive and negative
+−
+weight values (Wij = G+
+ij – Gij ). First, the conductancestates were randomly initialized between 100 µS to 300 µS
+representing random weights. Subsequently, the VMM during
+the layer-by-layer forward and backward pass and the weight
+(conductance-state) update during the training process utilising
+a hardware-friendly algorithm known as Manhattan rule [21]
+were performed in-situ on the passive RRAM crossbar array
+as shown in Fig. 5. Such in-situ computations outwit the
+von-Neumann bottleneck arising due to the frequent shuffling
+of information between the storage and processing units.
+Moreover, in-situ training with backpropagation is capable
+of self-adaptively adjusting the network parameters to fit the
+training data even in the presence of hardware imperfections
+
+=== page 4 ===
+4
+
+such as noise, device-to-device variations, non-linearity, etc.
+[10]-[11], [13], [21].
+The mean-squared error was used as the loss function
+during in-situ training and the desired weight change ∆W t
+was calculated using the stochastic gradient descent with
+momentum in the digital domain, given by:
+
+bias and multiplied by a read voltage (Vread ) to form the input
+voltage vector (Vin ) for the dense layer. During the inference,
+the output column current of the dense layer represents the
+prediction for the next month and is scaled back to get the
+passenger count.
+
+∆W t = α · GRAD + η · ∆W t−1
+
+III. R ESULTS AND D ISCUSSION
+
+(7)
+
+The learning rate α and the momentum value η were taken as
+0.01 and 0.9, respectively and the conductance-to-weight ratio
+was selected as 10−4 . Manhattan rule is a coarse-grain variation of backpropagation algorithm where the weight update is
+based on the sign information of weight gradients. Based on
+the sign of the desired weight change ∆W t (obtained using
+equation (7)), a single voltage pulse of fixed amplitude (Vreset
+= – 0.8 V for depression and Vset = 0.8 V for potentiation)
+and fixed duration (100 ns) was applied to change the RRAM
+conductance in the appropriate direction as:
+G = G0 + ∆G0
+
+(8)
+
+
+
+if ∆W t > 0
+Vset ,
+Vp = Vreset , if ∆W t < 0
+
+
+0,
+otherwise
+
+A. Accuracy
+
+The conductance change (∆G0 ) of the RRAMs in a passive
+crossbar array follows the dynamic equation [16]:
+∆G0 = Dm (G0 , Vp , tp ) + Dd2d (G0 , Vp , tp )
+
+Utilizing the hardware-aware simulation framework developed in section II, we performed a comprehensive analysis
+of the proposed LSTM network implementation exploiting
+the passive RRAM crossbar array and compared the different performance metrics such as accuracy, area and energy
+consumption during the training against the software (digital)
+and active 1T-1R RRAM array-based implementations [10].
+To decouple the impact of hardware imperfections such as
+spatial and temporal variations and noise on the performance
+of the proposed LSTM-based RNNs, we have also performed
+simulations considering variation/noise-free passive RRAM
+crossbar (exhibiting non-linear conductance update behavior)
+by switching-off the variability and noise flags in the comprehensive compact model [16].
+
+(9)
+
+where Dm is the expected noise-free conductance change
+after application of the voltage pulse (with amplitude Vp and
+duration tp ) which also depends on the present conductancestate leading to non-linearity, and Dd2d is the normallydistributed stochastic device-to-device variations for different
+RRAMs on the same crossbar array.
+This fixed amplitude training using the Manhattan’s rule is
+hardware-friendly since it obviates the need for computation
+and storage of the exact values of the gradient [21]. Furthermore, the calculation of the activation functions (tanh and
+sigmoid, σ) on the gate layer outputs of the LSTM cells were
+performed in the digital domain.
+For performance benchmarking, the proposed LSTM network is applied to a standard time series prediction (regression) problem similar to [10] where the task is to forecast the
+number of international airline passengers for the next month
+based on the prior observations.
+The data set consists of the number of passengers from
+January 1949 to December 1960 with 144 observations. The
+first 96 observations were used for training and the remaining
+48 observations were used for testing. The passenger data
+was normalized before applying as inputs. One observation
+(xt ) was appended with the hidden cell state ht−1 of the
+previous time step and a bias to form an input vector. The
+input vector was multiplied by a read voltage (Vread ) and
+padded by zeros to form a vector of input voltages (Vin ) before
+applying to the passive RRAM crossbar array based LSTM
+layer comprising of four gates (hta , hti , hto , htf ). The hidden cell
+state (ht ) obtained from the LSTM layer was appended with a
+
+The mean-squared loss function of the recurrent-LSTM
+network (described in section II) during the training using
+backpropagation with stochastic gradient descent algorithm
+for digital (software) implementation, in-situ training using
+a hybrid of stochastic gradient descent and resilient back
+propagation for active 1T-1R RRAM crossbar array-based
+implementation [10] and in-situ training using Manhattan
+rule for the proposed passive RRAM crossbar array-based
+implementation are shown in Fig 5. The LSTM model trained
+over passive RRAM crossbar array shows a faster convergence
+(within 200 epochs) as compared to the active 1T-1R-based
+implementation [10]. Therefore, the in-situ training of the
+LSTM networks on the passive RRAM crossbar arrays leads
+to a reduced latency. The conductance evolution of the passive
+RRAM crossbar array during the in-situ training is also shown
+in Fig. 7. As can be observed from Fig. 7, the conductance map
+does not change significantly even in the presence of hardware
+non-idealities such as device-to-device variations and noise.
+The passenger-count prediction after 200 epochs of training
+for digital (software) implementation, active 1T-1R RRAM
+crossbar array-based implementation [10] and the proposed
+passive RRAM crossbar array-based implementation (considering the non-idealities) are shown in Fig. 9. It is evident
+from Fig. 9 that the predictions made by the passive RRAM
+crossbar-based LSTM implementation follows the observations (test dataset) more closely as compared to their software
+and active 1T-1R crossbar counterparts. Moreover, Fig. 10
+compares the predictions made by the LSTM implementation
+with variation/noise-free RRAM cossbar and passive crossbar
+considering the device-to-device variations and noise after insitu training for 200 epochs. Fig. 10 clearly indicates that
+the LSTM model considering device-to-device variations and
+noise also performs well and fits the actual observations
+with decent accuracy. Therefore, the proposed LSTM network
+
+=== page 5 ===
+5
+
+implementation based on the passive RRAM crossbar array
+is resilient to hardware artifacts such as spatial and temporal
+variations, noise and non-linearity.
+B. Energy consumption during training
+We also calculated the energy dissipated in the passive
+RRAM crossbar array during the in-situ training of the LSTM
+network using Manhattan’s rule. The application of the programming (set or reset) pulse to tune the conductance-state
+(Gi−1 ) of the passive RRAM crossbar array leads to an energy
+consumption (Ei ) depending on the gradient sign i.e. whether
+the conductance needs to be potentiated or depressed as:
+
+2
+
+if Gi > Gi−1
+Vset · Gi−1 · tp ,
+2
+Ei = Vreset · Gi−1 · tp , if Gi < Gi−1
+
+
+0,
+otherwise
+The energy consumed in the passive RRAM crossbar array
+after each epoch of in-situ training of the proposed implementation is shown in Fig. 11. The cumulative energy required
+
+for updating the conductance-states of the variation/noisefree RRAM crossbar and the passive RRAM crossbar array
+considering the non-idealities are also shown in Fig. 12.
+The total energy required for in-situ training of the passive
+RRAM crossbar-based LSTM implementation till the network
+converges to optimal accuracy (200 epochs) considering the
+device-to-device variations and noise (3.0 µJ) is somewhat
+larger than the total energy consumed by variation/noise-free
+passive RRAM crossbar array (2.8 µJ).
+Utilizing the same approach, we also calculated the energy
+consumed while performing conductance-update during in-situ
+training of the active 1T-1R crossbar-based LSTM implementation [10]. To simplify the energy calculations for the active
+1T-1R crossbar array, an average conductance of 500µS was
+assumed by the authors in [10] to determine the average energy
+dissipation for Vset = 2.5V and Vreset = 1.7V . The energy
+dissipated during in-situ training of the network for 800 epochs
+(till the network converges to optimal accuracy) was found to
+be ∼145 µJ (∼35 µJ after 200 epochs of training with sub-
+
+Fig. 6. The Dynamic model equations along with the model parameters
+
+Fig. 7. The conductance evolution after different epochs of in-situ training utilising Manhattan’s rule for a (40 × 64) (a) variation/noise-free passive
+crossbar array and (b) passive RRAM crossbar array considering device-to-device variations.
+
+=== page 6 ===
+6
+
+Fig. 8. The mean-squared loss function of the different LSTM network
+implementations during training for 200 epochs.
+
+Fig. 9. The performance of the different LSTM network implementations
+after training for 200 epochs in predicting the observations (data set).
+
+optimal accuracy). Therefore, the proposed implementation exhibits a significantly reduced energy dissipation in the RRAM
+crossbar array by a factor of ∼51.7. However, it may be noted
+that the energy consumed during the gradient calculation in the
+digital domain was not included in these estimates for both
+cases. Since the gradient calculation is also easier while using
+the Manhatten’s rule, we believe that the energy consumption
+during the training process would also follow a similar trend.
+C. Area
+While a single memory cell in the active 1T-1R RRAM
+array of [10] occupies an area of ∼2360 (59 × 40) µm2 ,
+the footprint of an RRAM cell in the passive RRAM crossbar
+[16] is ∼0.36 (0.6 × 0.6) µm2 and dictated only by the metal
+electrode pitch. The overall area required for implementing the
+core computations of LSTM-based RNN with the active 1T-1R
+RRAM crossbar array of size 40 × 64 is approximately 6.041
+mm2 [10], while the proposed passive RRAM crossbar arraybased implementation requires an area of ∼921.6 µm2 [16],
+for a 40 × 64 array. Therefore, the proposed implementation
+
+Fig. 10. The performance of the LSTM network implementation based
+on variation/noise-free RRAM crossbar and passive RRAM crossbar
+array considering hardware non-idealities after in-situ training for 200
+epochs in predicting the observations (data set).
+
+Fig. 11.
+The energy consumed by the proposed passive RRAM
+crossbar-based LSTM implementation in each epoch during in-situ
+training.
+
+leads to a significant reduction in the footprint by a factor of
+∼6.5×103 .
+IV. C ONCLUSIONS
+In this work, for the first time, we propose to perform the
+resource-intensive core computations of the LSTM network insitu on a passive RRAM crossbar array for realizing compact
+and ultra-low power RNN engines for mobile IoT devices.
+We developed a hardware-aware simulation framework for
+evaluating the performance of the proposed LSTM implementation utilising an experimentally calibrated comprehensive
+phenomological model which can be extended for simulation
+of multi-layer deep LSTM-based RNNs for practical applications. Our extensive investigation reveals that the proposed
+implementation outperforms the prior digital and active 1T1R RRAM array-based LSTM implementations by several
+orders of magnitude in terms of area and energy consumption during the training. Moreover, the area-efficiency of the
+passive RRAM crossbar-based LSTM networks may be further
+
+=== page 7 ===
+7
+
+Fig. 12. The cumulative energy consumed by the proposed passive
+RRAM crossbar-based LSTM implementation after each epoch during
+in-situ training.
+
+enhanced by 3D-integration of several RRAM layers utilizing
+common electrodes in each layer [15]. Our results may provide
+the incentive for experimental realisation of such a novel
+computing paradigm for LSTM-based deep RNNs.
+R EFERENCES
+[1] S. Hochreiter, and J. Schmidhuber, “Long short-term memory,” Neural
+Comput., vol. 9, pp. 1735–1780, 1997. doi:10.1162/neco.1997.9.8.1735
+[2] F. A. Gers, J. Schmidhuber, and F. Cummins, “Learning to forget: continual prediction with LSTM,” Neural Comput., vol. 12, pp. 2451–2471,
+2000.doi:10.1162/089976600300015015
+[3] A. X. M. Chang, and E. Culurciello, “Hardware accelerators for recurrent neural networks on FPGA,” in Proc. IEEE Int. Symp. Circuits and
+Systems, pp. 1–4, 2017. doi:10.1109/ISCAS.2017.8050816
+[4] Y. Guan, Z. Yuan, G. Sun, and J. Cong, “FPGA-based accelerator for
+long short-term memory recurrent neural networks,” in Proc. IEEE
+Asia and South Pacifc Design Automation Conf., pp. 629–634, 2017.
+doi:10.1109/ASPDAC.2017.7858394
+[5] Y. Zhang, C. Wang, L. Gong, Y. Lu, F. Sun, C. Xu, X. Li and
+X. Zhou, “A power-efficient accelerator based on FPGAs for LSTM
+network,” in Proc. IEEE Int. Conf. Cluster Computing, pp. 629–630,
+2017.doi:10.1109/CLUSTER.2017.45
+[6] F. Conti, L. Cavigelli, G. Paulin, I. Susmelj, and L. Benini, “Chipmunk: a systolically scalable 0.9 mm2 , 3.08 Gop/s/mW @ 1.2
+mW accelerator for near-sensor recurrent neural network inference,”
+in proc. IEEE Custom Int. Circuits Conf. (CICC), pp. 1–4, 2018. doi:
+10.1109/CICC.2018.8357068
+[7] C. Gao, D. Neil, E. Ceolini, S. -C. Liu, and T. Delbruck, “DeltaRNN:
+A power-efficient recurrent neural network accelerator” in Proc.
+ACM/SIGDA Int. Symp. Field-Programmable Gate Arrays, pp. 21–30,
+2018. doi:10.1145/3174243.3174261
+[8] M. Rizakis, S. I. Venieris, A. Kouris, and C. -S. Bouganis, “Approximate
+FPGA-based LSTMs under computation time constraints,” in proc.
+Int. Symp. Applied Reconfgurable Computing (ARC), pp. 3–15, 2018.
+doi:10.1007/978-3-319-78890-6-1
+[9] M. Hu, J. P. Strachan, Z. Li, E. M. Grafals, N. Davila, C. Graves, S.
+Lam, N. Ge, J. J. Yang and R. S. Williams, “Dot-product engine for
+Neuromorphic computing: Programming 1T1M crossbar to accelerate
+matrix-vector multiplication,” in Proc. 53rd ACM/IEEE Design Automat.
+Conf. (DAC), pp. 1–6, 2016. doi:10.1145/2897937.2898010
+[10] C. Li, Z. Wang, M. Rao, D. Belkin, W. Song, H. Jiang, P. Yan, Y.
+Li, P. Lin, M. Hu and N. Ge, “Long short-term memory networks in
+memristor crossbar arrays,” Nat. Mach. Intell., vol. 1, pp. 49–57, 2009.
+doi:10.1038/s42256-018-0001-4
+[11] Z. Wang, C. Li, P. Lin, M. Rao, Y. Nie, W. Song, Q. Qiu, Y. Li, P.
+Yan, J. P. Strachan and N. Ge, “In situ training of feed-forward and
+recurrent convolutional memristor networks,” Nat. Mach. Intell., vol. 1,
+pp. 434–442, 2019. doi:10.1038/s42256-019-0089-1
+[12] H. Kim, H. Nili, M. Mahmoodi and D. Strukov, “4K-memristor analoggrade passive crossbar circuit,” arXiv preprint arXiv:1906.12045, 2019.
+[online]
+
+[13] F. Alibart, E. Zamanidoost, and D. Strukov, “Pattern classification by
+memristive crossbar circuits using ex situ and in situ training,” Nat.
+comm., vol. 4, no. 1, pp.1-7, 2013. doi:10.1038/ncomms3072
+[14] F. M. Bayat, M. Prezioso, B. Chakrabarti, H. Nili, I. Kataeva and D.
+Strukov, “Implementation of multilayer perceptron network with highly
+uniform passive memristive crossbar circuits,” Nat. comm., vol. 9, no.
+1, pp.1-7, 2018. doi:10.1038/s41467-018-04482-4
+[15] G. C. Adam, B. D. Hoskins, M. Prezioso, F. Merrikh-Bayat, B.
+Chakrabarti and D. B. Strukov, ”3-D memristor crossbars for analog and
+neuromorphic computing applications,” IEEE Trans. Electron Devices,
+vol. 64, no. 1, pp.312-318, 2016. doi:10.1109/TED.2016.2630925
+[16] H. Nili, A. F. Vincent, M. Prezesio, M. R. Mahmoodi, I. Kataeva and
+D. B. Strukov, “Comprehensive compact phenomenological modeling of
+integrated metal-oxide memristors,” IEEE Trans. Nanotechnology, vol.
+19, pp. 344-349, 2020. doi: 10.1109/TNANO.2020.2982128
+[17] F. Alibart, L. Gao, B. D. Hoskins and D. B. Strukov, ”High precision tuning of state for memristive devices by adaptable variationtolerant algorithm,” Nanotechnology, vol. 23, no. 7, p.075201, 2012.
+doi:10.1088/0957-4484/23/7/075201
+[18] S. Sahay, M. Bavandpour, M. R. Mahmoodi and D. Strukov, “Energyffficient moderate precision time-domain mixed-signal vector-by-matrix
+multiplier exploiting 1T-1R arrays,” IEEE J. Exploratory Solid-State
+Computational Devices and Circuits, vol. 6, no. 1, pp. 18-26, 2020.
+doi: 10.1109/JXCDC.2020.2981048
+[19] S. Sahay, M. Bavandpour, M. R. Mahmoodi and D. Strukov, “A 2T-1R
+cell array with high dynamic range for mismatch-robust and efficient
+neurocomputing,” in proc. IEEE Int. Memory Workshop (IMW), pp. 1-4,
+2020. doi:10.1109/IMW48823.2020.9108142
+[20] M. Bavandpour, S. Sahay, M. R. Mahmoodi and D. Strukov, ”Efficient mixed-signal neurocomputing via successive integration and
+division,” IEEE Trans. VLSI systems, vol. 28, no. 3, pp. 823-827, 2020.
+doi:10.1109/TVLSI.2019.2946516
+[21] I. Kataeva, F. Merrikh-Bayat, E. Zamanidoost and D. Strukov, “Efficient
+training algorithms for neural networks based on memristive crossbar
+circuits,” in proc. IEEE Int. Joint Conf. Neural Networks (IJCNN), pp.
+1-8, 2015. doi: 10.1109/IJCNN.2015.7280785

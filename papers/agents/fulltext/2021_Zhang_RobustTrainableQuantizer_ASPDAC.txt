@@ -1,0 +1,880 @@
+# A Quantized Training Framework for Robust and Accurate ReRAM-based Neural Network Accelerators
+# id: W3109300165 | key: 2021_Zhang_RobustTrainableQuantizer_ASPDAC | ASP-DAC 2021 | card: ../cards/2021_Zhang_RobustTrainableQuantizer_ASPDAC.md
+
+
+=== page 1 ===
+A Quantized Training Framework for Robust and Accurate
+ReRAM-based Neural Network Accelerators
+Chenguang Zhang
+
+Pingqiang Zhou
+
+School of Information Science and Technology,
+ShanghaiTech University
+zhangchg@shanghaitech.edu.cn
+
+School of Information Science and Technology,
+ShanghaiTech University
+zhoupq@shanghaitech.edu.cn
+
+ABSTRACT
+
+training and inference processes of NN are computing-consuming
+and bandwidth-intensive, because large amounts of data processing
+and data movements between computing units and memories are
+required. However, conventional CPU and GPU platforms are not
+able to accommodate such processes due to the well-known “power
+wall” and “memory wall”.
+Resistive Random Access Memory (ReRAM) is an emerging memory featuring high speed, low power and large capacity [1]. The
+crossbar-structured ReRAM can not only store the weights of the
+NN but also perform analog matrix-vector multiplications (MVMs)
+efficiently in memory. With these features, the time complexity of
+the MVM (𝑛 × 𝑛 matrix) is reduced from 𝑂 (𝑛 2 ) to 𝑂 (1), thereby
+achieving high-density computation with reduced data movement.
+With these merits, the ReRAM-based neural network accelerator
+has been widely studied and is proved to be a promising alternative
+to Von-Neumann architecture [2] [3] for this type of application.
+Despite these advantages, just like other nano-scale devices,
+ReRAM also suffers some challenges inevitably. Non-ideal effects,
+such as fabrication imperfection, switching stochastic, limitation of
+programming facilities etc., lead to conductance variation (including device-to-device variation and pulse-to-pulse variation). That is
+to say, the conductance of ReRAM device always deviates from its
+ideal value[4]. In general, neural networks need to maintain stable
+and high-precision weight to guarantee high accuracy due to its
+high sensitivity to weight. Consequently, conductance variation
+drastically degrades the inference accuracy of NN that executed
+on the ReRAM-based accelerator[5]. For instance, with 10% maximum deviation, the recognition accuracy of ReRAM-based SVM
+significantly drops from 90% to only 53% [6].
+To overcome conductance variation of the ReRAM devices, and
+achieve high reliable accurate NN computing, various solutions
+have been proposed, which are categorized as following two types.
+Weight compensation: Some works [5, 7] cooperate mask retraining and re-mapping methods to compensate the conductance
+deviation measured on a specific ReRAM crossbar. However, these
+methods require careful learning rate tuning, complex mask design and device-by-device conductance reading, which are either
+computing-intensive or time-consuming, making them highly inefficient. Besides, re-mapping methods may not work, when IR-drop
+effect is taken into consideration. Other works [8] [9] try to train NN
+on the ReRAM crossbar hardware directly with stochastic gradient
+decent algorithm (online train). But online training heavily relies
+on the accuracy of the cell-by-cell fine-tuning and measurement.
+Commonly, these types of methods does not tolerate stochastic
+noise very well. With stochastic noise taken into consideration,
+the number of iterations in training will be greatly increased; thus,
+leading to high energy cost and device endurance issue. The most
+
+Neural networks (NN), especially deep neural networks (DNN),
+have achieved great success in lots of fields. ReRAM crossbar, as
+a promising candidate, is widely employed to accelerate neural
+network owing to its nature of processing MVM. However, ReRAM
+crossbar suffers high conductance variation due to many non-ideal
+effects, resulting in great inference accuracy degradation. Recent
+works use uniform quantization to enhance the tolerance of conductance variation, but these methods still suffer high accuracy loss
+with large variation. In this paper, firstly, we analyze the impact of
+the quantization and conductance variation on the accuracy. Then,
+based on two observation, we propose a quantized training framework to enhance the robustness and accuracy of the neural network
+running on the accelerator, by introducing a smart non-uniform
+quantizer. This framework consists of a robust trainable quantizer
+and a corresponding training method, and needs no extra hardware
+overhead and compatible with a standard neural network training
+procedure. Experimental results show that our proposed method
+can improve inference accuracy by 10% ∼ 30% under large variation,
+compared with uniform quantization method.
+
+CCS CONCEPTS
+• Hardware → Process, voltage and temperature variations;
+Emerging technologies.
+
+KEYWORDS
+ReRAM, Neural Network, Variation, Robust, Quantize
+ACM Reference Format:
+Chenguang Zhang and Pingqiang Zhou. 2021. A Quantized Training Framework for Robust and Accurate ReRAM-based Neural Network Accelerators.
+In 26th Asia and South Pacific Design Automation Conference (ASPDAC ’21),
+January 18–21, 2021, Tokyo, Japan. ACM, New York, NY, USA, 6 pages.
+https://doi.org/10.1145/3394885.3431528
+
+1
+
+INTRODUCTION
+
+Neural networks (NN), especially the deep neural networks (DNN),
+have achieved great success and is seen as the most promising and
+effective method in the broader artificial intelligence field. But both
+Permission to make digital or hard copies of all or part of this work for personal or
+classroom use is granted without fee provided that copies are not made or distributed
+for profit or commercial advantage and that copies bear this notice and the full citation
+on the first page. Copyrights for components of this work owned by others than ACM
+must be honored. Abstracting with credit is permitted. To copy otherwise, or republish,
+to post on servers or to redistribute to lists, requires prior specific permission and/or a
+fee. Request permissions from permissions@acm.org.
+ASPDAC ’21, January 18–21, 2021, Tokyo, Japan
+© 2021 Association for Computing Machinery.
+ACM ISBN 978-1-4503-7999-1/21/01. . . $15.00
+https://doi.org/10.1145/3394885.3431528
+
+43
+Authorized licensed use limited to: ShanghaiTech University. Downloaded on June 05,2021 at 04:53:57 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 2 ===
+ASPDAC ’21, January 18–21, 2021, Tokyo, Japan
+
+C. Zhang and P. Zhou, et al.
+
+serious common issue of these device-level algorithm is that the cellby-cell weights compensation of one crossbar is not reproducible
+in another one, the processes have to be re-conducted on another
+new ReRAM crossbar. Obviously, inherent robustness of NN is not
+exploited.
+Digital crossbar: In [10–12], a high-precision value is represented
+by several single-bit crossbars, which is also called “ReRAM crossbar
+in digital mode”. And [13, 14] try to incorporate quantization with
+training to eliminate the quantization error. Their results show improvement in conductance variation tolerance. Nevertheless, there
+is still a significant accuracy drop with large variation compared
+with the baseline model. For example, in [14] accuracy drops 7.09%
+(from 94.11% to 87.02%) for MNIST dataset with 10% conductance
+variation.
+To eliminate accuracy loss brought by conductance variation,
+in this paper, we present a framework including the design, evaluation and training process of the quantization scheme, for NN
+accelerator using multi-bit crossbar. The main contributions of this
+paper include:
+
+The primary operation of the NN is matrix-vector multiplications. It is processed by the basis processing element of the ReRAMbased NN accelerator that consists of ReRAM crossbar arrays and
+peripheral digital circuits, such as Analog-to-Digital Converters
+(ADCs), Digital-to-Analog Converters (DACs), and Sensing Amplifier (SAs), output buffers, switch matrices, etc., as shown in Fig. 1.
+Matrix-vector multiplication can be written as:
+𝒚 = 𝑾 𝑇 𝒙,
+
+(1)
+
+where 𝑊 ∈ 𝑅 𝑀×𝑁 , 𝑥 ∈ 𝑅 𝑀 , 𝑦 ∈ 𝑅 𝑁 are weight matrix, input vector
+and output vector respectively. In order to accelerate matrix vector
+multiplication in analog domain, the weight matrix and input vector
+need to be converted to the ReRAM conductance matrix and the
+input voltage vector 𝐺 ∈ 𝑅 𝑀×𝑁 and 𝑉 ∈ 𝑅 𝑀 . The matrix-vector
+multiplication is achieved by current accumulation along each bitlines. Specially speaking, current of the ReRAM cells on the 𝑛-th
+bit-line is accumulated though Kirchhoff’s current law as Eq. 2.
+𝐼𝐴𝐷𝐶,𝑛 = (𝑮𝑇 𝑽 )𝑛 =
+
+𝑀
+
+𝑚=1
+
++
+−
+(𝐺𝑚,𝑛
+− 𝐺𝑚,𝑛
+)(𝑉𝑖𝑛,𝑚 − 𝑉𝑟𝑒 𝑓 )
+
+(2)
+
+Finally, the current vector from bit-lines is converted to output voltage by transimpedance amplifiers (TIAs) and converted to digital
+output vector by ADCs. Weight matrix (𝑊 ) is rescaled by 𝑆 𝑤 to
+match the conductance range.
+𝑤𝑚,𝑛 𝑔𝑚𝑎𝑥 − 𝑔𝑚𝑖𝑛
++
+−
+− 𝐺𝑚,𝑛
+=
+(3)
+𝐺𝑚,𝑛 = 𝐺𝑚,𝑛
+𝑆𝑤
+𝜂𝑤
+⎧
+|𝑥 | 𝑔
+− 𝑔𝑚𝑖𝑛
+⎪
+⎨ 𝑚,𝑛 𝑚𝑎𝑥
+⎪
++ 𝑔𝑚𝑖𝑛 𝑤 < 0,
+−
+𝑆𝑤
+𝜂𝑤
+=
+𝐺𝑚,𝑛
+⎪
+⎪𝑔𝑚𝑖𝑛 ,
+𝑤 >0
+⎩
+
+(1) We propose a quantized training framework for ReRAMbased Neural Network accelerators. The model trained by
+this framework, can be executed on a ReRAM-based accelerator robustly and accurately. This training framework is
+variation-aware, the inherent robustness of a well-trained
+NN is enhanced by an improved quantizer.
+(2) To evaluate the robustness and accuracy of a quantization
+scheme, we design a metric to measure quantization error
+and sensitivity of a quantizer to conductance variation and
+make a trade-off between them.
+(3) Instead of using fixed and uniform conductance level, our
+quantizer is designed to be trainable, based on the metric
+mentioned above, thereby realizing much more flexibility
+for exploiting accuracy-robustness trade-off.
+(4) We design a corresponding heuristic optimization algorithm
+for the quantizer that can be integrated in standard network
+training procedure. The quantizer can be updated during
+each training phase with little extra training overhead.
+
++
+=
+𝐺𝑚,𝑛
+
+𝑔
+⎧
+⎪
+⎨ 𝑚𝑖𝑛
+⎪
+|𝑥𝑚,𝑛 | 𝑔𝑚𝑎𝑥 − 𝑔𝑚𝑖𝑛
+⎪
++ 𝑔𝑚𝑖𝑛
+⎪
+𝜂𝑤
+⎩ 𝑆𝑤
+
+𝑤 <0
+𝑤 >0
+
+Input vector is rescaled by 𝑆𝑥 to range [−𝑉𝑑𝑑 /2, 𝑉𝑑𝑑 /2] and then
+shifted to be positive by the bias 𝑉𝑟𝑒 𝑓 = 𝑉𝑑𝑑 /2 added to all entries. 𝑔𝑚𝑖𝑛 , 𝑔𝑚𝑎𝑥 are the minimal and the maximum value of the
+conductance.
+𝑥 𝑉𝑑𝑑
+𝑉𝑖𝑛 =
+(4)
++ 𝑉𝑟𝑒 𝑓
+𝑆𝑥 2
+For a uniformly quantized system, continuous values of input vector,
+weight matrix and output are discretized with uniform distance,
+and a 𝑘-bit quantization scheme can be performed as Eq. 5.
+
+2 BACKGROUND AND MOTIVATION
+2.1 Computing unit with uniform quantization
+
+2𝑁 − 1
+𝑡
+· (2𝑡𝑁 − 1)) · 𝑡
+(5)
+𝑆𝑡
+𝑆𝑡
+Here, 𝑁𝑡 is the quantization bit-width and 𝑆𝑡 is the scaling factor of 𝑡
+and 𝑟 ( ) is the round function. The value range is evenly divided into
+2𝑡𝑁 − 1 intervals called quantization step. The input vector and
+weight matrix are quantized during mapping, while output vector
+is quantized during current sensing out. In this paper, we note
+bit-width of input vector, weights and output vector as 𝑁𝑥 , 𝑁 𝑤 , 𝑁 𝑦
+respectively.
+𝑄 (𝑡) = 𝑡ˆ = 𝑟 (
+
+2.2
+
+Modeling and impact of conductance
+variation
+
+2.2.1 Variation modeling. When mapping the weight matrix to
+ReRAM array, conductance variation including device-to-device
+
+Figure 1: Computing unit of ReRAM NN accelerator[15].
+
+44
+Authorized licensed use limited to: ShanghaiTech University. Downloaded on June 05,2021 at 04:53:57 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 3 ===
+A Quantized Training Framework for Robust and Accurate ReRAM-based Neural Network Accelerators
+
+ASPDAC ’21, January 18–21, 2021, Tokyo, Japan
+
+Figure 2: Structure of the ReRAM cell.
+Figure 3: Test accuracy w.r.t. variation amplitude.
+
+variation and pulse-to-pulse variation, is commonly observed and
+is remarkable. In [16], the I-V relationship of the ReRAM devices
+and approximate conductance are modeled as :
+𝐼 = 𝐼 0 · 𝑒𝑥𝑝 (−𝑑/𝑑 0 ) · 𝑠𝑖𝑛ℎ(𝑉 /𝑉0 ),
+
+Here, the abbreviation “qNx bNw Ny ” represents the model quantized with 𝑁𝑥 bits input vectors, 𝑁 𝑤 bits weights and 𝑁 𝑦 bits output
+vectors mentioned in Section 2.1. Although high bit-width quantization introduces less quantization error and has better inference
+accuracy without considering variation, low bit-width quantization
+has better robustness under variation. There should be a trade-off
+between accuracy and robustness when selecting quantization
+bit-widths.
+If a ReRAM device is used to represent 𝐾 bit unsigned number, the conductance range is divided evenly. By “3 sigma criterion”, we assume the actual conductance 𝑔 (𝑘,𝑎𝑐𝑡𝑢𝑎𝑙) ranges from
+[𝑔 (𝑘) − 3𝜎𝑔 (𝑘) , 𝑔 (𝑘) + 3𝜎𝑔 (𝑘) ]. Uniform quantization method can be
+interpreted by a naive intuition: decreasing the bit-width enlarges
+the margin between two conductance levels, numerical overlapping
+that caused by actual conductance variation can be avoided. As a
+result, quantization method can achieve better robustness.
+
+(6)
+
+𝑑
+𝐼0
+exp(− ).
+(7)
+𝐺≈
+𝑉0
+𝑑0
+Here, 𝑑 is average tunneling gap distance shown in Fig. 2, 𝐼 0 (∼
+1 mA), g0 (∼ 0.25 nm) and 𝑉0 (∼ 0.25 V) are fitting parameters.
+Device-to-device variation is caused by fabrication variation and
+pulse-to-pulse variation is caused by stochastic evolution of the
+gap distance [17].
+
+
+𝑑
+= 𝑑  + Δ𝑑 (𝑖𝑑𝑒𝑎𝑙) + 𝛿𝑑
+(8)
+𝑡 +Δ𝑡
+
+𝑡
+
+𝛿𝑑 ∼ 𝑁 (0, 𝜎 2 ) is Gaussian noise that implies the random variation
+during gap distance changing. And it can be easily deduced that
+the distribution of the actually programmed conductance value
+(𝐺𝑎𝑐𝑡𝑢𝑎𝑙 ) after programming:
+𝐺𝑎𝑐𝑡𝑢𝑎𝑙 ≈ 𝐺𝑡𝑎𝑟𝑔𝑒𝑡 · 𝑒 𝜃 .
+
+(9)
+
+3
+
+ROBUST TRAINABLE QUANTIZATION FOR
+RERAM-BASED NN ACCELERATOR
+3.1 Robust quantization
+
+Where, 𝜃 follows normal distribution. Obviously, conductance exhibits a lognormal distribution [18], i.e, 𝐺 ∼ 𝑙𝑜𝑔𝑛𝑜𝑟𝑚(𝜇𝐺𝑖𝑑𝑒𝑎𝑙 , 𝜎𝐺 ).
+This is also supported by experimental results [19].
+
+The two observations mentioned above show that it is make sense
+to find such a quantization scheme that can maintain accuracy and
+enhance robustness. Firstly, A good quantizer should minimize the
+quantization error. Quantization introduces quantization error and
+affects the inference accuracy of a NN. In conventional “digital-style”
+quantization methods, quantization levels are fixed and uniformly
+distributed in full range. However, weight distributions differ across
+layers, and during the training process, the distribution of weights
+changes all the time, a predefined quantizer can not always be
+optimal [22].
+Besides, conductance variation is not uniformly distributed in
+conductance range, with uniform quantizer, the sensitivity of the
+model to conductance variation is not controllable. Hence, a good
+quantizer should be adapted to suit weights distribution and variation distribution, maintain the accuracy of the full-precision system
+and improve the robustness of a NN during inference process. Basing on the fact mentioned above, a learnable quantizer is necessary.
+
+2.2.2 Impact of the quantization and conductance variation. Stateof-the-art ReRAM device can achieve up to 7-bit precision for a
+single device [20], by iterative read-verify-write operations until
+the resistance converges to the desired value. However, to achieve
+such high tuning accuracy, complex algorithms and circuits for
+programming signal generation are required, which means energy
+and timing inefficiency. In many conditions, only low precision
+tuning can be achieved because of limited time and facilities. That
+is to say, conductance variation may considerable. To avoid a sharp
+accuracy loss, a quantization scheme with lower quantization error
+and higher conductance variation tolerance is necessary. Based
+on the device model and the conventional uniform quantization
+methods, there are two observations:
+Observation 1: The fewer the devices with high conductance, the
+better the robustness of the neural network running on the accelerator.
+It is observed that the effect of process variations, the effect is
+greater near the high conductance region [21]. And with the same
+𝜃 in Eq. 9, the ReRAM device with large conductance value suffers
+more serious variation.
+Observation 2: Quantization introduces accuracy loss. By incorporating quantization and training procedures, we can minimize
+the quantization error and recover the accuracy. Fig. 3 shows the
+accuracy degradation of a three-layer NN under different variation
+amplitudes and bit-width configurations.
+
+3.1.1 Learnable quantizer. The target of quantization is to map the
+full-precision input values in a large set to the output values in a
+smaller countable set of discrete values. It can be reformulated as a
+1-dimensional clustering problem. In this paper, full precision
+weights in each layer are grouped into 𝐾 clusters 𝐶 1, ...𝐶𝐾 . The
+weights grouped into 𝐶𝑘 are represented by representative value
+𝑞𝑘 and allocated the label 𝑘, that indicates the mapping relationship. Clustering operation is performed by quantizer which can be
+
+45
+Authorized licensed use limited to: ShanghaiTech University. Downloaded on June 05,2021 at 04:53:57 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 4 ===
+ASPDAC ’21, January 18–21, 2021, Tokyo, Japan
+
+C. Zhang and P. Zhou, et al.
+
+level S(·):
+
+modeled as:
+𝑄 (𝑤) = 𝑞𝑘 ,
+
+𝑖 𝑓 𝑤 ∈ 𝐶𝑘
+
+𝑘 ∈ {1, 2, ..., 𝐾 },
+
+(10)
+S(𝑞𝑘 ) = 𝑞𝑘 ·
+
+𝑤 is the full precision weight value and 𝑄 (·) is the transform function of the quantizer. The representative value and the cluster
+boundary can be determined according to the system requirement.
+
+D. Optimization target. Two optimization targets are combined
+by introducing a coefficient 𝛾. Here 𝛾 controls the importance of
+the robustness in clustering. Then the quantization problem is reformulated into choosing the proper K discrete representative values 𝑞 1, ..., 𝑞𝐾 , and learning the mapping from full-precision weights
+to quantization levels for quantizer 𝑄 (·), that is, minimize the target
+function:
+𝑀 
+2
+
+ ( 𝑗)
+
+𝑞 1, ..., 𝑞𝐾 = arg min
+w − 𝑄 (w ( 𝑗) ) + 𝛾S(𝑄 (w ( 𝑗) ))  .
+𝐹
+
+𝑞 1 ,...,𝑞𝐾 𝑗=1
+
+(14)
+
+3.2
+
+Training algorithm
+
+3.2.1 EM-style clustering method. It is complex and not efficient
+to solve the Eq. 14 directly with brute-force search, therefore, an
+EM-style [24] layer-by-layer quantizer optimization algorithm is
+designed for this clustering problem.
+A: Latent variable introduction. Latent variable 𝐴𝑛𝑘 is introduced to represent the clustering pattern, i.e, another form of
+the label. It is called “latent”, because it was never intended to be
+known in the first place.
+𝐴𝑛𝑘 = 1 When the 𝑛𝑡ℎ example is assigned to the 𝑘𝑡ℎ cluster,
+and 0 otherwise. Then we can reshape the loss function Eq. 14:
+
+Consider an 𝑀-layers neural network, the weight matrix of 𝑗-th
+layer is denoted by w ( 𝑗) , which consists of full-precision weights.
+𝑄 (·) denote the non-uniform quantizer, and 𝑞 1, ..., 𝑞𝐾 denote the
+quantizer values that the weights in 𝑗-th layer are mapped to and
+𝑞𝑖 ∈ [𝑤𝑚𝑖𝑛 , 𝑤𝑚𝑎𝑥 ].
+B. Minimize the variation. To ensure the robustness of the NN,
+total weight perturbation under conductance variation should be
+small enough. To measure the impact of conductance variation, we
+implement this metric “accumulated squared error (ASE)” in [23]
+on quantized NN to be the second optimization goal as:
+𝑀 
+2
+
+
+
+𝐿2 = 𝐴𝑆𝐸 =
+𝑄𝑎𝑐𝑡𝑢𝑎𝑙 (w ( 𝑗) ) − 𝑄𝑖𝑑𝑒𝑎𝑙 (w ( 𝑗) )  ,
+𝑠.𝑡 . 𝑄𝑖𝑑𝑒𝑎𝑙 (w ( 𝑗) ) ∈ {𝑞 1, ..., 𝑞𝐾 }𝑁 .
+
+(13)
+
+𝐹
+
+𝑗=1
+
+𝐹
+
+𝑗=1
+
+(12)
+
+𝑔 (𝑘)
+
+Then accumulated squared error (ASE) can be replaced by:
+𝑀
+2
+ 
+
+𝐿2 =
+S(𝑄 (w ( 𝑗) ))  , 𝑠.𝑡 . 𝑄 (w ( 𝑗) ) ∈ {𝑞 1, ..., 𝑞𝐾 }𝑁 .
+
+3.1.2 Quantizer metric: robustness and accuracy. To find a good
+quantizer, the clustering metric should also be defined.
+Based on the two observations about the quantization error
+and the variation sensitivity, for a quantized NN implemented on
+ReRAM-based, the weight deviation can be broken down into two
+parts: quantization error (𝑄 (w) − w) between quantized and the
+full-precision value, and the device variation (Q(w)actual − 𝑄 (w))
+between actual value represented by ReRAM (𝑄 (𝑤)𝑎𝑐𝑡𝑢𝑎𝑙 ) and ideal
+quantized value (𝑄 (𝑤)).
+Firstly, we propose clustering metric consists of two optimization
+targets. Then, we make a trade-off between the two optimization
+targets to balance robustness and accuracy under conductance
+variation of the neural network running on the accelerator.
+A. Minimize the quantization error. To ensure each quantizer
+has a good performance, the quantization error minimization should
+be guaranteed. The first optimization goal is quantization error as
+below:
+𝑀 
+2
+
+ ( 𝑗)
+
+𝐿1 =
+w − 𝑄 (w ( 𝑗) )  , 𝑠.𝑡 . 𝑄 (w ( 𝑗) ) ∈ {𝑞 1, ..., 𝑞𝐾 }𝑁 .
+𝑗=1
+
+3𝜎𝑔 (𝑘 )
+
+𝐿(𝐴, 𝑞 1, ..., 𝑞𝐾 ) =
+=
+
+𝑁
+
+
+( 𝑗)
+
+𝑛=1
+𝑁
+ 𝐾
+
+𝑛=1 𝑘=1
+
+𝐹
+
+𝑠.𝑡 .
+
+𝐾
+
+𝑘=1
+
+(11)
+
+( 𝑗)
+
+( 𝑗)
+
+min [(𝑥𝑛 − 𝑞𝑘 ) 2 + 𝛾S 2 (𝑞𝑘 )]
+𝑘
+( 𝑗)
+
+( 𝑗)
+
+( 𝑗)
+
+𝐴𝑛𝑘 [(𝑥𝑛 − 𝑞𝑘 ) 2 + 𝛾S 2 (𝑞𝑘 )]
+
+(15)
+
+(16)
+
+𝐴𝑛𝑘 = 1
+
+Instead of solving 𝐴𝑛𝑘 and 𝑞𝑘 simultaneously, in our EM-style
+algorithm, 𝐴𝑛𝑘 and 𝑞𝑘 are solved alternately.
+B: Clustering pattern 𝐴𝑛𝑘 update (E-step). Fix 𝐴𝑛𝑘 and update
+𝑞𝑘 . Minimize target loss function Eq. 16 by finding the stationary
+𝜕𝐿 = 0.
+points that 𝜕𝑞
+𝑘
+𝐾
+𝐴 𝑥
+𝜕S(𝑞𝑘 )
+𝑘=1 𝑛𝑘 𝑛
+𝑞𝑘 + 𝛾S(𝑞𝑘 )
+= 
+(17)
+𝑁 𝐴
+𝜕𝑞𝑘
+𝑛=1 𝑛𝑘
+In this paper, for simplicity, we adapt the assumption in [16] that
+3𝜎𝑔 (𝑘 ) /𝑔 (𝑘) is a constant, i.e. S(𝑞𝑘 ) = 𝛼𝑞𝑘 . Then we have:
+𝑁
+𝑛=1 𝐴𝑛𝑘 𝑥𝑛
+𝑞𝑘 =
+(18)
+𝑁
+(1 + 𝛾𝛼 2 ) 𝑛=1
+𝐴𝑛𝑘
+
+This metric measures the accumulated deviation between the quantized values and actual value represented by ReRAM devices. By
+optimizing this target, each quantized level (𝑞𝑘 ) is encouraged to
+be selected in region that has lower probability of suffering large
+conductance variation. As a result, cumulative probability that the
+model is affected by the conductance fluctuation is under control.
+C. Modeling the robustness (variation sensitivity). Conductance variation is randomly distributed, which is not suitable for
+optimization. In Eq. 9 conductance level with large 𝐺 and 𝜎𝑔 (𝑘) suffers more serious variation. Here we use conductance range upper
+bound defined by “3𝜎 criterion” mentioned in Section 2.2.1, to represent the sensitivity of each conductance level 𝑞𝑘 to conductance
+variation. Here we suppose 𝑞𝑘 is converted to 𝑔 (𝑘) . According to
+the mapping relationship between weight 𝑤 and conductance in Eq.
+3, we can get the function of sensitivity of each weight quantization
+
+C: Representative value qk update (M-step). Fix 𝑞𝑘 and update
+𝐴𝑛𝑘 . Minimize Eq. 16 Find the cluster pattern by find which cluster
+
+46
+Authorized licensed use limited to: ShanghaiTech University. Downloaded on June 05,2021 at 04:53:57 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 5 ===
+A Quantized Training Framework for Robust and Accurate ReRAM-based Neural Network Accelerators
+
+𝑥𝑛 should belong to.
+( 𝑗)
+( 𝑗) 2
+⎧
+2 ( 𝑗)
+⎪
+⎨ 1 𝑘ˆ𝑛 = arg min [(𝑥𝑛 − 𝑞𝑘 ) + 𝛾S (𝑞𝑘 )]
+⎪
+𝑘
+𝐴𝑛𝑘 =
+⎪
+⎪ 0 𝑒𝑙𝑠𝑒
+⎩
+
+Table 1: Parameters of the LeNet-300-100
+(19)
+
+After T times iterations of E/M-steps, we can get a sub-optimal solution (𝐴, 𝑞 1, ..., 𝑞𝐾 ) for the quantization problem. At the beginning
+of the training, 𝑞 1, ..., 𝑞𝐾 are chosen uniformly.
+
+|𝑟𝑖 | ≤1
+
+4.2
+
+LeNet-300-100
+
+input
+output
+
+Linear 784 × 300, Relu
+Linear, 300 × 10
+
+Tolerance to conductance variation and
+quantization error
+
+In this section, firstly, we train the model with different bit-width
+values and coefficient values (𝛾 in Eq. 14) combinations. All the models are trained from scratch. Then the performance of well-trained
+models is tested by sweeping conductance variation amplitude (𝜎)
+from 0 to 2.0 as shown in Fig. 4. Monte Carlo simulation is performed to model resistance variation of the device, and average
+cases are plotted. Here, the abbreviation “qNx bNw Ny ” represent
+
+(20)
+=1
+
+Layer
+
+on the PyTorch and implemented by Python. It models the crossbar computation including input/output signal conversion, current
+accumulation, the weight splitting/mapping and conductance variation. With the help of PyTorch API, the simulator framework can
+train and test the model on multi-GPU with flexible network structures and training configurations. We experiment on the MNIST
+hand-writing digit dataset [27] with LeNet-300-100 (2 layers perceptron) [28] (listed in Table 1). LeNet-300-100 is a fully connected
+network with two hidden layers, with 300 and 100 neurons each,
+which achieves 1.6% error rate on MNIST. Crossbar size is 64 × 64.
+The remaining settings of hardware parameters are same as PytorX.
+
+3.2.2 Network training. As discussed in Section 2.2.2, quantizer
+training and weight training should work together to minimize the
+quantization error.
+The training process of the NN quantizer by EM-style clustering
+method is conducted during the forward propagation. During
+the backward propagation, the parameters of the quantizer remain unchanged, only the weights of the NN are updated. With
+continuously inputs, the quantizer produces discrete outputs, which
+means the transform function of the quantizer would always have
+zero gradient with respect to its input mathematically. Backward
+propagation can not work. To make the gradient-decent feasible,
+“straight-through-estimator (STE)” method in [25] [26] is adopted
+to compute the gradients:
+Forward : 𝑟𝑜 = 𝑄 (𝑟𝑖 )
+
+
+𝜕𝐸 𝑆𝑇 𝐸 𝜕𝐸 
+𝜕𝑟𝑜 
+Backward :
+=
+=⇒
+
+
+𝜕𝑟 0
+𝜕𝑟𝑖 
+𝜕𝑟𝑖 
+
+ASPDAC ’21, January 18–21, 2021, Tokyo, Japan
+
+(21)
+
+|𝑟𝑖 | ≤1
+
+Here, 𝑟𝑖 is variable that is normalized to the interval [−1, 1], and the
+gradient of the quantizer transform function is set to 1 for values
+between [−1, 1], and 0 elsewhere.
+During the training process, every several times backward propagation, parameters of the quantizer is updated by the EM-style
+clustering method during next forward propagation, based on the
+result in the previous forward propagation. The overall training
+procedures are summarized in the algorithm 1.
+Algorithm 1 Training and testing the quantizer
+Input: Weight matrix w of an N-layer NN, number of cluster 𝐾
+Output: 𝑄 (w)
+1: for 𝑗 = 1 → 𝑀 do
+2:
+if in the forward propagation then
+( 𝑗)
+( 𝑗)
+3:
+Initial the 𝑞 1 , ..., 𝑞𝐾 ;
+4:
+for 𝑡 = 1 → 𝑇 do
+( 𝑗)
+( 𝑗)
+( 𝑗)
+5:
+Compute 𝑞 1 , ..., 𝑞𝑘 with 𝐴𝑛𝑘 by Eq. 18
+( 𝑗)
+
+( 𝑗)
+
+Figure 4: Test accuracy of the models with different configurations and values of 𝛾.
+the model quantized with 𝑁𝑥 bits input vectors, 𝑁 𝑤 bits weights
+and 𝑁 𝑦 bits output vectors mentioned in Section 2.1. Curves with
+label “𝛾 = t” represent the performance of model trained with our
+method and 𝛾 = 𝑡, Curve with label “uniform q” represents the
+performance (inference accuracy) of model trained with uniform
+quantization.
+As shown in Fig. 4, With proper 𝛾 setting, as variation amplitude increasing, prediction accuracy of the models trained with
+our method drops slower. For conventional uniform quantization
+method, as 𝜎 increases from 0 to 0.6, 1.2 and 2.0, accuracy of model
+drops from 93.07% to 58.79%, 32.67% and 25.64%. In contrast, our
+method can achieve accuracy of 94.69%, 88.7%, 51.65% and 24.05% at
+most, when 𝜎 is equal to 0, 0.6, 1.2 and 2.0, respectively. It means that
+our method can improve robustness of model under conductance
+variation. Considering the situations without device variation, our
+method can achieve at least similar prediction accuracy compared
+to the original uniform quantization scheme, and even better in
+
+( 𝑗)
+
+Compute 𝐴𝑛𝑘 with 𝑞 1 , ..., 𝑞𝐾 by Eq. 19
+7:
+end for
+8:
+else
+( 𝑗)
+( 𝑗)
+( 𝑗)
+9:
+Compute label 𝑘ˆ𝑛 with 𝑞 1 , ..., 𝑞𝐾 by Eq. 19
+10:
+Compute 𝑄 (w) by Eq. 10.
+11:
+end if
+12: end for
+6:
+
+4 EXPERIMENTAL RESULTS
+4.1 Experimental setup
+To evaluate our proposed training algorithm, we build a comprehensive simulation framework based on PytorX [15], a simulator based
+
+47
+Authorized licensed use limited to: ShanghaiTech University. Downloaded on June 05,2021 at 04:53:57 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 6 ===
+ASPDAC ’21, January 18–21, 2021, Tokyo, Japan
+
+(a)
+
+C. Zhang and P. Zhou, et al.
+
+minimize the quantization error and the probability that the model
+is affected by the conductance variation. With our method, we
+can train a model with robustness and high accuracy, and make a
+well balance between them. The framework does not need extra
+hardware overhead and need little extra training efforts, and the
+trained-NN can be mapped to any ReRAM-based NN accelerator
+maintains its accuracy as much as possible without more optimization. Both pulse-to-pulse variation and device-to-device variation
+can be well tolerated.
+
+(b)
+
+Figure 5: (a). Weight distribution before quantization; (b).
+Weight distribution after quantization with our method.
+
+REFERENCES
+[1] H. . P. Wong et al., “Metal–oxide RRAM,” Proc. IEEE, vol. 100, no. 6, pp. 1951–1970,
+2012.
+[2] A. Shafiee et al., “ISAAC: A convolutional neural network accelerator with in-situ
+analog arithmetic in crossbars,” SIGARCH Comput. Archit. News, vol. 44, no. 3, p.
+14–26, 2016.
+[3] P. Chi et al., “PRIME: A novel processing-in-memory architecture for neural
+network computation in ReRAM-based main memory,” in ISCA, vol. 44, no. 3,
+2016, pp. 27–39.
+[4] C. Wang et al., “Cross-point resistive memory: Nonideal properties and solutions,”
+TODAES, vol. 24, no. 4, 2019.
+[5] S. Jin et al., “A variation tolerant scheme for memristor crossbar based neural
+network designs via two-phase weight mapping and memristor programming,”
+Future Generation Computer Systems, vol. 106, pp. 270–276, 2020.
+[6] Peng Gu et al., “Technological exploration of RRAM crossbar array for matrixvector multiplication,” in ASP-DAC, 2015, pp. 106–111.
+[7] L. Chen et al., “Accelerator-friendly neural-network training: Learning variations
+and defects in RRAM crossbar,” in DATE, 2017, pp. 19–24.
+[8] L. Xia et al., “Fault-tolerant training with on-line fault detection for RRAM-based
+neural computing systems,” in DAC, 2017, pp. 1–6.
+[9] M. Cheng et al., “TIME: A training-in-memory architecture for memristor-based
+deep neural networks,” in DAC, 2017, pp. 1–6.
+[10] Z. Zhu et al., “A configurable multi-precision cnn computing framework based
+on single bit RRAM,” in DAC, 2019, pp. 1–6.
+[11] L. Ni et al., “On-line machine learning accelerator on digital RRAM-crossbar,” in
+ISCAS, 2016, pp. 113–116.
+[12] B. Li et al., “Merging the interface: Power, area and accuracy co-optimization for
+RRAM crossbar-based mixed-signal computing system,” in DAC, 2015, pp. 1–6.
+[13] Y. Cai et al., “Low bit-width convolutional neural network on RRAM,” TCAD, pp.
+1414–1427, 2020.
+[14] C. Song et al., “A quantization-aware regularized learning method in multilevel
+memristor-based neuromorphic computing system,” in NVMSA, 2017, pp. 1–6.
+[15] Z. He et al., “Noise injection adaption: End-to-end ReRAM crossbar non-ideal
+effect adaption for neural network mapping,” in DAC, 2019.
+[16] S. Yu et al., “A neuromorphic visual system using RRAM synaptic devices with
+sub-pj energy and tolerance to variability: Experimental characterization and
+large-scale modeling,” in IEDM, 2012, pp. 10.4.1–10.4.4.
+[17] S. Yu, X. Guan, and H.-S. P. Wong, “On the switching parameter variation of
+metal oxide RRAM—part ii: Model corroboration and device design strategy,”
+TED, pp. 1183–1188, 2012.
+[18] M. Hu et al., “Leveraging stochastic memristor devices in neuromorphic hardware
+systems,” JESTCS, vol. 6, no. 2, pp. 235–246, 2016.
+[19] A. Fantini et al., “Intrinsic switching variability in Hf𝑂 2 RRAM,” in IEEE International Memory Workshop, 2013, pp. 30–33.
+[20] F. Alibart et al., “High precision tuning of state for memristive devices by adaptable variation-tolerant algorithm,” Nanotechnology, vol. 23, no. 7, p. 075201, 2012.
+[21] J. Rajendran et al., “Improving tolerance to variations in memristor-based applications using parallel memristors,” IEEE Transactions on Computers, vol. 64, no. 3,
+pp. 733–746, 2015.
+[22] D. Zhang et al., “Lq-nets: Learned quantization for highly accurate and compact
+deep neural networks,” in ECCV, 2018, pp. 365–382.
+[23] B. Liu et al., “Vortex: variation-aware training for memristor x-bar,” in DAC, 2015,
+pp. 1–6.
+[24] G. J. McLachlan and T. Krishnan, The EM algorithm and extensions, 1996.
+[25] Y. Bengio et al., “Estimating or propagating gradients through stochastic neurons
+for conditional computation,” arXiv preprint arXiv:1308.3432, 2013.
+[26] G. Hinton et al., “Neural networks for machine learning,” Coursera, video lectures,
+vol. 264, no. 1, 2012.
+[27] Y. LeCun et al., “Gradient-based learning applied to document recognition,” Proc.
+IEEE, vol. 86, no. 11, pp. 2278–2324, 1998.
+[28] Y. LeCun, “1. s. denker, and sa solla. optimal brain damage,” Advances in Neural
+Information Processing Systems (NIPS), 1989.
+
+some cases. This implies that the quantization error can be minimized by our method. We compare our method with variation
+tolerant scheme proposed in [14]. As 𝜎 increases from 0 to 0.6, 1.2
+and 2.0, accuracy of model drops from 94.11% to 87.02%, 48.16% and
+22%. Although Song’s method shows similar performance with conductance variation, but our method shows better accuracy without
+variation and better flexibility.
+Fig. 5 shows the statistical distribution of weights before and after
+quantization of the input layer of the two-layer perceptron trained
+by our method. It is obviously observed that the region nearby zero
+(suffer less variation) and with higher weight density have more
+quantization levels. i.e., quantization step in our method is not a
+constant. The target of our optimization algorithm is achieved.
+
+4.3
+
+Optimal hyper parameter selection
+
+As discussed in Eq. 14, the hyper-parameter 𝛾 is introduced to
+balance the robustness and accuracy under conductance variation.
+In Fig. 6, we vary the values of 𝛾 when training the NN for hunting
+for the peak accuracy. It can be seen that models with different
+values of 𝜎 and 𝛾 differ in test accuracy, and a peek value can be
+identified.
+Besides, the models trained with larger 𝛾 shows better robustness,
+but at the cost of some accuracy degradation under small variation.
+This phenomenon verifies the effectiveness of the 𝛾 and indicates
+that 𝛾 should be tuned depending on actual variation distribution.
+
+Figure 6: Scan coefficient 𝛾 to search the best accuracy.
+
+5
+
+CONCLUSION
+
+In this paper, we analyze the impact of the quantization and conductance variation on neural network executed on the ReRAM-based
+NN accelerator. The observations reveal the trade-off between robustness and accuracy. By introducing a framework including the
+design, evaluation and training process of the quantizer, we can
+
+48
+Authorized licensed use limited to: ShanghaiTech University. Downloaded on June 05,2021 at 04:53:57 UTC from IEEE Xplore. Restrictions apply.

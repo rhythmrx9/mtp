@@ -1,0 +1,17 @@
+# Topic: kv-cache
+
+11 papers, most important first.
+
+| key (→ card) | year | venue | cat | devices | evidence | basis | cited-by | TL;DR |
+|---|---|---|---|---|---|---|---|---|
+| [2025_Leroux_GainCellAnalogAttention_NatCompSci](../cards/2025_Leroux_GainCellAnalogAttention_NatCompSci.md) | 2025 | NatCompSci | 11 | Gain-cell,Charge/Capacitor | simulation | F | 3 | Gain-cell (capacitor) analog IMC arrays store the KV cache and compute both attention dot products with ADC-free charge-to-pulse HardSigmoid blocks, and an adap |
+| [2025_Tsai_AnalogAILLMAccelerators_IMW](../cards/2025_Tsai_AnalogAILLMAccelerators_IMW.md) | 2025 | IMW | 11 | PCM | survey | F | 1 | Short IBM IMW 2025 overview of PCM-based analog in-memory computing for LLM inference: three 14 nm PCM chips/architectures (9.76 and 12.4 TOPS/W measured), hard |
+| [2025_Burr_AnalogAILowLatencyLM_CICC](../cards/2025_Burr_AnalogAILowLatencyLM_CICC.md) | 2025 | CICC | 11 | PCM,ReRAM,Flash,SRAM-analog | analytical | F | 1 | Invited overview from IBM arguing that Fully-Weight-Stationary (F-FWS) analog NVM accelerators give up to 9.75x lower latency, 5.21x better area efficiency and  |
+| [2025_Xu_FeRAMKVCache3D_IEDM](../cards/2025_Xu_FeRAMKVCache3D_IEDM.md) | 2025 | IEDM | 11 | FeRAM | measured-silicon | F | 0 | First experimental ferroelectric KV cache: a fabricated 3D 3x32x32 HZO FeCap array (~10 ns switching, 10-year retention, 1e16 extrapolated endurance) used as an |
+| [2025_Xu_UniCAIM_DAC](../cards/2025_Xu_UniCAIM_DAC.md) | 2025 | DAC | 11 | FeFET | algorithm+simulation | F | 0 | FeFET-based unified CAM/CIM array performing O(1) dynamic top-k KV-cache selection, charge-domain static eviction and current-domain exact attention, cutting ar |
+| [2026_Wang_JADE_JETCAS](../cards/2026_Wang_JADE_JETCAS.md) | 2026 | JETCAS | 11 | ReRAM,SRAM-digital | simulation | F | 0 | JADE is a Python framework that co-explores architecture (IMC/NMC organisation, mesh/H-tree topology) and dataflow (matrix-multiplication unrolling, attention v |
+| [2026_Suzuki_KVCacheSLCMLC_JJAP](../cards/2026_Suzuki_KVCacheSLCMLC_JJAP.md) | 2026 | JJAP | 11 | ReRAM | simulation | A | 0 | Splitting quantized KV values into upper bits in SLC and lower bits in MLC ReRAM gives 49.1% fewer cells with perplexity kept low across LLMs and quantizers. |
+| [2026_Zheng_InterfaceKVQ_ICCAD](../cards/2026_Zheng_InterfaceKVQ_ICCAD.md) | 2026 | ICCAD | 11 | ReRAM | algorithm+simulation | F | 0 | A randomized-Hadamard-rotation plus shared-codebook 4-bit KV quantizer matched to fixed-range NVM read converters gives 3.1-3.6x lower modeled KV read energy an |
+| [2024_Bhattacharjee_ClipFormer_TCAD](../cards/2024_Bhattacharjee_ClipFormer_TCAD.md) | 2024 | TCAD | 04 | ReRAM | algorithm+simulation | F | 1 | Shows that write noise on dynamically written K and V matrices makes pre-trained ViTs (DeiT-S) fragile on RRAM crossbars and proposes ClipFormer, a training-fre |
+| [2026_Vasilopoulos_AIMCforLLMInference_IMW](../cards/2026_Vasilopoulos_AIMCforLLMInference_IMW.md) | 2026 | IMW | 11 | PCM,ReRAM,MRAM,Flash,SRAM-analog,Gain-cell,Generic-NVM | analytical | F | 0 | Perspective from IBM Research arguing that AIMC suits the static, high-reuse MVMs of LLMs (weights programmed once in dense, 3D NVM) but its system benefit shri |
+| [2025_Zhao_CMSwitch_ASPLOS](../cards/2025_Zhao_CMSwitch_ASPLOS.md) | 2025 | ASPLOS | 05 | DRAM | simulation | F | 0 | CMSwitch is a CIM compiler that treats each array's compute/memory mode as a compile-time decision (DP network segmentation + MIP array allocation), giving 1.31 |

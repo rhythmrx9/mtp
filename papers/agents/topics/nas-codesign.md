@@ -1,0 +1,17 @@
+# Topic: nas-codesign
+
+11 papers, most important first.
+
+| key (→ card) | year | venue | cat | devices | evidence | basis | cited-by | TL;DR |
+|---|---|---|---|---|---|---|---|---|
+| [2023_Kang_MGen_TC](../cards/2023_Kang_MGen_TC.md) | 2023 | TC | 11 | ReRAM | algorithm+simulation | A | 0 | MGen is a framework that generates reduced-redundancy multi-task BERT models and schedules their execution order to cut the energy (not just area) cost of runni |
+| [2024_Moitra_TReX_TETC](../cards/2024_Moitra_TReX_TETC.md) | 2024 | TETC | 04 | FeFET,SRAM-analog | algorithm+simulation | F | 0 | TReX removes the attention block from selected ViT encoders and reuses the previous encoder's attention output through a small transformation block, chosen to m |
+| [2017_Ankit_TraNNsformer_ICCAD](../cards/2017_Ankit_TraNNsformer_ICCAD.md) | 2017 | ICCAD | 05 | Memristor(generic) | algorithm+simulation | F | 6 | TraNNsformer interleaves magnitude pruning with size-constrained spectral clustering during training so surviving FC weights form dense crossbar-sized blocks, c |
+| [2021_Yang_CFMESMO_ICCAD](../cards/2021_Yang_CFMESMO_ICCAD.md) | 2021 | ICCAD | 07 | ReRAM | algorithm+simulation | F | 4 | ReSNA trains DNNs against thermal, shot, RTN and programming noise of ReRAM crossbars (+2.57% accuracy on ResNet20/CIFAR-10 on average) and CF-MESMO, a continuo |
+| [2023_Sun_Gibbon_TCAD](../cards/2023_Sun_Gibbon_TCAD.md) | 2023 | TCAD | 05 | ReRAM,Memristor(generic) | algorithm+simulation | F | 2 | Gibbon co-searches NN topology/quantisation and memristor-PIM hardware (crossbar size, ADC/DAC bits, cell precision) with an evolutionary search with adaptive p |
+| [2021_Huang_MixedPrecisionQuant_ASP-DAC](../cards/2021_Huang_MixedPrecisionQuant_ASP-DAC.md) | 2021 | ASP-DAC | 09 | ReRAM | algorithm+simulation | F | 4 | Jointly quantizes weights, inputs and ADC partial sums per layer for ReRAM inference accelerators using a deep-RL search, cutting LeNet inference energy by up t |
+| [2023_Benmeziane_AnalogNAS_EDGE](../cards/2023_Benmeziane_AnalogNAS_EDGE.md) | 2023 | EDGE | 07 | PCM | algorithm+simulation | F | 2 | AnalogNAS combines an XGBoost ranking surrogate trained on ~1,000 HWA-trained ResNet-like networks with evolutionary search to find drift-robust CNNs for analog |
+| [2025_Mai_CIMWise_ICCAD](../cards/2025_Mai_CIMWise_ICCAD.md) | 2025 | ICCAD | 05 | None | measured-silicon | A | 0 | CIMWise is an IREE/MLIR-based end-to-end compiler for CIM processors whose auto-tuner searches hardware parameters and dataflow characteristics with a two-stage |
+| [2025_Krestinskaya_CIMNAS_TCASAI](../cards/2025_Krestinskaya_CIMNAS_TCASAI.md) | 2025 | TCASAI | 05 | ReRAM,SRAM-analog | algorithm+simulation | F | 0 | CIMNAS jointly searches NN architecture, quantization and CIM device/circuit/architecture parameters (9.9e85 combinations) with an evolutionary algorithm, cutti |
+| [2025_Li_HARMONY_TCAD](../cards/2025_Li_HARMONY_TCAD.md) | 2025 | TCAD | 05 | Generic-NVM | simulation | A | 0 | HARMONY is a CIM compiler built on a hardware IR unifying compute and memory abstractions; it automatically identifies CIM-offloadable operators, builds a hybri |
+| [2021_Li_RaQu_TCAD](../cards/2021_Li_RaQu_TCAD.md) | 2021 | TCAD | 09 | ReRAM | algorithm+simulation | A | 0 | RaQu is an AutoML-based quantization framework for RRAM-based PIM that generates a fine-grained, hardware-structure-aware quantization strategy to maximize cros |

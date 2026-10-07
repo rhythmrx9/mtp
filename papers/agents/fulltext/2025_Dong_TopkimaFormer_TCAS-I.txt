@@ -1,0 +1,1155 @@
+# Topkima-Former: Low-Energy, Low-Latency Inference for Transformers Using Top- k In-Memory ADC
+# id: W4408563999 | key: 2025_Dong_TopkimaFormer_TCAS-I | TCAS-I 2025 | card: ../cards/2025_Dong_TopkimaFormer_TCAS-I.md
+
+
+=== page 1 ===
+Topkima-Former: Low-energy, Low-Latency
+Inference for Transformers using top-k In-memory
+ADC
+Shuai Dong1,† , Junyi Yang1,† , Xiaoqi Peng1 , Hongyang Shang1 , Ye Ke1 , Xiaofeng Yang2 ,
+Hongjie Liu2 , Arindam Basu1,∗
+
+arXiv:2411.13050v1 [cs.AR] 20 Nov 2024
+
+1
+
+Department of Electrical Engineering, City University of Hong Kong, Hong Kong
+2
+Reexen Technology, China
+
+Abstract—Transformer model has gained prominence as a
+popular deep neural network architecture for neural language
+processing (NLP) and computer vision (CV) applications. However, the extensive use of nonlinear operations, like softmax,
+poses a performance bottleneck during transformer inference and
+comprises up to 40% of the total latency. Hence, we propose
+innovations at the circuit, architecture, and algorithm levels
+to accelerate the transformer. At the circuit level, we propose
+topkima—combining top-k activation selection with in-memory
+ADC (IMA) to implement a low-energy and low-latency softmax
+without any sorting latency. Only the k largest activations are sent
+to the softmax calculation block, reducing the huge computational
+cost of softmax. Using a modified training scheme with top-k
+only in the forward pass, experimental results demonstrate only
+a 0.4% to 1.2% reduction in accuracy across ViT, distilBERT,
+and BERT-base models when evaluated on CIFAR-10, CIFAR100, and SQuAD datasets with k=5. At the architecture level,
+an improved scale-free technique is introduced to reduce the
+computational cost of attention. The combined system, dubbed
+Topkima-Former, enhances 1.8 × −84× speedup and 1.3 × −35×
+energy efficiency (EE) over prior In-memory computing (IMC)
+accelerators. Compared to a conventional softmax macro and a
+digital top-k (Dtopk) softmax macro, our proposed tokima softmax
+macro achieves about 15× and 8× faster speed respectively.
+Index Terms—In-memory computing, In memory ADC, Transformer
+
+I. I NTRODUCTION
+Transformer can achieve superior performance in various
+applications involving neural language processing (NLP) and
+computer vision (CV) due to the attention mechanism. However, as the models evolve, the required computational and
+memory resources increase rapidly. To efficiently implement
+transformer on hardware, many software (SW) and hardware
+(HW) techniques have been proposed to accelerate the linear
+dot-product operation. On the SW side, there are two categories: (1) Quantization, where the weights and activations of
+matrix multiplications are quantized to low precision data [1].
+(2) Sparsity, where the insensitive data of weights and activations are removed to reduce the required computational number,
+like tokens pruning [2] and dynamic attention score sparsity [3].
+On the HW front, In-memory computing (IMC) is a popular
+† The first and second authors contributed equally.
+∗ Corresponding author: arinbasu@cityu.edu.hk
+
+method that reduces data movement to and from memory.
+Both volatile (SRAM, DRAM) and nonvolatile (RRAM, Flash)
+solutions have been explored. Resistive memory approaches
+have gained more traction recently due to their possibility
+of low-energy combined with low-area implementation above
+the active silicon area. These methods can implement vectormatrix multiplies very efficiently [4], but they suffer from
+ADC overheads [5]. To address this challenge, In-memory
+ADC (IMA) is proposed to embed ADC into each row of
+the IMC macro [6]. This approach allows for the reuse of bit
+cells for both multiply-accumulate (MAC) and ADC operations,
+resulting in enhanced energy efficiency (EE). However, the
+latency is slightly high due to the utilization of ramp ADC,
+which requires 2n cycles for an n-bit ADC.
+On the contrary, few works focus on optimizing the nonlinear
+(NL) operations in transformer, like softmax, which can result
+in a large overhead in latency and energy. For example, the
+softmax operation consumes up to 40% inference time, severely
+impeding the efficient implementation of transformer [7]. To
+solve this problem, low-precision implementation changes the
+base of exponential from e to 2, achieving 1.25× speed
+improvement [8]. And using Taylor series to approximate
+exponentials reduces inference time by only 19% [9]. The lack
+of significant improvement can be attributed to the necessity
+of handling all inputs of the softmax function. This becomes
+particularly challenging when dealing with lengthy inputs.
+Motivated by competitive networks in neuroscience [10], this
+work integrates the concept of top-k winner take all with IMA
+(topkima) such that only k (≪ d) values need to be passed
+to the NL operator. This works well since the output of the
+softmax exponentially increases larger values over others. Our
+proposed method eliminates sorting overheads and even reduces
+the latency overhead of ramp ADC. This design fully harnesses
+the potential of top-k, significantly reducing the overhead of
+the softmax operation in transformers. To further accelerate
+transformer, the integrated design, dubbed Topkima-Former,
+spans circuit, architecture, and algorithm innovations, which
+has the following main features:
+•
+
+Circuit: Integrating sorting operation for top-k selection in
+the IMA array without sorting overhead. This is achieved
+
+=== page 2 ===
+by replacing the increasing ramp in prior works with a
+decreasing ramp, allowing it to cross larger MAC voltages
+earlier. The integrated topkima can save energy and latency
+in both the data conversion stage (by early stopping) and
+the subsequent softmax operation by processing a reduced
+number of values.
+• Algorithm: Modified training scheme where k=5 results
+in only a 0.4% to 1.2% reduction in accuracy across ViT,
+distilBERT, and BERT-base models when evaluated on
+CIFAR-10, CIFAR-100, and SQuAD datasets.
+• Architecture: Removing scaling operations by just adjusting the weights of WQ without any overhead.
+WQ
+RRAM IMC
+Q
+
+SRAM IMC
+
+WK
+X
+
+K
+
+Transpose
+
+Q  KT
+
+Softmax
+
+Topkima-M
+
+WV
+
+Topkima-SM
+
+Attention
+scores (A)
+AV
+
+V
+
+Outputs
+
+Fig. 1. The attention module
+
+Topkima-Former achieves 1.8×−84× faster and 1.3×−35×
+more EE than prior IMC-based accelerators. Compared to
+a conventional softmax macro and a digital top-k (Dtopk)
+softmax macro, our proposed topkima softmax macro (topkimaSM) achieves about 15× and 8× faster speed.
+II. P RELIMINARIES AND RELATED WORKS
+A. Transformer models
+Transformer models are built up with multiple encoders
+and/or decoders. Multi-head attention is the main component of
+each coder. As shown in Fig. 1, there are three weight matrixes
+in one attention module: WQ , WK and WV . Then Queries (Q),
+Keys (K), and Values (V ) could be obtained by multiplying the
+input X:
+Q, K, V = X · WQ , X · WK , X · WV
+
+(1)
+
+where WQ , WK ∈ Rdmodel ×dk , WV ∈ Rdmodel ×dv , X ∈
+RSL×dmodel , Q, K ∈ RSL×dk . dmodel , dk , dv and SL are the
+dimensions of the model, K, V and sequence length of X. The
+result of this attention module is calculated by:
+Q · KT
+Attention(Q, K, V ) = sof tmax( √
+)·V
+dk
+
+(2)
+
+where the dimension of the result ∈ Rdk ×dv . The softmax funcxi
+tion is: sof tmax(xi ) = Pdek xj . It requires dk exponentials
+j=0 e
+
+and dk divisions. These NL operations render softmax difficult
+for HW implementation [11].
+
+B. Related works
+Softmax HW implementation schemes. Softmax involves
+expensive operations of exponential and division. The popular
+solution is to use function approximation to reduce the overhead of these two operations. Softermax switches the base of
+exponential from e to 2 to simplify HW implementations [7].
+I-BERT introduces a more general approximation, replacing
+the exponential with 2nd-order polynomials [12]. Similarly,
+SpAtten employs a 5th-order Taylor approximation [2]. In
+addition to the approximation of the exponential, Du et al.
+utilize the log sum-exp trick to avoid the division operation
+[13]. However, the aforementioned schemes require processing
+all inputs for softmax, leading to considerable latency and
+energy consumption when the input size (SL) is very large.
+For example, latency increases drastically by 137× when SL
+increases from 256 to 4096 [13]. Top-k method has also been
+proposed to process only the k largest inputs of softmax [3].
+It can achieve 2.6× speedup when k=30 with a small loss in
+accuracy. However, it suffers from the sorting complexity of
+O(SL). In our estimation, the sorting operation consumes at
+least 75% latency (See Section IV-B).
+IMC-based accelerators for transformer. Retransformer
+leverages the promising RRAM device to expedite the inference
+of transformer [1]. However, the low endurance of RRAM
+renders it unsuitable for deployment within crossbar arrays that
+require frequent programming, such as the crossbar K T with
+input Q. Conversely, TranCIM adopts the mature fabrication
+technology of SRAM to design a full-SRAM IMC accelerator
+for transformer [14]. But this design forfeits benefits associated
+with RRAM, including high storage density, fast read speed and
+low energy consumption. Subsequently, X-former proposes a
+hybrid IMC architecture built up with RRAM and SRAM together to efficiently execute different workloads of transformer
+[4]. However, it lacks a comprehensive co-design from circuit
+level, to architecture level and up to algorithm level.
+III. D ESIGN FEATURES
+We optimized Topkima-Former by using SW-HW co-design
+as described in this section.
+A. HW implementation
+Overall architecture design. The overall system simulation,
+conducted using the NeuroSim framework [5], comprises chip,
+tile, processing element (PE) and array hierarchies. The weights
+(WQ,K,V ) of projection operations in Fig. 1 are mapped onto
+RRAM IMC because RRAM provides high storage density,
+fast read speed, and low energy consumption when performing vector-matrix multiplication with fixed weights. However,
+SRAM is chosen for attention operations (Q · K T and A · V )
+since it needs to be written for every input sample. Therefore,
+K T and V are written in the SRAM IMC for every input. Note
+that the design of the RRAM IMC and SRAM IMC for A · V
+are consistent with NeuroSim design. Our focus in this work is
+the second SRAM IMC– topkima-SM that combines topkima
+macro (topkima-M) that uses SRAM array for Q · K T together
+with a digital softmax, as explained next.
+
+=== page 3 ===
+Pre_ctrl
+
+V1
+
+Vk
+
+Dual 10T SRAM array
+(Ramp)
+
+Stop
+Ramp
+
+V2
+
+Analog circuit
+
+Vn
+
+Vk+1
+
+-RWL
+Weight (QL, QR)
+
+w11-1
+
+2 × x1
+
+w11-2
+
+PWM input
+
+4 × x1
+
+w11
+
+SA
+
+Cnt
+Counter
+Top-k
+selection
+
+Register
+
+0 (L, L)
+
+QR
+
+QR
+
+0 (L, L)
+
+1 (H, L)
+
+0 (+DV-DV)
+
+-1 (+DV)
+
+-1 (+DV)
+
+0 (No change)
+
++1 (-DV)
+
+Ramp ADC
+
+△VRBL
+Col-1
+
+wn1-3
+
+4 × xn
+
+-1 (L, H)
++1 (-DV)
+
+0 (No change) 0 (No change) 0 (No change)
+
+1 (H, L)
+(e)
+
+ADC
+
+REQ
+
+Input (+RWL,-RWL)
+-1 (L, H)
+
+w11-3
+
+wn1
+
+Cnt==k
+
+WL
+
++RWL
+
+x1
+
+WL
+driver
+
+QL
+
+QL
+
+MAC
+
+Dual 10T SRAM array
+(MAC)
+
+WL
+driver
+
+BLL
+
+KT
+
+…
+
+Q
+
+WL
+
+BLR
+
+Pre-charge
+
+WL
+driver
+
+(d)
+
+BLBL
+BLBR
+
+BL Pre-charge
+
+VDD VDD
+RBLL
+RBLR
+
+RBLL
+
+(c)
+
+RBLR
+
+Dual 10T SRAM
+
+(a)
+
+Pre-charge
++VMAC1
+
+t
+
+MAC
+Saved latency
+ACK
+
+Arbiter +Encoder
+
+Ramp ADC
+
+Col-2
+
+Calib 1
+
+△VRBL
+
+(L, H)
+
+-VMAC2
+t
+△VRBL
+
+Address
+(b)
+
+Col-3
+
+Calib 32
+
+V1
+
+t
+
++VMAC3
+
+(L, H)
+
+Early stopping
+
+Vk
+
+Ramp 1
+
+(H, L)
+
+Ramp 32
+
+t1
+
+tk
+
+ADC
+inputs
+
+(H, L)
+
+tn
+GND
+
+...
+
+SA
+
+...
+
+Ramp
+
+C
+
+Early stopping
+
+...
+
+Calib
+
+Vramp
+
+Vn
+
+ADC output
+
+Fig. 2. Topkima-M hardware: (a) Block diagram. (b) Concept of early stopping in topkima. (c) Circuit diagram detail of one column. (d) Basic multiplication
+of proposed dual 10T SRAM cell. (e) Example timing diagram for 3 columns with top-1 selected.
+
+Topkima-M design. As seen in the block diagram of
+topkima-M (Fig. 2(a)), K T is stored in the dual 10T SRAM
+array while Q · K T is performed by SRAM IMC where Q
+values are sent as inputs by pulse-width modulating the WL, a
+commonly used technique [15]. To facilitate read-disturb free
+computing and signed inputs, four extra transistors (illustrated
+as the blue component in Fig. 2(d)) are added to the basic 6T
+cell. For ternary weight (-1(QL =L, QR =H)/ 0((QL =L, QR =L))/
++1((QL =H, QR =L))) storage, dual(Left-Right) cells are used
+(Fig. 2(d)). The pre-charged bitlines (BL) are discharged in
+accordance with the MAC operation of Q·K T as follows: when
+RWL+/RWL- is at high voltage, four blue transistors in either
+the L or R side will conduct based on high/low logic levels
+of signals QL , Q¯L , QR and Q¯R . This will cause a discharge
+current to flow through the read BL (RBLL or RBLR ),
+resulting in a small voltage drop on these read BL, as the
+basic multiplication in the table of Fig. 2(d). The accumulation
+happens by addition of the voltage drops for all activated
+bitcells. In contrast, when the RWL+/RWL- is at low voltage,
+there are no voltage changes. Fig. 2(c) shows a case where
+K T values are quantized into 4 bits where 1 bit is the sign
+value. To achieve this by using ternary weight cell as shown in
+Fig. 2(d), three cells are used to represent one weight, with the
+three corresponding input PWM signals scaled by the factors of
+1, 2 and 4 to achieve binary scaling. This allows for 15 levels
+
+of weight (-7 to 7), which is approximately equivalent to 4 bits
+precision.
+These MAC voltages (V1 to Vn in Fig. 2(a)) are then
+quantized using a ramp IMA (which enables replica bitcells
+one by one to create the ramp voltage) [6] and a sense amplifier
+(SA) as the comparator. After the MAC operation is completed,
+32 pulses are simultaneously sent in one clock cycle (Fig. 2(c))
+to dual 10T SRAM, leading to a discharge of RBLR for
+setting initial ramp voltage and calibration as necessary (see
+[6]). Subsequently, another 32 ramp pulses (5 bits ADC) are
+sequentially sent over 32 cycles to the dual 10T cells for ADC,
+causing a progressive discharge on RBLL with each clock
+cycle, thereby creating the ramp. The main novelty of the
+proposed design is that it can integrate the sorting operation for
+top-k selection in this IMA array. This is done by first changing
+the increasing ramp in prior work [6] to a decreasing one.
+The decreasing ramp crosses larger voltages earlier (t1 < tk
+if V1 > Vk in Fig. 2(b)). This can be verified by the example
+of 3 columns array with top-1 selected in Fig. 2(e), where the
+largest MAC result from column 3 leads to early stopping.
+To determine which columns’ SA got triggered in a clock
+cycle, an arbiter-encoder combination is used similar to address
+event representation (AER) [16] where the latched SA outputs
+are treated as requests (REQ) and the acknowledgment (ACK)
+signals are used to disable the SA. Along with the encoded
+
+=== page 4 ===
+‘address’ of the column, the conversion cycle at which the
+ramp crossing occurred is stored as the ADC output in registers.
+Further, a counter tracks the number of requests and stops the
+data conversion early (before 2n clock periods) when the count
+equals or exceeds ‘k’. In the rare case of count exceeding k
+due to ties (many similar large values), the number of outputs is
+reduced to k by giving preference to smaller column addresses.
+After obtaining the top-k quantized values, they are sent to a
+digital softmax core [17] to get the scores A. Note that we
+
+Accuracy (%)
+
+100
+
+Baseline
+
+Top-20
+
+Top-10
+
+Top-5
+
+Top-2
+
+Top-1
+
+80
+60
+40
+20
+0
+
+ViT+CIFAR10
+
+ViT+CIFAR100
+
+DistilBERT+SQuAD BERT-base+SQuAD
+
+Fig. 3. Accuracy evaluation of top-k
+
+include the operations of Q · K T and the following softmax in
+the complexity comparisons of topkima-SM done later.
+Topkima-SM benefits. The benefit of our proposed method
+can be understood by considering the latency of a conventional
+softmax macro, Tconv−SM , given by: Tconv−SM = Twr +
+d · (Tpwm,inp + Tima + d · TN L,dig ) where Twr is the time
+to write the K T values in SRAM, Tpwm,inp is the time to
+create WL pulses of Q (generally ∝ 2nb where nb is the bitwidth of input), Tima is the time for data conversion by IMA
+and TN L,dig is the time taken for digital implementation of
+exponentiation and division. Here, Twr occurs once while d
+colmuns of Q are applied one by one. For a top-k approach,
+the latencies for digital sorting TDtopk−SM and our proposed
+approach Ttopkima−SM are given by:
+TDtopk−SM = Twr + d · (Tpwm,inp + Tima + Tsort + k · TN L,dig ) (3)
+
+Ttopkima−SM = Twr + d · (Tpwm,inp + Tima,arb + k · TN L,dig ) (4)
+
+where Tima,arb = max(αTima + Tarb , Tclk + k · Tarb ) denotes
+latency of the IMA and arbiter-encoder in our proposed method.
+For both approaches, the NL compute time reduces by d/k but
+an added time for sorting (Tsort = min(d · log(d), d · k) × Tclk )
+is required in the digital sorting case. Additionally, the IMA
+latency in topkima reduces by a factor α due to early stopping
+of the ramp. Note that the term Tima,arb in (4) includes one
+cycle of arbiter-encoder latency for the k-th or last ramp
+crossing in addition to αTima .
+Considerations of crossbar size. Practical crossbar dimensions can be smaller than the dimensions of K T . In that
+case, the matrix K T has to be split and mapped into multiple
+crossbars. Two issues have to be handled in this case–(1)
+Reduced bit precision of K T since we have less number of
+SRAM rows in one column and (2) Inaccurate evaluation of
+top-k since the top-k selection for each array is now separate
+and there is no global informationP
+available. In this case, each
+array i chooses top-ki such that
+ki = k. We refer to this
+technique as sub top-k and show the resulting drop in accuracy
+in Section IV.
+
+B. SW algorithmic optimization
+To mitigate the accuracy penalties of retaining only k out
+of d values in the top-k method [3], we especially propose
+a modified training method: top-k forward-complete backward
+propagation (TFCBP), inspired by the quantization aware training [1]. Only top-k activations are used to calculate softmax
+probabilities in the forward propagation stage, while all (i.e.,
+d) activations participate in the gradient computation in the
+backward propagation stage.
+Moreover, since the latency and energy consumption of ramp
+IMA increases exponentially with the resolution, quantizationaware training (QAT) is introduced to reduce the activation precision [1]. To reduce accuracy drops, quantized activations are
+passed for forward propagation while the backward propagation
+exploits FP-32 based activations to update the weight. Note
+that these two methods are exclusively employed for training
+transformer in SW, following which the trained quantized
+network is mapped onto HW for inference.
+C. Architecture level optimizations
+√
+Scaling operation is needed to realize the scaling factor dk
+in (2). Each dot product result of Q · K T requires a division
+operation, which introduces high design complexity in HW,
+such as combining bit shifting with constant multiplication [1].
+Hence, we propose an improved scale-free design, inspired by
+T
+X·WQ ·K T
+√
+√
+=
+= Qs ·
+[21]. We rewrite the operation as: Q·K
+d
+d
+k
+
+W
+
+k
+
+K T where Qs = X · √dQ . So we can simply adjust the weights
+W
+
+k
+
+from WQ to √dQ to achieve the scale function without any HW
+k
+overhead for it [18].
+IV. R ESULTS
+We first present SW design space exploration to show acceptable ranges of k over several datasets. Next, HW performances
+from macro level, architecture level to system level are shown
+to present the benefits of using topkima in transformer. Lastly,
+the system performance is compared with state-of-the-art.
+A. SW Design Space Exploration
+At the SW level, we evaluate top-k design with two types
+of transformers. For ViT, we run two representative datasets:
+CIFAR-10 and CIFAR-100, while for DistilBERT and BERTbase, SQuAD v1.1 (SQuAD) is run for evaluation. Fig. 3 shows
+the result for varying k from 1 to 20. As expected, smaller k
+indicates a more aggressive approximation, leading to a higher
+accuracy drop. For ViT on CIFAR-100 and DistilBERT / BERTbase on SQuAD, top-1 results in nonnegligible performance
+degradation. However, top-5 can achieve a good trade-off
+between radical approximation and accuracy, with less than a
+1.2% accuracy drop. For ViT on CIFAR-10, top-1 can achieve
+comparable accuracy with the baseline (w/o top-k approximation), with only 0.4% accuracy loss. This significant advantage
+of our design over [3] in terms of radical approximation comes
+from the TFCBP training method.
+
+=== page 5 ===
+B. HW evaluation
+The HW evaluation is done for BERT-base model on the
+SQUAD dataset, with 0.2% accuracy loss after quantization. In
+this case, Q · K T is evaluated using SPICE simulations in 65
+nm CMOS technology, where Q and K T are quantized to 5
+bits and 4 bits (15 levels of weight as detailed in Sec.III-A)
+respectively, using QAT. Additionally, X · WQ,K,V and A · V
+are evaluated using NeuroSim [5]. In this evaluation, WQ,K,V
+are quantized into 8 bits by post-training quantization, and both
+inputs X and A, along with weight V , are quantized into 5 bits
+using QAT.
+Macro level analysis: Topkima-M SPICE simulation.
+First, we evaluate Topkima-M (computing Q · K T ), followed
+by Topkima-SM which includes the subsequent softmax. The
+topkima-M with nb = 5 resolution for ADC selects the top-5
+values from 384 MAC results (Q size of one head: 384 × 64,
+K T size of one head: 64 × 384). Due to the limitation of
+crossbar size, the weights K T and top-5 are split into 2 parts:
+a (64 × 3) × 256 sub-crossbar with sub-top-3 (k1 = 3) and a
+(64 × 3) × 128 sub-crossbar with sub-top-2 (k2 = 2), where
+3 pairs of bitcells represent 4 bits weight precision of K T .
+Combined with 64 replica bit cells per column (split evenly
+for calibration and ramp generation), the simulated sub-array
+size is set to 256 × 256. Simulation of the arbiter, encoder,
+and counter across corners and power supply results in worstcase delays at SS corner and Vdd = 0.8 V of 1.51, 0.57, and
+0.51 ns respectively resulting in Tarb < 2.08 ns. Tclk,ima is
+set at 4 ns resulting in Tima = 128 ns while α ≈ 0.31 in
+(4) averaged across the dataset. Vdd,SRAM is set at 0.5 V to
+reduce the unit cell discharge current; this requires slow (5 ns)
+writing for robust operation across corners. Estimated from [1]
+and [13], Twrite = 320 ns (row-by-row parallel writing) and
+TN L,dig = 6.5 ns. Using a 2 GHz clock for input 5 bits PWM
+results in maximum value of Tpwm,inp = 15.5 ns for the LSB
+and Tpwm,inp = 62 ns for the MSB. In Fig. 4(a), the latency
+of topkima-SM, Ttopkima−SM , is found to be ≈ 15× and
+8× lesser than Tconv−SM and TDtopk−SM respectively. The
+latency benefit of our design over conventional/Dtopk softmax
+mainly comes from a reduced number of inputs for the softmax
+operation and the elimination of the need to sort the top-k values. Note that Dtopk does not improve much over conventional
+softmax due to the dominant sorting time overhead. Similarly,
+the energy consumption of our design Etopkima−SM is 30×
+and 3× lesser than Econv−SM and EDtopk−SM respectively.
+The primary reason the EE improvement of our design over
+Dtopk is not as significant as the latency reduction is that
+the sorting energy is not a major contributor. Note that these
+speed/EE improvements increase with increasing SL which
+bodes well for the scalability of this method (e.g. GPT 3.5
+has SL = 4096).
+Fig. 4(b) shows the distribution of the IMA circuit output
+compared to SW calculations averaged across 256 conversions.
+The corresponding error was used to inject errors in SW
+simulations (Q · K T and A · V which are mapped to SRAM)
+resulting in a small drop in accuracy from 86.7% to 85.1%.
+We also assess the impact of crossbar size limitation on
+
+accuracy, by simulating with 128×128 and 256×256 crossbars.
+Specifically in Fig. 4(c), when using 128 × 128 crossbar to
+implement one head of K T (size: 64 × 384), 3 crossbars are
+required. Each crossbar allocates 64 rows for ADC and then
+leaves only 64 rows for MAC operations, resulting in only
+ternary precision of K T . Also, global top-5 (k = 5) is used
+for four cases (Fig. 4(e)) which gets divided into three subtop-k: k1 = 2, k2 = 2 and k3 = 1. For example, if the output
+Q · K T is [1, 2, 3, ..., 384], the selected values by three subtop-k are [127, 128], [255, 256] and [384] and then combined
+to be sent to digital softmax core for probability calculation.
+This is quite different from the selected values by global topk: [380, 381, 382, 383, 384], leading to an accuracy drop. The
+case for 256 × 256 crossbars are same as described earlier with
+two sub-top-k arrays (k1 = 3 and k2 = 2) constituting the
+global top-5. Each crossbar has 64 rows allocated for ADC
+and calibration. This leaves 192 additional rows for MAC
+operations, increasing the precision of K T to 4 bits (See details
+in Section III-A). It is observed that smaller crossbar size
+leads to larger accuracy degradation in Fig. 4(c). One reason is
+that a smaller crossbar size leads to reduced weight precision.
+Additionally, it fragments the global top-k into more sub-topk, thereby weakening the winner-takes-all principle. But for
+the datasets and networks considered here, commonly used
+crossbar size of 256 × 256 is sufficient to achieve an accuracy
+comparable to that of global top-k.
+Architecture
+level
+analysis.
+To
+account
+for
+architecture/system-level overheads, a full attention module is
+simulated in NeuroSim following the architecture described
+in Section III-A. RRAM and SRAM technologies are
+adopted from [19] and [5] respectively. The SRAM array
+is programmed row-by-row, where the latency is one clock
+cycle per row and the dynamic power per cell is 1.8 × 10−7
+mW/MHz [20]. The peripheral configuration setting is the
+same as [5]. The read pulse is 0.5 V, adopted from [4]. Note
+that the peripheral overhead of topkima-M, like interconnect
+and buffer cost, are not provided in SPICE simulation. So
+these overheads are also estimated from Neurosim. Also,
+we only estimate one attention module from BERT-base on
+SQuAD to report the HW performance because transformer is
+built by stacking attention modules.
+As seen in Fig. 4(d), we compare our scale-free design with
+left shift scale [1] and Tron’s free scale [21], achieving 2.4×
+and 1.5× speedup respectively. Left shift scale is not efficient
+due to the necessity of scaling for all elements from Q · K T
+while Tron’s free scale lacks parallelism and requires additional
+transpose operations.
+System level analysis. To clearly demonstrate the benefits
+of topkima-SM on the entire system, we breakdown the latency
+and energy by components, as shown in Figs. 4(e) and (f). The
+latency/energy of softmax is significantly reduced after introducing topkima-SM. The synaptic array dominates the latency
+for two main reasons. First, the 4× pulse width required for
+higher weight precision results in longer MAC times. Second,
+the MUX design in NeuroSim increases latency by determining
+which column’s MAC output needs to be sent to the ADC
+
+=== page 6 ===
+40
+
+(c)
+
+0
+
+−10
+
+Conv-SM
+
+−20 −10 0
+MAC theory
+
+Topkima-SM
+
+Dtopk-SM
+
+80
+60
+40
+
+0
+
+10
+
+ViT
+CIFAR10
+
+0.4%
+
+23%
+
+7.6%
+
+1.5%
+
+95.2%
+
+1
+
+2% 0.4%topkima-SM 7.6%
+9.3%
+
+7.7%
+39.8%
+
+36.9%
+
+0
+Ref. [1] Ref. [20] Ours
+
+(f) Energy breakdown by components
+6.7%
+1.2%
+35.3%
+
+4.4%
+
+15.1%
+
+BERT-base
+SQuAD
+
+DistilBERT
+SQuAD
+
+ViT
+CIFAR100
+
+(e) Latency breakdown by components
+0.5%
+
+2
+
+20
+
+−30
+0
+
+2.4× 1.5×
+
+100
+
+−20
+
+20
+
+Sub-top-k: 3 and 2 (d)
+
+Sub-top-k: 2, 2 and 1
+
+Global top-k
+
+Speed up (X)
+
+Latency (μs)
+
+270
+240
+
+(b) 10
+
+Accuracy (%)
+
+Write
+MAC
+ADC
+Softmax
+Sort
+Arb
+
+635
+
+MAC simulation
+
+(a)640
+
+6.5%
+
+0.7%
+19.2%
+10.1%
+
+12.8%
+
+topkima-SM
+
+Write Circuits
+
+Interconnect
+
+Arb
+
+80
+
+100
+
+61.4%
+1.9%
+
+Softmax
+
+ADC
+
+Synaptic array
+
+Accumulation circuits
+
+(h) Energy breakdown by operations
+
+(g) Latency breakdown by operations
+
+0
+
+100
+X · WQ
+
+Buffer
+
+200
+Latency (μs)
+X · WK
+
+0
+
+300
+
+20
+
+Q · KT
+
+X · WV
+
+40
+A·V
+
+60
+
+Energy (μJ)
+Softmax
+
+120
+Arb
+
+Fig. 4. Hardware evaluation results. (a) Latency breakdown across Conv-SM, Dtopk-SM and topkima-SM. (b) Theoretical and simulated MAC value. (c) Impact
+of sub-top-k. (d) Different scale implementations. (e) Latency and (f) energy breakdown by components. (g) Latency and (h) energy breakdown by operations.
+TABLE I
+C OMPARISON WITH STATE - OF - ART WORKS
+Year
+Technology node (nm)
+MAC implementation
+Supply voltage (V)
+Frequency (MHz)
+Subarray size
+RRAM precision (bit)
+Ron /Rof f (M Ω/kΩ)
+ADC (bit)
+Throughput (TOPS)
+EE (TOPS/W)
+
+ELSA [22]
+2021
+40
+Logic circuit
+1.1
+1000
+8-16
+1.09
+1.14
+
+ReTransformer [1]
+2020
+27
+RRAM IMC
+128 × 128
+2
+1/100
+5
+0.08
+0.47
+
+TranCIM [14]
+2023
+28
+SRAM IMC
+0.6-1.0
+80-240
+16 × 256
+1
+8-16
+0.19
+5.10
+
+[5]. The buffer dominates the energy primarily because the 12
+heads in the attention module require more buffers to store
+intermediate data. Unlike latency, the parallel operation of 12
+heads does not conceal the energy overhead. Similarly, the
+latency and energy are broken down by operations in Figs. 4
+(g) and (h). We find that the speed of X · WQ,K,V is about 2×
+lower than Q · K T and A · V due to the larger size of WQ,K,V
+compared to one attention head of K T and V . Although there
+are 12 heads, they can operate in parallel. However, the energy
+consumption of Q · K T and A · V is dominant due to the 12
+heads. The sparse input A after topkima-softmax makes A · V
+more energy-efficient.
+Table 1 presents a comparison with state of the art accelerators, including traditional systems and IMC-based accelerators. Our proposed Topkima-Former can achieve 6.70 TOPS
+
+X-Former [4]
+2023
+32
+SRAM/RRAM IMC
+0.5
+200
+128 × 128
+2
+1/100
+8
+13.44
+
+HARDSEA [23]
+2023
+32
+SRAM/RRAM IMC
+0.9
+300
+16 × 16 / 128 × 64
+5
+8
+3.64
+3.73
+
+This work
+32
+SRAM/RRAM IMC
+0.5
+200
+256 × 256
+2
+1/100
+5
+6.70
+16.84
+
+throughput and 16.84 TOPS/W EE at 200 MHz. Compared to
+ELSA [22], ReTransformer [1], X-Former [4] and HARDSEA
+[23], Topkima-Former can achieve 1.8 × −84× higher speed,
+and 1.3 × −35× energy reduction, respectively. Note that
+no dedicated pipelining is introduced into Topkima-Former.
+Otherwise, the speed can be even faster.
+V. C ONCLUSION
+In this work, we propose Topkima-Former, co-designed from
+circuit level, architecture level to algorithm level. At circuit
+level, we propose topkima which can use IMA to select the top
+k activation without any sorting latency and then achieve a lowenergy and low-latency softmax. At algorithm level, k=5 can
+achieve satisfied accuracy with only a 0.4%-1.2% accuracy drop
+across ViT, distilBERT, and BERT-base models when evaluated
+on CIFAR-10, CIFAR-100, and SQuAD datasets due to the
+
+=== page 7 ===
+proposed TFCBP training method. At architecture level, we
+introduce a scale-free technique for removing expensive scale
+operations. The combined system can achieve 1.8×−84× faster
+and 1.3×−35× EE compared to prior IMC-based accelerators.
+In addition, the designed tokima-SM, demonstrates a 15× and
+8× speedup compared to a conventional softmax macro and a
+Dtopk softmax macro, respectively.
+R EFERENCES
+[1] X. Yang, B. Yan, H. Li and Y. Chen, “ReTransformer: ReRAM-based
+processing-in-memory architecture for transformer acceleration,” ICCAD,
+2020, pp. 1-9.
+[2] H. Wang, Z. Zhang and S. Han, “Spatten: Efficient sparse attention
+architecture with cascade token and head pruning,” in HPCA, 2021, pp.
+97-110.
+[3] H. Peng, S. Huang, S. Chen, B. Li, T. Geng, et al, “A length adaptive
+algorithm-hardware co-design of transformer on fpga through sparse
+attention and dynamic pipelining,” in DAC, 2022, pp. 1135-1140.
+[4] S. Sridharan, J. R. Stevens, K. Roy and A. Raghunathan, “X-former: Inmemory acceleration of transformers,” IEEE T VLSI SYST, vol. 31, no.8,
+2023, pp. 1223-1233.
+[5] X. Peng, S. Huang, H. Jiang, A. Lu and S. Yu, “DNN+ NeuroSim
+V2. 0: An end-to-end benchmarking framework for compute-in-memory
+accelerators for on-chip training,” IEEE T COMPUT AID D, vol. 40,
+no.11, 2020, pp. 2306-2319.
+[6] C. Yu, T. Yoo, T. T. H. Kim, K. C. T. Chuan and B. Kim, “A 16K currentbased 8T SRAM compute-in-memory macro with decoupled read/write
+and 1-5bit column ADC,” in CICC, 2020, pp. 1-4.
+[7] J. R. Stevens, R. Venkatesan, S. Dai, B. Khailany and A. Raghunathan,
+“Softermax: Hardware/software co-design of an efficient softmax for
+transformers,” in DAC, 2021, pp. 469-474.
+[8] Y. Zhang, Y. Zhang, L. Peng, L. Quan, S. Zheng, et al, “Base-2 softmax
+function: Suitability for training and efficient hardware implementation,”
+TCAS-I, vol. 69, no.9, 2022, pp. 3605-3618.
+[9] P. Nilsson, A. U. R. Shaik, R. Gangarajaiah R and E. Hertz, “Hardware
+implementation of the exponential function using Taylor series,” in
+NORCHIP, 2014, pp. 1-4.
+[10] W. Maass, “On the Computational Power of Winner-Take-All,” Neural
+Computation, vol. 12, no. 11, pp. 2519-35, 2000.
+[11] J. Dass, S. Wu, H. Shi, C. Li, Z. Ye, et al, “Vitality: Unifying low-rank
+and sparse approximation for vision transformer acceleration with a linear
+taylor attention,” in HPCA, 2023, pp. 415-428.
+[12] S. Kim, A. Gholami, Z. Yao, M. W. Mahoney, K. Keutzer, “I-bert: Integeronly bert quantization,” in ICML, 2021, pp. 5506-5518.
+[13] G. Du, C. Tian, Z. Li, D. Zhang, Y. Yin and Y. Ouyang, “Efficient softmax
+hardware architecture for deep neural networks,” in GLSVLSI, 2019, pp.
+75-80.
+[14] F. Tu, Z. Wu, Y. Wang, L. Liang, L Liu, Y. Ding, et al, “TranCIM: Fulldigital bitline-transpose CIM-based sparse transformer accelerator with
+pipeline/parallel reconfigurable modes,” JSSC, vol. 58, no. 6, 2022, pp.
+1798-1809.
+[15] C. Jhang, C. Xue, J. Hung, F. Chang and M. Chang, “Challenges
+and trends of SRAM-based computing-in-memory for AI edge devices,”
+TCAS-I, vol. 68, no. 5, 2021, pp. 1773-1786.
+[16] C. Brandli, R. Berner, M. Yang, S. Liu and T. Delbruck, “A 240×180
+130 db 3 µs latency global shutter spatiotemporal vision sensor,” JSSC,
+vol. 49, no. 10, 2014, pp. 2333-2341.
+[17] X. Geng, J. Lin, B. Zhao, A. Kong, M. M. S. Aly and V. Chandrasekhar,
+“Hardware-aware softmax approximation for deep neural networks,” in
+ACCV, Perth, 2019, pp. 107-122.
+[18] H. Ran, S. Wen, Q. Li, Y. Yang and K. Shi, et al, “Memristor-based edge
+computing of blaze block for image recognition,” IEEE T NEUR NET
+LEAR, vol. 33, no. 5, 2020, pp. 2121-2131.
+[19] R. Fackenthal, M. Kitagawa, W. Otsuka, K. Prall, D. Mills, et al, “19.7 A
+16Gb ReRAM with 200MB/s write and 1GB/s read in 27nm technology,”
+in ISSCC, 2014, pp. 338-339.
+[20] A. Ramesh, S. Y. Park, P. R. Berger, “90 nm 32×32 bit Tunneling SRAM
+Memory Array With 0.5 ns Write Access Time, 1 ns Read Access Time
+and 0.5 V Operation,” TCAS-I, vol.58, no. 10, 2011, pp. 2432-2445.
+[21] S. Afifi, F. Sunny, M. Nikdast and S. Pasricha, “Tron: Transformer neural
+network acceleration with non-coherent silicon photonics,” in GLSVLSI,
+June 2023, pp. 15-21.
+
+[22] T. J. Ham, Y. Lee, S. H. Seo, S. Kim, and H. Choi, et al, “ELSA:
+Hardware-software co-design for efficient, lightweight self-attention
+mechanism in neural networks,” in ISCA, 2021, pp. 692-705.
+[23] S. Liu, C. Mu, H. Jiang, Y. Wang, J. Zhang, et al, “Hardsea: Hybrid
+analog-reram clustering and digital-sram in-memory computing accelerator for dynamic sparse self-attention in transformer,” IEEE T VLSI SYST,
+2023.

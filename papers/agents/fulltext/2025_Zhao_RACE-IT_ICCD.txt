@@ -1,0 +1,1745 @@
+# RACE-IT: A Reconfigurable Analog Computing Engine for In-Memory Transformer Acceleration
+# id: W7117584415 | key: 2025_Zhao_RACE-IT_ICCD | ICCD 2025 | card: ../cards/2025_Zhao_RACE-IT_ICCD.md
+
+
+=== page 1 ===
+RACE-IT: A Reconfigurable Analog Computing
+Engine for In-Memory Transformer Acceleration
+Lei Zhao1 , Aishwarya Natarajan1 , Luca Buonanno1 , Archit Gajjar1 , Ron Roth2 ,
+Sergey Serebryakov1 , John Moon1 , Omar Eldash1 , Jim Ignowski1 , Giacomo Pedretti1
+1
+
+Artificial Intelligence Research Lab (AIRL), Hewlett Packard Labs, USA
+2
+Technion - Israel Institute of Technology, Haifa, Israel
+
+arXiv:2312.06532v3 [cs.AR] 6 Aug 2025
+
+Emails: {lei.zhao, aishwarya.natarajan, luca.buonanno, archit.gajjar, sergey.serebryakov,
+jmoon, oeldash, jim.ignowski, giacomo.pedretti}@hpe.com, ronny@cs.technion.ac.il
+
+Abstract—Transformer models represent the cutting edge of
+Deep Neural Networks (DNNs) and excel in a wide range
+of machine learning tasks. However, processing these models
+demands significant computational resources and results in a substantial memory footprint. While In-memory Computing (IMC)
+offers promise for accelerating Vector-Matrix Multiplications
+(VMMs) with high computational parallelism and minimal data
+movement, employing it for other crucial DNN operators remains
+a formidable task. This challenge is exacerbated by the extensive
+use of complex activation functions, Softmax, and data-dependent
+matrix multiplications (DMMuls) within Transformer models.
+To address this challenge, we introduce a Reconfigurable
+Analog Computing Engine (RACE) by enhancing Analog Content
+Addressable Memories (ACAMs) to support broader operations.
+Based on the RACE, we propose the RACE-IT accelerator
+(meaning RACE for In-memory Transformers) to enable efficient
+analog-domain execution of all core operations of Transformer
+models. Given the flexibility of our proposed RACE in supporting
+arbitrary computations, RACE-IT is well-suited for adapting
+to emerging and non-traditional DNN architectures without
+requiring hardware modifications.
+We compare RACE-IT with various accelerators. Results show
+that RACE-IT increases performance by 453× and 15×, and
+reduces energy by 354× and 122× over the state-of-the-art GPUs
+and existing Transformer-specific IMC accelerators, respectively.
+Index Terms—in-memory computing, analog computing, neural network, RRAM
+
+I. I NTRODUCTION
+The Transformer architecture [2] has gained immense popularity in the fields of natural language processing [3], computer
+vision [4], etc., thanks to its remarkable ability to capture
+complex patterns in sequential and image data. However, the
+performance of Transformers comes at a cost: their high demand for computational resources and memory. These models
+often feature billions, if not trillions, of parameters, demanding
+substantial computation and data movement. The sheer scale
+of Transformer models, exemplified by LLaMA [23] and
+DeepSeek [24], necessitates specialized hardware and highcapacity memory systems, presenting a significant challenge
+to deploy them at scale. As a result, efficiently processing
+Transformer models remains a crucial concern in the quest to
+unlock their full potential for a wider range of applications.
+
+In-memory Computing (IMC) stands out as a promising
+solution to alleviate the computational and memory challenges
+posed by Transformer models [6]–[8]. IMC involves performing computations directly within the memory, bypassing the
+need for frequent data movement between memory and the
+processing units, which is a significant bottleneck in traditional
+computing architectures. Emerging memories such as Resistive
+Random Access Memories (RRAM) and Phase Change Memories (PCMs) offer a compelling avenue for IMC due to their
+non-volatile nature and high integration potential. Crossbar
+arrays of such emerging memories can efficiently map neural
+network weights in their conductance and accelerate a layer
+evaluation by parallel Vector-Matrix Multiplications (VMMs)
+in the analog domain [1]. High-performance silicon demonstrations of multi-core IMC accelerators using RRAM [16]
+and PCM [17] have been recently presented, finally grounding
+years of research in experimental measurements. However, one
+notable drawback is that these designs may not be optimally
+suited for critical operations like activations, Softmax, and
+Data-dependent Matrix Multiplications (DMMul), which are
+fundamental in the Transformer architecture.
+To address this challenge, existing IMC designs typically
+follow one of three main approaches. The first is an adhoc strategy that integrates specialized CMOS-based units
+tailored to specific workloads, as exemplified by ISAAC [9].
+While effective for fixed functionality, this approach lacks the
+flexibility to support new operations beyond Convolutional
+Neural Networks (CNNs). The second approach, adopted by
+architectures such as PUMA [13], introduces programmable
+digital Vector Functional Units (VFUs) to support a wide range
+of operations. However, this programmability comes at the
+cost of performance, particularly for DMMuls in Transformer
+models. The third approach, as demonstrated in ReTransformer [6], directly computes DMMuls and Softmax within
+RRAM crossbars by programming the inputs into the array.
+While promising, it suffers from the inherent drawbacks of
+RRAM’s slow writes and limited endurance [19]. Moreover,
+operations such as the GeLU activation remain unsupported
+in the analog domain and require dedicated digital hardware.
+Table I shows the comparison of these approaches with our
+
+=== page 2 ===
+v0
+
+DACs
+
+I0
+
+proposed design.
+
+I1
+I2
+
+TABLE I: Analog IMC approaches.
+Architecture
+
+VMM
+
+ISAAC [9]
+
+Crossbar
+
+PUMA [13]
+ReTransformer [6]
+RACE-IT (this work)
+
+Crossbar
+Crossbar
+Crossbar
+
+Act
+Fixed
+logic
+VFU
+VFU
+RACE
+
+Softmax
+
+DMMul
+-
+
+No
+
+VFU
+Crossbar
+RACE
+
+VFU
+Crossbar
+RACE
+
+Yes
+Yes
+Yes
+
+In this paper, we present a novel Reconfigurable Analog
+Computing Engine (RACE) built upon RRAM-based Analog
+Content Addressable Memory (ACAM) [10] to support a wide
+range of arbitrary operations. By reprogramming the value
+ranges stored in RRAM devices, the RACE can be reconfigured to perform different computations without requiring
+any hardware modifications. This reconfigurability makes it
+a compelling solution for building architectures capable of
+supporting all core operations in Transformer models, as well
+as future operators yet to be conceived. To reduce hardware
+overhead, we introduce an encoding scheme that significantly
+reduces the size of RACE arrays, thus further improving the
+area and energy efficiency.
+While the RACE offers energy-efficient computation by
+operating in the analog domain, it inherits the susceptibility
+to analog noise and device non-idealities. To evaluate its realworld effectiveness, we perform detailed circuit simulations in
+SPICE and propose a noise-aware fine-tuning (NAF) strategy
+by incorporating realistic noise models and variability to significantly improve CNNs and Transformer model’s inference
+robustness under practical operating conditions.
+By integrating the RACE with RRAM crossbars to form
+an IMC system, our proposed RACE-IT (i.e., RACE for Inmemory Transformers) accelerator demonstrates significant
+performance improvements and energy savings over state-ofthe-art GPUs, systolic arrays, and prior IMC designs.
+In summary, this paper makes the following contributions:
+We propose the RACE, a compact and reconfigurable analog structure that supports arbitrary operations, enabling
+flexible analog DNN acceleration.
+• We introduce an encoding-based optimization that reduces the RACE array size and significantly lowers
+hardware overhead.
+• We implement detailed circuit simulations of the RACE.
+To mitigate analog noise, we develop a NAF method that
+enhances inference robustness in IMC systems.
+• We conduct comprehensive comparisons against stateof-the-art GPUs, systolic array accelerators, and IMC
+designs employing alternative methods for non-VMM
+operations in Transformers. Experimental results demonstrate substantial performance improvements and energy
+savings.
+
+•
+
+g00=W00
+
+g01=W01 g02=W02
+
+v2
+
+g10=W10
+
+g11=W11 g12=W12
+
+g20=W20
+
+g21=W21 g22=W22
+
+2
+
+Support
+Transformers
+
+-
+
+v1
+
+Oi=∑ Ij·Wji
+
+i0
+
+j=0
+
+i1
+
+i2
+
+S&H
+
+v: voltage
+g: condunctance
+i: current
+
+ADCs
+O0
+
+O1
+
+O2
+
+Fig. 1: RRAM crossbar to compute VMM.
+
+II. BACKGROUND
+A. Crossbar-based VMM Computing Engine
+RRAM is an emerging non-volatile memory technology
+with strong potential for accelerating VMMs when arranged
+in crossbar arrays [19]. Figure 1 illustrates a VMM example
+where a 3-element input feature vector (I) is multiplied by a
+3 × 3 weight matrix (W ) using a RRAM crossbar. Digitalto-Analog Converters (DACs) convert input elements into
+a voltage vector (v), which is applied to the word lines.
+Weights are stored as RRAM conductance values (g), and
+Kirchhoff’s law ensures that the resulting current (i) on each
+bit line reflects the dot product of the input voltages and the
+conductance values. These analog currents are sampled by
+Sample-and-Hold (S&H) units and then digitized by Analogto-Digital Converters (ADCs) to produce the digital output
+vector (O). While the figure shows a small 3 × 3 crossbar for
+clarity, practical systems often use multiple much larger arrays
+(e.g., 512×256 [18]) to exploit massive parallelism.
+B. Analog Content Addressable Memory
+ML
+SLhi
+L M1
+T1
+DL
+X
+
+T3
+T2
+
+S1
+
+S2
+T4
+
+L: lower
+bound
+
+U M2
+
+DL
+X
+
+stored
+range
+
+U: upper
+bound
+
+Min
+
+Max L ≤ X < U
+
+Min
+
+Max
+
+X<U
+
+Min
+
+Max
+
+L≤X
+
+SLlo
+
+(a)
+
+(b)
+
+Fig. 2: (a) An ACAM cell structure. (b) The operational
+principle of an ACAM cell.
+Content Addressable Memories (CAMs) are a memory
+structure ubiquitous in networking, in which an input data
+vector is searched in the memory and its location is returned as
+output [20]. The recently proposed ACAM cell structure [10]
+allows comparing an analog input value within a defined range
+stored in the cell. Figure 2(a) presents the schematic of an
+ACAM cell. Two RRAMs, M1 and M2 , are utilized to store
+the lower and upper bounds of a range, respectively. The
+blue-shaded component compares the input X on the Data
+Line (DL) with the lower bound L of the range, while the
+red-shaded component compares the input X with the upper
+bound U of the range. The combined operation of the series
+transistors (S1 and S2 ) and RRAMs acts as voltage dividers,
+
+=== page 3 ===
+...
+
+ML
+SLhi
+
+M2
+
+M1
+
+UMSB
+
+ULSB
+
+XLSB
+
+XMSB
+
+UMSB+1
+
+LMSB
+
+XMSB
+
+XMSB
+
+LMSB+1
+
+LLSB
+
+XLSB
+
+(LMSB + 1 ≤ XMSB) ˅ (LLSB ≤ XLSB)
+
+DL2
+
+DL1
+
+˄ (LMSB ≤ XMSB)
+˄ (XMSB < UMSB) ˅ (XLSB < ULSB)
+
+SLhi
+
+˄ (XMSB < UMSB + 1)
+
+M4
+
+M3
+
+L≤X<U
+
+(b)
+DL4
+
+DL3
+
+-
+
+Min
+
+UX
+
+X
+
+SLlo
+
+Y
+
+UY
+
+LX
+
+X
+
+SLhi
+
+Y
+
+LY
+
+Max
+
+-
+
+M5
+
+M6
+
+(LX ≤ X)
+˄ (X < UX)
+DL6
+
+C. Transformers and Multi-Head Attention
+
+˄ (LY ≤ Y)
+˄ (Y < UY)
+(LX ≤ X < UX) ˄ (LY ≤ Y < UY)
+
+SLlo
+
+(a)
+
+Linear
+
+XMSB
+
+SLlo
+
+DL5
+
+Multi-Head
+Attention
+
+SA
+
+controlling the voltage supplied to the pull-down transistors
+(T1 and T2 ). In the blue-shaded component, when the input
+is greater than or equal to the data stored in M1 , T1 is off,
+thus keeping the Matching Line (M L) at a high voltage. The
+red-shaded component operates similarly, with an inverter (T3
+and T4 ) added before the pull-down transistor T2 . Figure 2(b)
+illustrates the operational principle of an ACAM cell. It is
+possible to represent a ”Don’t Care” value on either side of
+the range by programming M1 (M2 ) to the lowest (highest)
+possible conductance, as depicted by the lower two rows in
+Figure 2(b). Studies have demonstrated up to 4-bit analog
+search in ACAM [10], [11].
+
+(c)
+
+Fig. 4: (a) A RACE cell structure. (b) Mapping a one-variable
+8-bit comparison onto a RACE cell. (c) Mapping a twovariable 4-bit comparison onto a RACE cell.
+
+Concat
+
+MatMul
+Softmax
+Scale
+MatMul
+Heads
+Q
+K
+V
+Linear Linear Linear
+WQ
+WK
+WV
+
+XQ
+
+XK
+
+XV
+
+Fig. 3: Multi-Head attention in Transformers.
+The most fundamental component of Transformer models is
+the Multi-Head Attention (MHA), depicted in Figure 3. MHA
+operates on a sequence of tokens as its input, comprising three
+types of token sequences: xQ , xK , and xV . For each of these
+token sequences, a distinct linear layer (denoted by WQ , WK ,
+and WV ) is applied to generate respective matrices: Q, K,
+and V. This operation is defined as:
+Q, K, V = xQ · WQ , xK · WK , xV · WV
+
+(1)
+
+These resulting matrices are then partitioned into multiple
+segments, often referred to as heads, which undergo identical
+sets of computations, specifically the attention mechanism:
+!
+Qi · Ki T
+√
+Attention(Ki , Qi , Vi ) = softmax
+· Vi (2)
+dk
+where i ∈ num heads, and dk represents the dimension of
+the query and key vectors. Ultimately, the output from each
+head is concatenated and goes through another linear layer to
+form the overall output of this MHA.
+III. R ECONFIGURABLE A NALOG C OMPUTING E NGINE
+A. Cell Structure
+Our goal is to design a cell capable of computing arbitrary
+one- and two-variable functions by decomposing them into
+single- and two-variable comparisons (see Section IV). To
+enable this, we propose a new RACE cell structure that
+supports both comparison types. However, since each RRAM
+device in ACAM stores up to 4 bits, we aim to design a cell
+that compares partial bit widths and combines the results to
+support full 8-bit comparisons (see Section III-B).
+
+Figure 4(a) shows the proposed RACE cell structure. Recall
+that an ACAM cell in Figure 2(a) consists of a blue component
+that holds the lower bound of the stored range, and a red
+component that holds the upper bound. A single RACE cell
+comprises three blue components and three red components.
+All six components are connected to the pull-down path of the
+M L. The top two blue components are connected in parallel,
+implementing a logical AND operation: the M L is pulled
+down to ground when both (DL1 > M1 ) and (DL2 > M2 ).
+Similarly, the bottom two red components are also connected
+in parallel, so the M L is pulled down when both (DL5 < M5 )
+and (DL6 < M6 ). These two AND combinations are then
+connected in series with the serially connected blue and red
+components at the center, which implement the conditions
+(DL3 > M3 ) OR (DL4 < M4 ). As a result, the overall
+operation performed by a RACE cell can be expressed as:
+M L =[(DL1 > M1 ) ∧ (DL2 > M2 )]
+∨ (DL3 > M3 )
+∨ (DL4 < M4 )
+∨ [(DL5 < M5 ) ∧ (DL6 < M6 )]
+
+The inversion on M L reflects the inverter placed after the
+sense amplifier (SA) in the RACE readout path. By applying
+De Morgan’s laws to compute inversion on both sides of the
+equation, we get:
+M L =[(DL1 < M1 ) ∨ (DL2 < M2 )]
+∧ (DL3 < M3 )
+∧ (DL4 > M4 )
+∧ [(DL5 > M5 ) ∨ (DL6 > M6 )]
+
+(3)
+
+That is, the blue components store the upper bounds and
+the red components store the lower bounds.
+B. Computation Modes
+A RACE cell can be configured into two modes, according
+to the values stored in RRAM devices and the input on DLs.
+
+=== page 4 ===
+IV. RACE-BASED C OMPUTING
+
+110
+
+(d)
+
+101
+110
+
+011
+
+010
+
+010
+
+011
+
+001
+
+001
+
+000
+
+000
+
+x y2 y1 y0 (c)
+1.28 1 1 1
+0.65 1 1 0
+0.29 1 0 1
+0
+1 0 0
+-0.29 0 1 1
+-0.65 0 1 0
+-1.28 0 0 1
+0 0 0
+
+x g2 g1 g0 (e)
+1.28 1 0 0
+0.65 1 0 1
+0.29 1 1 1
+0
+1 1 0
+-0.29 0 1 0
+-0.65 0 1 1
+-1.28 0 0 1
+0 0 0
+
+1.28
+
+111
+
+100
+
+-0.65
+-0.29
+0
+0.29
+0.65
+
+101
+
+-1.28
+(b)
+
+100
+
+Tanh(x)
+Quantized Tanh(x)
+
+≥0
+
+-
+
+-
+
+-
+
+y2
+
+-0.65~0
+
+≥0.65
+
+-
+
+-
+
+y1
+
+-1.28~-0.65
+
+-0.29~0
+
+0.29~0.65
+
+≥-1.28
+
+y0
+
+x
+
+x
+
+x
+
+x
+
+≥0
+
+Gray output
+
+111
+
+(a)
+
+Binary output
+
+One-variable 8-bit comparison mode. In this mode, a
+RACE cell computes whether an 8-bit input value X is
+inside an 8-bit range (L < X < U ). Although lower-bit
+quantization has been studied, 8-bit activation remains the
+most popular—especially in Transformer-based large language
+models (LLMs)—due to its balance of accuracy and ease of
+implementation [29]. However, RRAM devices in ACAMs can
+only store up to 4 bits. We slice both the 8-bit input value and
+the bounds of the range into a 4-bit MSB part and a 4-bit LSB
+part, similar to [12]. The three blue components collectively
+represent the 8-bit upper bound of the range, and the three
+red components collectively store the 8-bit lower bound of the
+range. Therefore, the 8-bit comparison of L < X < U can
+be decomposed into a form shown in Figure 4(b). The dotted
+lines show how the sub-clauses of the decomposed comparison
+are mapped to each component of the RACE cell.
+Two-variable 4-bit comparison mode. This mode computes whether two 4-bit inputs (X and Y ) are both inside
+their 4-bit ranges, i.e., (Lx < X < Ux ) ∧ (Ly < Y < Uy ).
+The decomposition and mapping of this computation is shown
+in Figure 4(c).
+Note that the mode of the RACE is determined solely by the
+values stored in each cell component, without requiring any
+hardware modifications. In the next section, we demonstrate
+how these two computation modes can be used to implement
+arbitrary functions.
+
+-
+
+g2
+
+-0.65~0.65
+
+-
+
+g1
+
+-1.28~-0.29
+
+0.29~1.28
+
+g0
+
+x
+
+x
+
+Fig. 5: (a) Tanh activation output quantized to 3 bits in binary
+(left Y-axis) and Gray code (right Y-axis). (b) Binary output
+bits and corresponding Tanh inputs. (c) Mapping of (b) to a
+RACE array. (d) Gray code output bits and corresponding Tanh
+inputs. (e) Mapping of (d) to a RACE array.
+
+A. Activation
+We use the Tanh function as an example to demonstrate
+how the RACE can compute arbitrary activation functions.
+Figure 5(a) shows the Tanh curve in blue, along with a
+quantized version in red where the output y is represented
+using 3 bits (left Y axis). While in practice we use 8-bit
+quantization, here we show 3 bits for illustrative purposes.
+Along the X-axis, we mark the input x values whose Tanh
+outputs fall between two consecutive quantized levels. From
+this graph, we derive a table shown in Figure 5(b), which lists
+the corresponding input ranges for each output bit.
+By focusing on a specific output bit, we can identify the
+input ranges that result in that bit being set to 1. For example,
+output bit y1 is 1 when −0.65 ≤ x < 0 or x ≥ 0.65.
+Figure 5(c) illustrates how these input ranges are mapped to
+a RACE array. The RACE cells are configured in the onevariable 8-bit comparison mode, with each row responsible
+for computing a specific output bit. Cells marked with a dash
+are programmed to cover the full range and thus do not affect
+the result.
+The number of rows in the RACE array corresponds to
+the number of output bits, while the number of columns is
+determined by the maximum number of disjoint input ranges
+across all bits.
+
+tions (and thus 4-bit multiplication), we use a 3-bit example
+here for clarity.1 The X- and Y-axes represent the value of two
+input operands, and each grid cell shows their 6-bit product
+in both decimal and binary formats.
+Figure 6(b) separates the output into six individual
+grids—one for each bit of the 6-bit product. Each grid resembles a Karnaugh map, where we identify rectangles that
+cover all cells with a value of 1. Each rectangle corresponds
+to a specific input range combination of x and y that results
+in that output bit being set. For instance, in the grid for z5
+(the leftmost grid in Figure 6(b)), at least three rectangles are
+needed to cover all the 1s. This means z5 = 1 when x and y
+fall within any of the following input combinations: (1) x = 7
+and y = 5; (2) x = 5 and y = 7; (3) 6 ≤ x ≤ 7 and 6 ≤ y ≤ 7.
+Figure 6(c) shows how input ranges are mapped to a RACE
+array configured in the two-variable 4-bit comparison mode.
+In this mode, each cell stores a range for both x (green) and y
+(purple). Each row computes one output bit, and the number of
+columns is determined by the maximum number of rectangles
+(i.e., input range combinations) across all output bits.
+C. Softmax
+Softmax is a critical component in Transformer models and
+remains a challenging aspect for accelerators, as it involves
+
+B. Data Dependent Multiplication
+Figure 6(a) illustrates an example of 3-bit integer multiplication. Although RACE supports 4-bit two-variable computa-
+
+1 The attention mechanism in Transformers typically uses 8-bit multiplications, which can be implemented by combining four 4-bit multiplications
+implemented with RACE.
+
+=== page 5 ===
+(a)
+
+(c)
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+z5
+
+5~5 6~6
+
+7~7 7~7
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+z4
+
+2~3 4~5
+
+6~7 4~4
+
+5~6 5~5
+
+2~2 6~7
+
+4~5 6~6
+
+4~4 7~7
+
+6~6 7~7
+
+7~7 6~6
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+z3
+
+6~7 1~2
+
+2~2 2~3
+
+3~3 2~2
+
+4~5 3~3
+
+7~7 3~4
+
+1~1 4~5
+
+3~3 4~4
+
+3~4 5~5
+
+5~5 4~4
+
+1~2 6~7
+
+3~4 7~7
+
+5~5 6~6
+
+6~6 5~6
+
+-
+
+-
+
+-
+
+-
+
+z2
+
+2~3 1~1
+
+1~1 2~2
+
+3~3 2~2
+
+1~2 3~3
+
+6~7 1~1
+
+5~5 2~2
+
+7~7 2~2
+
+5~6 3~3
+
+2~3 5~5
+
+1~1 6~6
+
+3~3 6~6
+
+1~2 7~7
+
+6~7 5~5
+
+5~5 6~6
+
+7~7 6~6
+
+5~6 7~7
+
+z1
+
+1~1 1~1
+
+3~3 1~1
+
+5~5 1~1
+
+7~7 1~1
+
+1~1 3~3
+
+3~3 3~3
+
+5~5 3~3
+
+7~7 3~3
+
+1~1 5~5
+
+3~3 5~5
+
+5~5 5~5
+
+7~7 5~5
+
+1~1 7~7
+
+3~3 7~7
+
+5~5 7~7
+
+7~7 7~7
+
+z0
+
+x
+
+x
+
+x
+
+x
+
+x
+
+x
+
+x
+
+x
+
+x
+
+x
+
+x
+
+x
+
+x
+
+x
+
+7~7 5~5
+
+6~7 6~7
+
+5~5 7~7
+
+-
+
+6~7 3~4
+
+4~6 4~5
+
+3~4 6~7
+
+4~7 2~2
+
+3~5 3~3
+
+4~5 1~1
+
+y
+
+y
+
+y
+
+-
+
+y
+
+-
+
+x
+
+y
+
+y
+
+y
+
+y
+
+x
+
+y
+
+y
+
+y
+
+y
+
+y
+
+y
+
+y
+
+y
+
+(b)
+
+(d)
+
+Binary of z0
+Num Rectangles: 16
+
+1 round Gray code on z0
+Num Rectangles: 16
+
+2 rounds Gray code on z0
+Num Rectangles: 16
+
+3 rounds Gray code on z0
+Num Rectangles: 10
+
+4 round Gray code on z0
+Num Rectangles: 13
+
+(e)
+
+Fig. 6: (a) Grid for 3-bit multiplication. (b) Grids per output bit. (c) Mapping (b) to a RACE array. (d) z0 grid under different
+Gray code depths. (e) Number of ranges per grid in (d) for z0 computation.
+costly exponentiation and division operations. The Softmax
+function is defined as follows:
+exi
+softmax(xi ) = PL
+(4)
+xj
+e
+=1
+j
+Here, xi represents an element in the input vector x =
+[x1 , ..., xL ], and L denotes the length of x.
+Step 1
+
+x1
+
+exp
+
+Step 3
+
+exp
+
+x
+
+e n
+
++
+
+∑e
+
+xi
+
+inv
+
+1
+x
+∑e i
+
+Step 4
+x
+
+mul
+
+...
+
+...
+
+...
+xn
+
+Step 2
+x
+
+e 1
+
+We first leverage the one-variable 8-bit comparison mode
+for computing the exponentiations (step 1). Subsequently,
+these exponents are aggregated by an adder tree to yield the
+denominator in Equation 4 (step 2). To circumvent the division
+operation and its associated hardware costs, we replace the
+division with an inverse of the denominator followed by a
+multiplication:
+1
+a/b = a ·
+(5)
+b
+
+mul
+
+e1
+x
+∑e i
+x
+
+en
+x
+∑e i
+
+A RACE array in one-variable 8-bit comparison mode
+A RACE array in two-variable 4-bit comparison mode
+
+Fig. 7: Dataflow of computing Softmax using RACE
+The expensive exponentiation and division operations can
+be easily mitigated with RACE-based computing. Figure 7
+portrays the dataflow of computing Softmax with the RACE.
+
+The inverse can be implemented in the RACE with the onevariable 8-bit comparison mode (step 3), and the multiplication can be implemented in the RACE with the two-variable
+4-bit comparison mode (step 4).
+V. E NCODING
+Figures 5(c) and 6(c) show many ”Don’t Care” cells —
+programmed with full range and not affecting results — due
+to varying input range requirements across output bits. In
+the one-variable 8-bit comparison mode, this depends on
+consecutive 1s per output bit in Figure 5(b). In the twovariable 4-bit comparison mode, it depends on the number of
+
+=== page 6 ===
+bn-2
+Regs
+
+bn-1
+
+gn-2
+MUX
+
+RACE
+
+gn-1
+
+...
+
+rectangles covering 1s in the Karnaugh-like grid in Figure 6(b).
+Ultimately, it depends on how often each output bit toggles
+with input changes.
+To reduce the RACE array size, we propose a Gray codebased optimization that lowers the number of input ranges.
+Since Gray code ensures only one bit changes between consecutive values, it naturally reduces the bit toggling frequency.
+Table II demonstrates an example of the Gray code format for
+3-bit case.
+
+g0
+
+b0
+
+Fig. 8: Decoding Gray code to binary format.
+
+TABLE II: 3-bit Gray Code Encoding.
+Decimal
+0
+1
+2
+3
+
+Binary
+000
+001
+010
+011
+
+Gray
+000
+001
+011
+010
+
+Decimal
+4
+5
+6
+7
+
+Binary
+100
+101
+110
+111
+
+Gray
+110
+111
+101
+100
+(a)
+
+Instead of representing the outputs in binary format, we use
+Gray code. The right Y-axis in Figure 5(a) shows the 3-bit
+Gray-coded Tanh output. The corresponding input ranges for
+each output bit are listed in Figure 5(d). This change reduces
+the number of input ranges for all bits except the MSB, cutting
+the RACE array size almost in half, as shown in Figure 5(e).
+For the two-variable case, the effect is more subtle. The
+first two grids in Figure 6(d) show that although Gray coding
+z0 groups the 1s more tightly, it doesn’t reduce the number
+of rectangles needed. Since z0 requires the most rectangles,
+this means no immediate savings in the RACE array size.
+However, we notice that Gray-coded z0 looks similar to binary
+z1 . Applying Gray coding again clusters the 1s further, which
+may reduce the number of rectangles. The remaining grids in
+Figure 6(d) show z0 after additional rounds of Gray coding.
+We observe a repeating pattern across encoding depths: the
+number of rectangles initially decreases and then increases
+again, as shown in Figure 6(e).
+Since Gray code cannot be used directly in later computations, we need to convert it back to binary format. The
+conversion is straightforward: each binary bit is computed by
+XOR-ing all higher-order bits of the Gray code. The MSB
+remains unchanged between Gray and binary formats, i.e.,
+(
+gi
+i=n−1
+bi =
+(6)
+XOR(gn−1 , gn−2 , ..., gi+1 ) i < n − 1
+where bi and gi are the ith bit in the binary and Gray code
+format, respectively. n is the bit width of the output. Therefore,
+the conversion only needs some simple XOR gates, as shown
+in Figure 8. To support multi-depth Gray code decoding in the
+two-variable 4-bit comparison mode, the outputs of the XOR
+gates are latched and fed back for additional decoding rounds.
+VI. A NALOG CIRCUIT NON - IDEALITIES
+A. Circuit Simulation
+Figure 9(a) shows the layout of an individual RACE cell
+designed using Global Foundries’ GF22FDX 22 nm technology node. Based on this design, we validate the cell’s
+functionality for two-variable comparison, as illustrated in
+Figure 9(b). To simulate the input variations of X and Y ,
+
+(b)
+
+Fig. 9: (a) Layout of a RACE cell in 22nm. (b) Computing a
+two-variable comparison in a RACE cell.
+
+we sweep the DLs accordingly (see Figure 4(c)). The RRAM
+conductance values are programmed to represent the range
+condition (4 < X < 9) ∧ (7 < Y < 12). As shown
+in Figure 9(b), the M L voltage drops within the specified
+input range and remains high outside of it, confirming correct
+comparison behavior.
+B. Nose-Aware Fine-Tuning
+Analog noise affects both the crossbars and the RACE.
+To mitigate crossbar noise, we use analog slicing [27] when
+programming the weight matrix. For noise in the RACE, we
+adopt a fine-tuning approach based on the ACAM noise model
+from [25]. A key challenge is the non-differentiability of
+the comparison and Gray code decoding operations, which
+prevents gradient-based optimization. To address this, we
+employ differentiable approximations [21].
+While differentiable approximations for single-variable
+comparison and Gray decoding are available in [25], we
+design a new differentiable formulation for the two-variable
+comparison, shown in Algorithm 1. Each RACE cell originally
+computes (Lx < x < Ux ) ∧ (Ly < y < Uy ). We approximate
+these comparisons using subtraction and ReLU, replacing the
+logical AND with multiplication. This yields a non-zero result
+only when all conditions are met. Line 4 further scales the
+
+Algorithm 1: Differentiable Approximation of twovariable comparison
+Input: x, y: input values; Lx , Ly : lower bounds of x and y; Ux ,
+Uy : upper bounds of x and y; ϵ: small number avoid
+dividing by 0;
+Output: m: one output bit of comparing
+(Lx < x < Ux ) ∧ (Ly < y < Uy )
+1 mx = ReLU(x − Lx ) · ReLU(Ux − x);
+2 my = ReLU(y − Ly ) · ReLU(Uy − y);
+3 m = mx + my ;
+4 m = m/(m + ϵ);
+
+=== page 7 ===
+output to a value close to 0 or 1, mimicking the binary output
+of a RACE row.
+These differentiable approximations enable end-to-end
+backpropagation, allowing us to fine-tune the bounds stored in
+the RACE cells and adapt the model to analog non-idealities.
+VII. M ETHODOLOGY
+
+(a)
+
+Regs
+
+R
+R
+Interface
+
+Regs
+
+Tile
+
+Mux
+
+Tile
+
+Regs
+
+Tile
+R
+
+R
+
+XOR
+
+R
+
+Adders
+
+S&H
+
+Tile
+
+R
+
+ADC
+
+Tile
+
+R
+
+Shared
+Mem
+
+Tile
+R
+
+Core
+
+Core
+
+Core
+
+Core
+
+Core
+
+Core
+(b)
+
+(c)
+
+DAC
+
+R
+
+RACE
+
+Tile
+
+Regs
+
+Tile
+
+Regs
+
+RACE Array
+
+Tile
+
+Xbar
+
+(d)
+
+Fig. 10: (a) A RACE-IT accelerator chip. (b) A tile in RACEIT. (c) A RACE Unit. (d) A core in the tile.
+The overall architecture of our RACE-IT accelerator, which
+integrates the RACE into a crossbar-based IMC system, is
+shown in Figure 10. The design largely follows ISAAC [9],
+adopting a hierarchical structure of tiles and cores (Figure 10(a) and (b)), with the key difference that each tile
+integrates a RACE unit, adders, and registers to support
+intermediate data storage for RACE and adder operations.
+Figure 10(c) illustrates the structure of a RACE unit, which
+consists of four RACE arrays, each sized 8×50 — determined
+in Section VIII-B. Each RACE unit also includes XOR-based
+decoding logic to convert Gray code outputs back to binary
+format. We designed RACE-IT in 22nm CMOS technology
+with monolithically integrated TaOx RRAM [14]. We considered conductance values from 0.1µS to 150µS both for the
+crossbar arrays and the RACE, and noise models are extracted
+from experimental data [14].
+We compare RACE-IT against the following baselines: (1)
+NVIDIA H100 GPU, (2) Eyeriss [22], (3) PUMA [13], and (4)
+ReTransformer [6]. Performance and energy for the H100 GPU
+are measured using NVIDIA’s NVTX library with tensor cores
+enabled. RACE-IT and all other baselines are implemented in
+Timeloop+Accelergy for evaluation. We extend Eyeriss with
+the Flex-SFU [15] to support non-VMM operations. Since
+ReTransformer still uses digital logic for activation, we also
+equip it with Flex-SFUs for fair comparison.
+We evaluate RACE-IT using BERT-base [5] on the GLUE
+benchmark to assess its support for core Transformer operations and the effectiveness of NAF. To demonstrate benefits
+in CNNs, we choose EfficientNet [28], which uses non-ReLU
+activations unlike typical CNNs. For scalability analysis, we
+also include LLaMA3.2 [23] 1B and 3B models.
+VIII. E XPERIMENTAL R ESULTS
+We first analyze the accuracy of RACE-IT-based computation, then explore the design space and associated trade-offs.
+Based on these insights, we finalize the architecture configuration and thoroughly evaluate RACE-IT’s performance and
+energy-saving benefits.
+
+A. Accuracy
+Table III presents the accuracy results at various stages of
+applying NAF to CNN and Transformer models. The FP32
+row serves as the baseline, showing the accuracy of the original
+models using 32-bit floating-point precision. In the Crossbar
+Noise row, we simulate the effect of programming DNN
+weights onto RRAM crossbars using analog slicing. Although
+analog noise is introduced to crossbars at this stage, the impact
+on accuracy is negligible thanks to the robustness provided
+by analog slicing. The Quant row shows the accuracy after
+quantizing the outputs of activations, Softmax, and DMMuls
+into 8-bit fixed-point representations. This quantization step is
+required because these operations will later be implemented
+with the RACE, which only produces 8-bit output. Since
+weights are stored in RRAM crossbars, no additional quantization is needed for them, and overall accuracy remains largely
+unaffected. In the RACE row, we replace the activations,
+Softmax, and DMMuls with RACE-based implementations.
+Because RACE can accurately compute each output bit of
+these functions, there is no loss in accuracy. However, when
+we further incorporate RRAM non-idealities into the RACE
+arrays, as shown in the RACE noise row, we observe a
+noticeable drop in accuracy due to analog variability and the
+non-linear comparison in RACE. Finally, the last NAF row
+shows that the accuracy is recovered close to the ideal case in
+the RACE row after applying our proposed NAF.
+B. Design Space Exploration and Trade-offs
+We first analyze the required array size for 4-bit multiplication under varying Gray code depths (blue line in
+Figure 11(a)). A depth of 0 corresponds to direct binary output.
+The number of rows of a RACE array is fixed at 8 (for 8 output
+bits), while the number of columns depends on the number of
+ranges (i.e., rectangles in Figure 6(b)’s grids) among all the
+output bits. As can be seen in the figure, a Gray code depth
+of 3 yields the smallest array size.
+We then evaluate the Energy Delay Product (EDP, lower
+is better) across depths. Although deeper encoding requires
+more decoding rounds, the overhead is minimal due to the
+simplicity of the XOR-based decoding logic. Thus, EDP is
+mainly affected by additional energy caused by a larger array
+size. As shown by the yellow line in Figure 11(a), the smallest
+array size (at depth 3) also achieves the lowest EDP, making
+it the most energy-efficient configuration. Therefore, we use a
+Gray code depth of 3 and set the size of each RACE array to
+8 × 50 in all subsequent experiments.
+C. Performance, Energy and Scalability
+Figure 11(b) and (c) show the speedup and energy savings of
+RACE-IT and other accelerators relative to the GPU baseline.
+For single-sample inference (BS = 1), which is critical for
+low-latency, energy-efficient edge AI inference, GPU performance suffers from low utilization [26]. In contrast, RACEIT achieves 453× speedup and 354× energy savings on
+average. Its advantage over other IMC accelerators stems
+
+=== page 8 ===
+TABLE III: Accuracy of various stages in the proposed NAF.
+Model
+Dataset
+FP32
+Crossbar noise
+Quant
+RACE
+RACE noise
+NAF
++
+
+EfficientNet
+Cifar10
+91.15
+91.14
+89.32
+89.47
+70.25
+89.37
+
+BERT-base
+cola*
+0.585
+0.585
+0.591
+0.578
+0.515
+0.577
+
+BERT-base
+mrpc
+84.55
+84.55
+84.31
+84.31
+83.22
+84.21
+
+= Pearson Correlation Coefficient (PCC), range [-1, 1], higher is better.
+
+BERT-base
+stsb+
+0.88
+0.88
+0.873
+0.872
+0.85
+0.87
+
+BERT-base
+rte
+64.98
+65.7
+63.17
+64.25
+62.05
+64.81
+
+BERT-base
+sst2
+92.43
+92.43
+91.74
+91.85
+91.36
+91.69
+
+BERT-base
+qnli
+91.54
+91.46
+89.3
+89.27
+87.65
+89.21
+
+BERT-base
+mnli
+84.2
+84.02
+81.99
+82.23
+77.42
+82.09
+
+BERT-base
+qqp
+90.92
+90.9
+90.3
+90.17
+89.27
+90.11
+
+* = Matthews Correlation Coefficient (MCC), range [-1, 1], higher is better.
+
+Chip
+C2C
+Memory
+
+(a)
+
+(b)
+
+(c)
+
+(d)
+
+Fig. 11: (a) RACE array size and EDP using binary and Gray code outputs at varying depths. (b) Speedup and (c) energy
+savings of RACE-IT and baseline accelerators normalized to GPUs. (d) Speedup and energy savings when scaling up RACE-IT
+for larger models.
+from replacing costly VFUs and natively supporting attention
+mechanisms.
+We also evaluate the impact of larger batch sizes, for which
+GPUs are significantly optimized. For CNNs, where the RACE
+mainly accelerates activation functions, increasing the batch
+size slightly reduces relative gains, but it still consistently
+outperforms all baselines. For LLMs, the RACE is also used
+for accelerating Softmax and DMMul, leading to greater
+speedup and energy savings for large batch sizes.
+As model size grows, a single chip cannot accommodate
+the entire network. To avoid RRAM wear-out from timemultiplexing, we adopt a multi-chip setup. BERT-base fits in
+one RACE-IT chip, while LLaMA3.2-1B and 3B require 3
+and 8 chips, respectively. We assume a conservative 10Gbps,
+30pJ/bit chip-to-chip (C2C) interconnect. Even under these
+worst-case conditions, RACE-IT achieves hundreds of times
+speedup and energy savings over GPU (Figure 11 (d)).
+IX. C ONCLUSION
+This paper presents RACE-IT, a reconfigurable analog engine for non-VMM operations in Transformer models. By
+combining a novel RACE cell design with an encoding-based
+optimization and noise-aware fine-tuning, RACE-IT achieves
+compact area, high flexibility, and robust analog computation.
+Extensive evaluations across CNNs and Transformer models
+demonstrate significant gains in performance and energy efficiency over state-of-the-art accelerators. We believe RACE can
+open up novel possibilities for in-memory computing, enabling
+the computation of arbitrary functions in the analog domain.
+R EFERENCES
+[1] M. Hu et al., “Dot-Product Engine for Neuromorphic Computing: Programming 1T1M Crossbar to Accelerate Matrix-Vector Multiplication,”
+in DAC, 2016.
+[2] A. Vaswani et al., “Attention is all you need,” in NeurIPS, 2017.
+
+[3] Z. Lan et al., “ALBERT: A Lite BERT for Self-supervised Learning of
+Language Representations,” in ICLR, 2020.
+[4] W. Li et al., “Exploiting temporal contexts with strided transformer for
+3d human pose estimation,” in TMM, 2022.
+[5] J. Devlin et al., “BERT: Pre-training of Deep Bidirectional Transformers
+for Language Understanding,” in NAACL, 2019.
+[6] X. Yang et al., “ReTransformer: ReRAM-based processing-in-memory
+architecture for transformer acceleration,” in ICCAD, 2020.
+[7] M. Kang et al., “A framework for area-efficient multi-task Bert execution
+on ReRAM-based accelerators,” in ICCAD, 2021.
+[8] Q. Zheng et al., “Accelerating Sparse Attention with a Reconfigurable
+Non-volatile Processing-In-Memory Architecture,” in DAC, 2023.
+[9] A. Shafiee et al., “ISAAC: A convolutional neural network accelerator
+with in-situ analog arithmetic in crossbars,” in ACM SIGARCH Computer Architecture News, 2016.
+[10] C. Li et al., “Analog content-addressable memories with memristors,”
+in Nature communications, 2020.
+[11] G. Pedretti et al., “Tree-based machine learning performed in-memory
+with memristive analog CAM,” in Nature communications, 2021.
+[12] G. Pedretti et al., “X-TIME: accelerating large tree ensembles inference
+for tabular data with analog CAMs,” in JXCDC, 2024.
+[13] A. Ankit et al., “PUMA: A programmable ultra-efficient memristorbased accelerator for machine learning inference,” in ASPLOS, 2019.
+[14] X. Sheng et al., “Low-Conductance and Multilevel CMOS-Integrated
+Nanoscale Oxide Memristors,” in Advanced Electronic Materials, 2019.
+[15] E. Reggiani et al., “Flex-SFU: Accelerating DNN Activation Functions by Non-Uniform Piecewise Approximation,” in arXiv preprint
+arXiv:2305.04546, 2023.
+[16] W. Wan et al., “A compute-in-memory chip based on resistive randomaccess memory,” in Nature, 2022.
+[17] M. Le Gallo et al., “A 64-core mixed-signal in-memory compute chip
+based on phase-change memory for deep neural network inference,” in
+Nature Electronics, 2023.
+[18] W. Chen et al., “A 65nm 1Mb nonvolatile computing-in-memory
+ReRAM macro with sub-16ns multiply-and-accumulate for binary DNN
+AI edge processors,” in ISSCC, 2018.
+[19] D. Ielmini et al., “Resistive Switching Random-Access Memory
+(RRAM): Applications and Requirements for Memory and Computing,”
+in Chemical Reviews, 2025.
+[20] K. Pagiamtzis et al., “Content-Addressable Memory (CAM) Circuits and
+Architectures: A Tutorial and Survey,” in JSSC, 2006.
+[21] G. Pedretti et al., “Differentiable Content Addressable Memory with
+Memristors,” in Advanced electronic materials, 2022.
+[22] Y. Chen et al., “Eyeriss: An Energy-Efficient Reconfigurable Accelerator
+for Deep Convolutional Neural Networks,” in JSSC, 2017.
+
+=== page 9 ===
+[23] A. Grattafiori et al., “The llama 3 herd of models,” in arXiv preprint
+arXiv:2407.21783, 2024.
+[24] A. Liu et al., “Deepseek-v3 technical report,” in arXiv preprint
+arXiv:2412.19437, 2024.
+[25] L. Zhao et al., “Noise Aware Finetuning for Analog Non-Linear Dot
+Product Engine,” in MLNCP, 2024.
+[26] S. Moon et al., “Lpu: A latency-optimized and highly scalable processor
+for large language model inference,” in MICRO, 2024.
+[27] G. Pedretti et al., “Redundancy and analog slicing for precise in-memory
+machine learning—Part I: Programming techniques,” in T-ED, 2021.
+[28] M. Tan et al., “Efficientnet: Rethinking model scaling for convolutional
+neural networks,” in ICML, 2019.
+[29] L. Lin et al., “Awq: Activation-aware weight quantization for on-device
+llm compression and acceleration,” in MLSys, 2024.

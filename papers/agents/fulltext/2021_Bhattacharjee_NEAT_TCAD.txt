@@ -1,0 +1,657 @@
+# NEAT: Nonlinearity Aware Training for Accurate, Energy-Efficient, and Robust Implementation of Neural Networks on 1T-1R Crossbars
+# id: W3198405160 | key: 2021_Bhattacharjee_NEAT_TCAD | TCAD 2021 | card: ../cards/2021_Bhattacharjee_NEAT_TCAD.md
+
+
+=== page 1 ===
+1
+
+NEAT: Non-linearity Aware Training for Accurate
+and Energy-Efficient Implementation of Neural
+Networks on 1T-1R Memristive Crossbars
+
+arXiv:2012.00261v1 [cs.ET] 1 Dec 2020
+
+Abhiroop Bhattacharjee1∗ , Lakshya Bhatnagar2∗ , Youngeun Kim1∗ , and Priyadarshini Panda1
+1 Department of Electrical Engineering, Yale University, USA
+2 Department of Electrical Engineering, Indian Institute of Technology, Delhi, India†
+
+Abstract—Memristive crossbars have emerged as an energyefficient component of deep learning hardware accelerators due
+to their compact and efficient Matrix Vector Multiplication
+(MVM) implementation. However, they suffer from non-idealities
+(such as, sneak paths) introduced by their circuit topology that
+degrades computational accuracy. A 1T-1R synapse, adding a
+transistor (1T) in series with the memristive synapse (1R), has
+been proposed to mitigate the non-idealities of crossbar. We
+observe that the non-linear characteristics of the transistor affect
+the overall conductance of the 1T-1R cell which in turn affects the
+MVM operation. This 1T-1R non-ideality arising from the input
+voltage-dependent non-linearity is not only difficult to model or
+formulate, but also causes a drastic performance degradation of
+deep neural networks when mapped to such crossbars. In this
+paper, we analyse the non-linearity of the 1T-1R crossbar and
+propose a novel Non-linearity Aware Training (NEAT) method to
+address the non-idealities. Specifically, we first identify the range
+of network weights, which can be mapped into the 1T-1R cell
+within the linear operating region of the transistor. After that,
+we regularize the weights of neural networks to exist within the
+linear operating range by using iterative training algorithm. Our
+iterative training significantly recovers the classification accuracy
+drop caused by the non-linearity. Moreover, we find that each
+layer has a different weight distribution and in turn requires
+different gate voltage of transistor to guarantee linear operation.
+Based on this observation, we achieve energy efficiency while
+preserving classification accuracy by applying heterogeneous gate
+voltage control to the 1T-1R cells across different layers. Finally,
+we conduct various experiments on CIFAR10 and CIFAR100
+benchmark datasets to demonstrate the effectiveness of our nonlinearity aware training. Overall, NEAT yields ∼ 20% energy
+gain with less than 1% accuracy loss (with homogeneous gate
+control) when mapping ResNet18 networks on 1T-1R crossbars.
+Index Terms—Deep neural network, memristive crossbar, 1T1R non-linearity, retraining
+
+I. I NTRODUCTION
+
+T
+
+HE last decade has seen the rise of Deep Neural Networks (DNNs) to solve many real-world problems. Their
+promising real-world application and growing resource requirements have lead to researchers focusing on dedicated
+hardware accelerators. As the CMOS digital hardware advancement cannot keep up with the growing computational
+needs of DNNs [1], Non-Volatile-Memory (NVM) based
+crossbars have emerged as a compact and efficient realization
+∗ These authors have contributed equally
+
+† This work was done while Lakshya was interning at Yale University
+
+Fig. 1: Illustration of 1T-1R Crossbar. A Transistor (T) with a
+NVM device (R) at every junction of the Word-lines (WL) and
+bit-lines (BL). Select-lines (SL) are used to turn on transistors
+for selected rows.
+for performing the Matrix-Vector-Multiplication (MVM) operations of DNNs in the analog domain [2], [3]. Fig. 1 illustrates
+an m × n crossbar. Here, a 1 × m input vector of voltages
+(Vi ) interacts with a matrix of NVM conductances (Gij ) to
+produce the output current Ij = Σm
+i=1 Vi ∗ Gij . Hence, the
+currents from the n columns of the crossbar constitute the
+output vector of the MVM operation. Especially, 1T-1R NVM
+crossbars (Fig. 1) have been widely studied since the transistor
+in series with the NVM device can help mitigate sneak paths
+and the incorrect programming of the NVM device induced
+by noise [4], [5].
+However, the presence of a transistor in the synapse introduces various non-idealities pertaining to the non-linear I-V
+characteristics of a transistor. These non-idealities are datadependent [6] and DNNs when mapped onto such crossbars
+suffer computational accuracy losses. Most of the previous
+works [3], [7]–[10] have proposed strategies and frameworks
+to model and mitigate data-independent non-idealities (primarily resistive non-idealities and NVM device variations)
+pertaining to 1R crossbar arrays to improve on the accuracy
+of the mapped DNNs. However, none of these works have
+proposed methods to mitigate the transistor-induced nonlinearities (data-dependent) in 1T-1R crossbars for the weightto-conductance mapping in an energy-efficient manner. Recent
+work GenieX [6] provides a neural network based framework
+to model both data-dependent and data-independent nonidealities for a crossbar array of 1T-1R synapses. However,
+it lacks transferability to crossbars with different specifi-
+
+=== page 2 ===
+2
+
+cations and requires re-training of the neural network to
+model the non-idealities. Thus, approaches towards ensuring
+efficient mapping of DNNs onto 1T-1R crossbars in an energyconstrained environment has not been well explored. This
+is highly crucial because 1T-1R crossbars are increasingly
+becoming prospective candidates for deployment in extremely
+resource-constrained environment such as IoT devices, drones
+among others.
+In this work, we provide a new perspective on the energyefficient implementation of DNNs on 1T-1R crossbars. Specifically, we focus on the gate-voltage of the transistor, on which
+the power consumption of a 1T-1R crossbar system is found to
+largely depend for a given set of analog input voltages. We observe that 1T-1R synapse has approximately linear characteristics when sufficiently high gate-voltage is supplied. However,
+if the gate-voltage is low (resource-constrained scenario for
+low power operation), then the synapse starts exhibiting nonlinearity. This non-linearity becomes even more pre-dominant
+when synapses are programmed to higher conductance values.
+This non-linear characteristic of 1T-1R synapse degrades the
+accuracy of DNNs when mapped onto crossbars.
+To address this problem, we propose a Non-linearity Aware
+Training (NEAT) technique. Given the gate-voltage and trained
+network weights, we first compute the range of conductances
+for linear operation of the 1T-1R cell via SPICE simulations.
+Based on this range, we force the weight parameters to be
+within the linear regime. To this end, we train the networks
+by iterative training consisting of two steps: (1) approximating
+the trained weight parameters in the non-linear regime to the
+boundary of the linear regime; (2) re-training the network
+with modified weights. We repeat these steps so that a greater
+number of weight parameters can lie in the linear regime.
+Also, in this work, we propose two gate-voltage settings in
+order to implement an energy-efficient crossbar. We can set the
+same gate-voltage across all layers (homogeneous) or different
+gate-voltage for each layer (heterogeneous) of the DNN. The
+homogeneous approach results in high energy gains but can
+incur significant accuracy losses. The heterogeneous setting
+addresses this problem by searching layer-wise gate-voltage
+that guarantees a small accuracy drop while achieving energyefficiency. Both the settings can be applied in NEAT and we
+show their efficiency through extensive experiments.
+In summary, we focus on mitigating the non-linear and datadependent non-idealities introduced on addition of a transistor
+to the crossbar-synapses by operating with optimal selection
+of transistor gate-voltage. We take a device-agnostic approach
+assuming that the NVM device can be programmed to a given
+conductance. Once the non-linear effects are countered, one
+can use the existing methods to counter other data-independent
+non-idealities, such as interconnect parasitics, NVM device
+variations, etc. [3], [6], [7]. Thus, our proposed NEAT is
+complementary to prior works dealing with mitigating or
+modelling non-idealities in analog crossbars.
+The key contributions of this work are as follows:
+•
+
+Comprehensive analysis through SPICE simulations to
+determine factors affecting crossbar power and transistorinduced non-linearities in 1T-1R synapse
+
+Fig. 2: Average 1T-1R synapse Power for Monte Carlo simulation. Normalised for Vg = 1V.
+Determination of the maximum permissible value of
+effective synaptic conductance for linear operation for
+a given transistor gate-voltage. In essense, our work
+unleashes gate-voltage as a control knob to limit the nonidealities encountered in a 1T-1R crossbar array while
+yielding energy-efficiency.
+• Propose Non-linearity Aware Training (NEAT) for accurate and energy-efficient implementation of DNNs on
+1T-1R memristive crossbar. By using NEAT, we achieve
+∼20% energy gain on ResNet18 architecture on CIFAR10, CIFAR100 datasets while having a tolerable
+accuracy loss (∼1%).
+•
+
+II. BACKGROUND AND P RELIMINARY W ORK
+To understand the effects of introducing the access transistor
+(or selector) in the synapse, we performed extensive SPICE
+simulations using the 1T-1R configuration with different input
+voltage, conductance and gate-voltage ranges. The selector devices are based on PTM 45nm CMOS technology model. We
+have considered a memristive device with RON = 30kΩ and
+ROF F = 300kΩ. For a given supply voltage Vsupply , the input
+to any word-line (Vin ) will be in the range 0 ≤ Vin ≤ Vsupply .
+A. 1T-1R Power Analysis
+Before diving into non-linearity considerations, we characterise the role of transistor gate-voltage Vg in the per synapse
+power consumption. We performed a Monte Carlo simulation
+on a 8 × 8 1T-1R crossbar with weights drawn drawn from
+a normal distribution and mapped to conductance, and inputs
+drawn from a uniform distribution. Average power per synapse
+is shown in Fig 2. The results suggest that Vg plays a
+considerable role in determining power consumption.
+B. Analysis of Transistor Induced Non-Linearity
+For a crossbar in the 1R configuration, the weights W of
+the DNN are directly mapped to a memristor conductance
+state (GM = 1/RM ). On the other hand, in the 1T-1R
+configuration, W is mapped to the effective conductance
+Gef f = 1/(RM + Rt ), where Rt is the equivalent resistance
+due to the transistor. The non-linearities in the 1T-1R crossbars
+arise due to the dependence of Rt on Vin . Note, Vin is
+proportional to the neuronal activation values of the DNN
+which varies with the input. Hence, these are referred to as
+data-dependent non-idealities.
+
+=== page 3 ===
+3
+
+(a) Vg = 0.8V
+
+Fig. 3: Characterising Gef f for 1T-1R synapse. Variation in
+Gef f with GM ,Vin , Vg is shown.
+As shown in Fig 3, the effective conductance Gef f is a
+function of NVM conductance GM , input voltage Vin , and
+gate-voltage Vg , i.e.
+Gef f = f1 (GM , Vin , Vg )
+
+(1)
+
+The key takeaway from Fig. 3 is that Vin has significant
+influence on Gef f for both smaller and larger GM values.
+For lower Vin , the Gef f non-ideality can be attributed to the
+leakage current in the transistor. Thus, in low Vin ranges, lower
+Vg operation of transistor will nullify the leakage current.
+Hence, even though Gef f → ∞ when Vin → 0, the distortion
+in Gef f is negligible for low Vg . On the other hand, leakage
+current is not negligible for higher Vg , hence the distortions
+in Gef f cannot be neglected. Further, at higher values of Vin
+and low Vg operation, the transistor begins to shift its region
+of operation from linear to saturation, as a result of which we
+find deviations in the value of Gef f . At the juncture of the
+linear and saturation regions of operation, Rt increases and
+thus, there is a larger voltage drop across it causing a dip in
+the value of Gef f . This can be seen in Fig. 3 for Vin > 1
+when Vg = 0.8. Note, for high Vg ≥ 1, such stauration effects
+occur at a much higher Vin > 2 thus making it irrelevant.
+C. Finding 1T-1R Linear Regime
+In the ideal scenario, we would expect Gef f to be a
+horizontal line parallel to the x-axis for any given value of
+GM in case of Fig 3. Since we keep selector gate-voltage
+constant for an MVM operation, we want:
+Gef f = f2 (GM , Vg )
+
+(b) Vg = 1.0V
+
+(2)
+
+To omit data-dependence, our objective here is to find out
+the range of parameters for which Eqn. 2 is a reasonable
+approximation for Eqn. 1. That is, there should be a weak or
+no dependence of Gef f on Vin . Once we get rid of this datadependence, we can infer that controlling Vg will allow us to
+operate the transistor in a linear regime where, GM ≈ k∗Gef f ,
+where k is a scalar.
+Fig. 4 (Right) illustrates the 1T-1R non-linearity where we
+show the Gef f values obtained for a range of GM for 0 <
+Vin < 0.5 across different Vg . For a particular GM (especially
+larger values) we observe the spread of Gef f becomes more
+prominent. Higher the spread of the blue region, higher is
+the data-dependence of Gef f on Vin for the given GM . So,
+restricting the spread in Gef f will curb non-linearity of the 1T1R synapse. This will also ensure that the transistor operates in
+
+(c) Vg = 1.3V
+
+Fig. 4: (Left) GM vs range of Vin for which linearity can be
+assumed. The blue shaded region essentially marks the region
+where linearity is observed, Gef f ≈ k ∗ GM . Vsupply /Vin =
+0.25, 0.5V is marked in the plots for convenience. (Right) GM
+vs range of Gef f for Vsupply = 0.5V is shown. Ideal Gef f =
+GM line (red) drawn for convenience. The blue shaded line
+shows the overall deviation of Gef f from GM for an input
+voltage range 0 < Vin < 0.5. tm is the tolerance metric. The
+GM cutof f values for tm < 2.5% are annotated. For Vg = 1.3,
+tm > 2.5% for the entire range of GM values.
+the linear regime with a constant Rt (that is data-independent).
+Thus, we define a tolerance metric (tm) to quantify the spread
+or deviation in Gef f as shown in Fig. 4 (Right). Fig. 4 (Left)
+further illustrates the range of Vin for which linearity can be
+assumed for a given GM across different Vg values.
+At low Vg = 0.8V , unavailability of higher Vin values for
+higher values of GM in Fig. 4a (Left) can be attributed to
+transistor saturation. These results support the observations
+in prior work GenieX [6]. The authors found higher supply
+voltage (Vsupply ) of 0.5V (or higher Vin ) yields higher nonideality than lower supply voltage Vsupply = 0.25V . As seen
+from Fig. 4a, we can explain this as an artefact of the 1T1R non-linearity. At high Vg = 1.3V , unavailability of lower
+Vin for lower GM in Fig 4c (Left) can be attributed to high
+leakage current. Both of these effects are not noticed in Fig
+4b (Left). To make sure that NEAT is capable of handling the
+worst case, we use Vsupply = 0.5V in all our experiments.
+The above discussion indicates that there is an upper limit
+to Vg for achieving desirable linear characteristics for a given
+Vin range.
+D. Defining Conductance cut-off (Gef f cutof f )
+Based on our above discussion, we observe that for a given
+set of Vg , Vsupply and tolerance metric, an upper bound cut-off
+
+=== page 4 ===
+4
+
+Fig. 5: The change of GM cutof f with respect to Vg .
+value (Gef f cutof f ) exists for which the 1T-1R synapse exhibits linear characteristics. We term the corresponding NVM
+device state as GM cutof f . GM cutof f has been annotated
+in Fig. 4a for a tolerance value < 2.5%. For Vg = 0.8V
+and 1V , GM cutof f values are around 1.25 × 10−5 Ω−1 and
+3.34 × 10−5 Ω−1 respectively. For Vg = 1.3V , we don’t have
+any cutoff for the given tolerance metric. This implies that we
+cannot operate the 1T-1R synapse at Vg = 1.3V . Thus, from
+this analysis, we obtain the Gef f cutof f values that can be
+used to determine the corresponding range of software DNN
+weights which will ensure linear operation of 1T-1R synapse
+after mapping. Fig 5 shows the GM cutof f vs. Vg plot for 2.5%
+tolerance metric and Vsupply = 0.25V, 0.5V .
+Note, the focus of the above analysis is on the correctness of
+the Multiply-and-Accumulate (MAC) operation that happens
+at the synapse level based on Vg , Vsupply and Gef f cutof f
+values. While extending this analysis to a crossbar, feasibility
+of all these parameters should be checked. For e.g. there
+would be a limit to leakage current permissible for each bitline dictated by the sensing device, which would in-turn set
+a per synapse limit on leakage current, essentially adding a
+constraint on Vg . Thus, at an array level, new Vg , Vsupply and
+Gef f cutof f constraints need to be calculated. However, the
+overall methodology of obtaining the cut-off parameters for
+linear operation will be the same as discussed above.
+III. N ON - LINEARITY AWARE T RAINING (NEAT)
+The non-linearity of Gef f can induce performance degradation in DNNs when the corresponding trained weights W
+are mapped onto crossbars. To mitigate performance losses,
+we convert Gef f cutof f (as determined in Section II-D) to
+obtain the corresponding Wcut for the software DNN. Then,
+we restrict all the weights (W ) of the DNN in the interval
+[−Wcut , Wcut ] as shown in (3):
+
+
+|W | ≤ Wcut
+W
+Wmap = Wcut
+(3)
+W > Wcut
+
+
+−Wcut W < −Wcut .
+From Eqn. 3, we observe that for the linear regime (|W | ≤
+Wcut which corresponds to Gef f ≈ GM ), the software weight
+parameters can be mapped linearly onto the crossbars. While,
+for the non-linear regime (|W | > Wcut that corresponds to
+deviation of Gef f from GM ), W is clipped at Wcut . The
+objective of NEAT is to restrict the weight parameters to
+be within the linear regime for the given gate-voltage Vg of
+the transistor. Fig. 6 illustrates the overall flow of the NEAT
+process.
+
+Fig. 6: Overall flow of NEAT.
+
+Fig. 7: Illustration of layer-wise weight distribution. We use a
+VGG11 architecture on CIFAR10.
+A. Training DNNs and Obtaining Wcut
+We train the network with cross-entropy loss on the classification dataset. From the trained networks, we can find the
+maximum and the minimum weight values, namely Wmin
+and Wmax . After that, given all the weight parameters, we
+calculate the Wcut value for a given Vg value by determining
+Gef f cutof f using SPICE simulations as described in Section
+II-D. We set the search range of Vg as [0.7, 1.0] with interval
+of 0.05.
+B. Vg Control Schemes: Homogeneous and Heterogeneous
+With the above-stated relationship between Wcut and Vg ,
+we suggest two different strategies for Vg selection.
+Homogeneous Vg control: We use the same Vg value
+for Wcut computation across all layers of the DNN. This
+method ensures high energy-gains but can incur significant
+accuracy losses. It is hard to predict how much accuracy
+degradation will be incurred without accessing the validation
+or test dataset. In other words, for a given Wcut (related to a
+given Vg ), we can identify the percentage of weights that will
+operate in the non-linear 1T-1R regime after mapping. But
+we cannot identify the accuracy drop without accessing the
+test dataset. This might be crucial for the applications where
+accuracy should be preserved.
+Heterogeneous Vg control: To address the abovementioned problem, we suggest a heterogeneous approach
+where each layer has a different Vg allocated. We observe that
+each layer of the DNN has a different weight distribution,
+as shown in Fig. 7. Using this observation, we allocate a low
+value of Vg (corresponding to a smaller Gef f cutof f and hence,
+Wcut ) for the layers having a smaller range weights (e.g., layer
+
+=== page 5 ===
+5
+
+Algorithm 1 Heterogeneous Vg Searching
+
+Algorithm 2 Iterative Training
+
+Input: DNN weights (W ); Vg search list (S = [0.7, 1.0; 0.05])
+Output: layer-wise gate voltage Vg
+1: for l ← 1 to L do
+2:
+% Find the maximum weight representation at layer l
+3:
+l.Wr = max(|l.Wmin |, |l.Wmax |)
+4:
+for Vg in S do
+5:
+% Define weight cutoff based on Vg
+6:
+l.Wcut ← (Vg , l.W )
+7:
+% Find the optimal Vg
+8:
+if l.Wcut > l.Wr then
+9:
+l.Vg ← Vg prev
+10:
+break
+11:
+end if
+12:
+Vg prev ← Vg
+13:
+end for
+14: end for
+
+Input: The number of iteration (N ), DNN weights (W ); layer-wise
+gate voltage Vg
+Output: Trained DNN weights (W )
+1: for n ← 1 to N do
+2:
+% STEP 1: Apply Wcut to W according to Vg
+3:
+Wcut ← Vg
+4:
+W ← (W, Wcut )
+5:
+% STEP 2: Train W
+6:
+W ← train(W )
+7: end for
+
+5 ∼ layer 7), otherwise, we allocate a high value of Vg (e.g.,
+layer 1). By doing this, we can obtain energy-efficiency by
+guaranteeing that most of the weights lie in the linear regime.
+Note, we set the Vg and Wcut for all layers based on the weight
+distribution without having access to the test or validation data.
+Algorithm 1 shows the strategy of selecting the optimal
+Vg for the heterogeneous approach. The purpose is to set the
+Vg configuration to extract significant energy-efficiency. Any
+accuracy loss incurred in the DNN with setting the Vg and
+corresponding Wcut is recovered by iterative training. To this
+end, we first define the maximum absolute value of weights
+in layer l (lines 1-3). Then, we search the optimal Vg value in
+ascending order. Based on the given Vg , we calculate Wcut . If
+the current Wcut covers all the weights values, we set the last
+Vg prev as the optimal Vg at layer l and stop searching (lines
+4-12). It is worth mentioning that setting Vg prev or Wcut
+distorts the weight distributions that causes accuracy decline.
+This loss can be minimized by iterative training described
+in the next subsection. We further note that heterogenous Vg
+selection does not require any data.
+C. Iterative Training
+In NEAT, after setting the optimal Vg and Wcutof f values
+from homogeneous or heterogeneous gate control, we then
+transform the weights of the DNN. If we use lower values
+of Vg which do not cover all weight ranges, the weight
+distribution gets altered, resulting in accuracy degradation. To
+address this issue, we propose iterative training which consists
+of two steps, as shown in Algorithm 2. Step 1 is essentially
+restricting the weights of the DNN (W ) in the suitable cut-off
+regime as per Eqn. (3). In Step 2, we retrain the networks
+iteratively for a couple of epochs to recover any accuracy loss
+incurred from Step 1. We repeat these two steps so that greater
+number of weights in the network can be located in the linear
+regime when mapped onto crossbars. By carrying out extensive
+experiments, we show that the iterative training significantly
+improves the performance in lower Vg scenarios.
+IV. E XPERIMENTAL R ESULTS
+We conduct our experiments on PyTorch with VGG11 [11]
+and ResNet18 [12] architectures on CIFAR10 and CIFAR100
+
+Fig. 8: Classification accuracy with respect to Vg .
+
+datasets [13]. For retraining process (Step 2 in Algorithm
+2), we use Adam optimizer with learning rate 10−5 . For all
+experiments, the number of iteration (N in Algorithm 2) is 30
+which implies low overhead for retraining.
+A. Analysis on Homogeneous Vg Selection
+In Fig. 8, we change Vg from 0.75 to 1.0 and report the
+classification accuracy. The results show that low Vg induces
+low Wcut and in turn decreases performance when DNN
+weights are restricted to Wcut regime. However, using iterative
+training recovers the performance degradation. Especially,
+for a ResNet18 architecture, using iterative training shows
+improvement over 50% in terms of accuracy at Vg = 0.75.
+Moreover, with iterative training, VGG11 and ResNet18 networks almost maintain their classification accuracy in the
+range of Vg = [0.85, 1.0] and Vg = [0.8, 1.0], respectively.
+To further validate the effectiveness of iterative training, we
+provide the accuracy with respect to the number of iterations.
+Fig. 9 shows that the classification accuracy improves as the
+number of iterations (N in Algorithm 2) increases. This is
+because iterative training forces the weights to be in the linear
+regime of operation. To validate this, we plot the percentage
+of weights in the linear regime at the first convolution layer
+(Vg = 0.8 case). The results demonstrate that the majority
+of weights (∼ 96%) are located in the linear regime after 30
+iterations in case of iterative training. Other layers also show
+similar results.
+
+=== page 6 ===
+6
+
+Fig. 9: Classification accuracy with respect to the number of
+iterative training. We use VGG11 on CIFAR100.
+TABLE I: Classification accuracy of heterogeneous setting.
+Model
+
+Dataset
+
+Iterative Training
+
+Optimal Vg
+
+Optimal Vg − 0.05
+
+VGG11
+VGG11
+
+CIFAR10
+CIFAR10
+
+No
+Yes
+
+88.05
+88.74
+
+78.55
+83.51
+
+Res18
+Res18
+
+CIFAR10
+CIFAR10
+
+No
+Yes
+
+90.60
+90.58
+
+55.67
+59.23
+
+VGG11
+VGG11
+
+CIFAR100
+CIFAR100
+
+No
+Yes
+
+68.42
+68.88
+
+63.64
+66.06
+
+Res18
+Res18
+
+CIFAR100
+CIFAR100
+
+No
+Yes
+
+72.99
+73.60
+
+27.62
+29.22
+
+Fig. 10: Vg configurations of heterogeneous setting. “Optimal
+Vg ” denotes the Vg configuration from searching algorithm
+(Algorithm 1). Also, in “Optimal Vg − 0.05”, we reduce Vg
+of all layers by 0.05.
+
+B. Analysis on Heterogeneous Vg Selection
+Based on Algorithm 1, we obtain the heterogeneous layerwise Vg configuration, and define this as “Optimal Vg ”.
+In order to study the energy-accuracy trade-off, we conduct
+experiments on the more energy-efficient configuration, named
+“Optimal Vg −0.05”. Here, we take the individual layerwise Vg
+values obtained from Algorithm 1 and further subtract 0.05V
+as shown in Fig. 10. In Fig. 10, we observe that high Vg
+values are required for the input layer, whereas low Vg values
+are required for the intermediate layers. Table I presents the
+classification accuracy in case of the heterogeneous approach.
+Just plainly restricting the DNN weights in the cut-off range
+based on “Optimal Vg ” configuration yields < 0.3% accuracy
+drop, even without any iterative training across all models
+and datasets. For “Optimal Vg − 0.05” (Fig. 10), drastic
+performance degradation is observed since most of the Vg
+values are set to the minimum value 0.7 which lowers the
+Wcut . Iterative training in this case increases the accuracy by
+2 − 5%. It is worth mentioning that we can find a more finegrained solution by setting the search interval (in this case,
+0.05) to a smaller value.
+
+C. Analysis on Energy Efficiency
+Finally, we present the energy efficiency of various configurations in Fig. 11. We measure the energy consumption in 1T1R crossbars following previous work [14]. We use the energy
+computed for homogeneous gate-control scenario for Vg = 1.0
+as baseline against which energy gain (%) are shown. For the
+homogeneous setting, we can achieve high energy gain by
+simply reducing Vg . Especially, we can achieve ∼ 23% energy
+gain at Vg = 0.8 on ResNet18 architecture with CIFAR10
+while suffering minimal accuracy loss (∼1.5%). However,
+selecting a very low value for Vg such as Vg = 0.75 induces
+huge performance degradation (Fig. 8). For the heterogeneous
+setting, we obtain over 10% energy gain for all experiments.
+
+Fig. 11: Energy gain from homogeneous and heterogeneous
+approaches.
+V. C ONCLUSION
+We propose a novel training method that takes into account
+the non-linear characteristics of the transistor (selector) in 1T1R crossbars. We analyse this non-linearity in low transistor
+gate-voltage scenario using both algorithm and hardware perspectives. Moreover, we mitigate the effect of non-linearity
+by iterative training. Our experimental results demonstrate
+that our proposed NEAT technique achieves energy-efficiency
+while preserving the classification accuracy of the DNNs. Our
+work can impact the future deployment of 1T-1R crossbar in
+extremely resource-constrained environment.
+ACKNOWLEDGEMENT
+This work was supported in part by the National Science Foundation (Grant#1947826), and the Amazon Research
+Award.
+R EFERENCES
+[1] X. Xu, Y. Ding, S. X. Hu, M. Niemier, J. Cong, Y. Hu, and Y. Shi,
+“Scaling for edge inference of deep neural networks,” Nature Electronics, vol. 1, no. 4, pp. 216–222, 2018.
+[2] A. Ankit, I. E. Hajj, S. R. Chalamalasetti, G. Ndu, M. Foltin, R. S.
+Williams, P. Faraboschi, W.-m. W. Hwu, J. P. Strachan, K. Roy et al.,
+“Puma: A programmable ultra-efficient memristor-based accelerator
+for machine learning inference,” in Proceedings of the Twenty-Fourth
+International Conference on Architectural Support for Programming
+Languages and Operating Systems, 2019, pp. 715–731.
+
+=== page 7 ===
+7
+
+[3] S. Jain, A. Sengupta, K. Roy, and A. Raghunathan, “Rxnn: A framework
+for evaluating deep neural networks on resistive crossbars,” IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems,
+2020.
+[4] T. Li, X. Bi, N. Jing, X. Liang, and L. Jiang, “Sneak-path based test
+and diagnosis for 1r rram crossbar using voltage bias technique,” in
+Proceedings of the 54th Annual Design Automation Conference 2017,
+2017, pp. 1–6.
+[5] Z. Wang, W. Zhao, W. Kang, Y. Zhang, J.-O. Klein, and C. Chappert,
+“Ferroelectric tunnel memristor-based neuromorphic network with 1t1r
+crossbar architecture,” in 2014 International Joint Conference on Neural
+Networks (IJCNN). IEEE, 2014, pp. 29–34.
+[6] I. Chakraborty, M. F. Ali, D. E. Kim, A. Ankit, and K. Roy, “Geniex:
+A generalized approach to emulating non-ideality in memristive xbars
+using neural networks,” arXiv preprint arXiv:2003.06902, 2020.
+[7] S. Lee, G. Jung, M. E. Fouda, J. Lee, A. Eltawil, and F. Kurdahi,
+“Learning to predict ir drop with effective training for reram-based
+neural network hardware,” in 2020 57th ACM/IEEE Design Automation
+Conference (DAC). IEEE, 2020, pp. 1–6.
+[8] P.-Y. Chen, B. Lin, I.-T. Wang, T.-H. Hou, J. Ye, S. Vrudhula, J.-s.
+Seo, Y. Cao, and S. Yu, “Mitigating effects of non-ideal synaptic device
+characteristics for on-chip learning,” in 2015 IEEE/ACM International
+Conference on Computer-Aided Design (ICCAD). IEEE, 2015, pp.
+194–199.
+[9] B. Liu, H. Li, Y. Chen, X. Li, T. Huang, Q. Wu, and M. Barnell, “Reduction and ir-drop compensations techniques for reliable neuromorphic
+computing systems,” in 2014 IEEE/ACM International Conference on
+Computer-Aided Design (ICCAD). IEEE, 2014, pp. 63–70.
+[10] B. Liu, H. Li, Y. Chen, X. Li, Q. Wu, and T. Huang, “Vortex: variationaware training for memristor x-bar,” in Proceedings of the 52nd Annual
+Design Automation Conference, 2015, pp. 1–6.
+[11] Simonyan et al., “Very deep convolutional networks for large-scale
+image recognition,” arXiv:1409.1556, 2014.
+[12] He et al., “Deep residual learning for image recognition,” in IEEE CVPR,
+2016, 2016.
+[13] A. Krizhevsky, G. Hinton et al., “Learning multiple layers of features
+from tiny images,” 2009.
+[14] Ankit et al., “Resparc: A reconfigurable and energy-efficient architecture with memristive crossbars for deep spiking neural networks,”
+arXiv:1702.06064, 2017.

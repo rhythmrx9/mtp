@@ -1,0 +1,2243 @@
+# Crossbar-Aware Neural Network Pruning
+# id: W2883149906 | key: 2018_Liang_CrossbarAwarePruning_IEEEAccess | IEEEAccess 2018 | card: ../cards/2018_Liang_CrossbarAwarePruning_IEEEAccess.md
+
+
+=== page 1 ===
+1
+
+Crossbar-Aware Neural Network Pruning
+
+arXiv:1807.10816v3 [cs.CV] 6 Dec 2018
+
+Ling Liang, Lei Deng, Member, IEEE, Yueling Zeng, Xing Hu, Yu Ji, Xin Ma,
+Guoqi Li, Member, IEEE, and Yuan Xie, Fellow, IEEE
+
+Abstract—Crossbar architecture has been widely adopted in
+neural network accelerators due to the efficient implementations
+on vector-matrix multiplication (VMM) operations. However, in
+the case of convolutional neural networks (CNNs), the efficiency
+is compromised dramatically because of the large amounts of
+data reuse. Although some mapping methods have been designed
+to achieve a balance between the execution throughput and
+resource overhead, the resource consumption cost is still huge
+while maintaining the throughput.
+Network pruning is a promising and widely studied method
+to shrink the model size. Whereas, prior work for CNNs compression rarely considered the crossbar architecture and the corresponding mapping method, and cannot be directly utilized by
+crossbar-based neural network accelerators. This paper proposes
+a crossbar-aware pruning framework based on a formulated L0 norm constrained optimization problem. Specifically, we design
+an L0 -norm constrained gradient descent (LGD) with relaxant
+probabilistic projection (RPP) to solve this problem. Two types
+of sparsity are successfully achieved: i) intuitive crossbar-grain
+sparsity and ii) column-grain sparsity with output recombination,
+based on which we further propose an input feature maps (FMs)
+reorder method to improve the model accuracy. We evaluate
+our crossbar-aware pruning framework on the median-scale
+CIFAR10 dataset and the large-scale ImageNet dataset with VGG
+and ResNet models. Our method is able to reduce the crossbar
+overhead by 44%-72% with insignificant accuracy degradation.
+This work significant reduce the resource overhead and the
+related energy cost, and provides a new co-design solution for
+mapping CNNs onto various crossbar devices with much better
+efficiency.
+
+Keywords: Crossbar Architecture, Convolutional Neural
+Networks, Neural Network Pruning, Constrained Optimization
+Problem
+I. I NTRODUCTION
+It is well known that crossbar with analog-domain computing naturally boosts the performance of vector-matrix multiplication (VMM), which is the major operation in existing
+neural networks (NNs) [1]–[3]. For this reason, nowadays
+crossbar architecture based on conventional memory devices
+(e.g. SRAM [4]–[7] and Flash [8]) or emerging memory
+devices (e.g. RRAM [1], [9]–[14], PCRAM [15]–[17], MRAM
+[18], etc.) are being widely used in neural network (NN)
+Ling Liang and Lei Deng contributed equally to this work, corresponding
+authors: Yuan Xie and Guoqi Li. The work was partially supported by National
+Science Foundation (Grant No. 1719160, 1725447 and 1730309) and National
+Natural Science Foundation of China (Grant No. 61603209 and 61876215).
+Ling Liang, Lei Deng, Yueling Zeng, Xing Hu, Xin Ma and Yuan Xie are
+with the Department of Electrical and Computer Engineering, University of
+California, Santa Barbara, CA 93106, USA (email: lingliang@ucsb.edu, leideng@ucsb.edu, yuelingzeng@ucsb.edu, xinghu@ucsb.edu, xinma@ucsb.edu
+and yuanxie@ucsb.edu). Guoqi Li is with the Department of Precision Instrument, Center for Brain Inspired Computing Research, Tsinghua University,
+Beijing 100084, China (email: liguoqi@mail.tsinghua.edu.cn). Yu Ji is with
+the Department of Computer Science and Technology, Tsinghua University,
+Beijing 100084, China (email: jiy15@mails.tsinghua.edu.cn).
+
+accelerators. A functional crossbar is a self-contained small
+NN with a weighted connection crossbar and its peripheral
+units. Many functional crossbars are wired by a 2D scalable
+routing infrastructure, and this forms a massively parallel socalled many-crossbar architecture. Based on a variety of intercrossbar communication topologies, such as tree [19], 2D
+triangular toroidal mesh [20] or 2D XY mesh [5], [21], manycrossbar architecture has demonstrated high performance on
+various NN benchmarks compared to traditional platforms.
+Even though the many-crossbar architecture usually performs well in multi-layered perceptron (MLP) with dense
+VMM operations, the efficiency is compromised on convolutional neural networks (CNNs) due to the large amounts
+of data reuse. To map CNNs onto the many-crossbar architecture, fully-unfolding the reused data is a straightforward
+solution [22], [23]. Specifically, it unfolds the reused neuron
+activations and synaptic weights, and assigns independent
+resources for all these unfolded cells. It can achieve extremely
+throughput compared to the fully-folded mapping that reuses
+all the neurons and weights [1] cycle by cycle, however, this
+scheme consumes significantly huge crossbar resources. For
+example, more than 3×104 crossbars are needed to achieve
+comparable accuracy on medium-scale CIFAR-10 dataset [24]
+even if a network pruning approach has been leveraged [22];
+more than hundreds of thousands of crossbars [23] are often
+occupied for larger models [25]–[27] on ImageNet dataset
+[28]. Although a compromised solution, termed as semi-folded
+mapping [29], has emerged to achieve a balance between the
+execution throughput and resource overhead, the resource and
+the resulting energy cost are still very high. This becomes
+a fatal blow for the compact and energy-limited embedded
+devices.
+Recently, many works on NN pruning seem promising
+to shrink large models to reduce the resource and energy
+consumption. In detail, various sparsity structures from the
+element grain [30], [31], element group grain [32], vector
+grain [33], [34], and even channel grain [35]–[38], have been
+proposed. On one side, although the sparse network obtained
+from channel-wise pruning can be reorganized as a compact
+dense model for any architecture, the accuracy loss is usually
+high due to the aggressive sparsity. On the other side, almost
+all the smaller-grain pruning works consider only the original
+logic computational graph or the execution graph on general
+purpose platforms (e.g. CPU/GPU), instead of the execution
+graph after mapping onto the crossbar architecture. Although
+it is possible, also widely used, to save energy via adding
+compute gate benefit from the vast zeros in a sparse network,
+the crossbar still cannot be removed due to the residual
+irregular non-zeros. Therefore, we have to leave its costly
+peripheral circuits. It is difficult to efficiently leverage these
+
+=== page 2 ===
+2
+
+II. C ROSSBAR ARCHITECTURE AND CNN M APPING
+Normally, the crossbar-based architecture is a hierarchical
+and scalable system. In such architecture, a basic building
+block, called functional crossbar (Func), consists of a crossbar
+and its peripheral circuits (e.g. read/write driver, ADC/DAC,
+activation function and pooling circuits, timing scheduler, etc.)
+
+and can efficiently perform the vector-matrix multiplication
+(VMM). As shown in Figure 1, the Func units are connected
+by a routing structure to realize communication with each
+other.
+NOC
+Input FMs
+Output FMs
+
+Cell
+
+Func
+(VMM)
+
+Func
+(VMM)
+
+Func
+(VMM)
+
+Func
+(VMM)
+
+Router
+
+DAC
+
+fine-grained sparse models in practical crossbar devices. In this
+sense, reducing the number of crossbars as much as possible
+is the most effective way to save the resource and energy
+cost. With this guidance, previous work attempted to obtain
+crossbar-oriented pruning using iterative clustering method
+[39], but the fully-connected (FC) layer was the focus. The
+effective pruning of Conv layer on crossbars is still a remaining
+challenge, since the Conv mapping is more complex than the
+intuitive FC mapping due to the data reuse and the pruning
+difficulty is increased due to the less redundancy.
+Motivated by the above analysis, we try to answer one
+important yet untouched question, i.e. how many crossbars
+can we reduce when mapping CNNs onto the crossbar architecture? To this end, a crossbar-aware pruning framework
+is proposed to minimize the resource overhead on crossbar
+architecture for CNNs. Firstly, two crossbar-friendly sparsity
+grains, crossbar grain and column grain, are designed based
+on the semi-folded mapping method. The former sparsity is
+straightforward and easy to map, and the latter one can be
+converted to the crossbar-grain sparsity by recombining nonzero columns along the output dimension. Secondly, we formulate the crossbar-aware pruning as an L0 -norm constrained
+optimization problem, and propose an L0 -norm constrained
+gradient descent (LGD) with relaxant probabilistic projection
+(RPP) method to solve it. Thirdly, a reorder of input FMs
+is proposed to enhance the model accuracy. We conduct a
+comprehensive analysis on the resource-accuracy trade-off on
+various benchmarks, including medium-scale CIFAR10 and
+large-scale ImageNet datasets with VGG and ResNet models.
+Overall, our crossbar-aware pruning framework is efficient for
+crossbar architecture, which is able to reduce 44%-72% crossbar overhead with acceptable accuracy degradation. This paper
+provides a new co-design solution for mapping CNNs onto
+various crossbar devices with significantly higher efficiency.
+The contributions of this work are briefly summarized as
+follows:
+• We propose an effective pruning method for CNN implementation on crossbars, which can significantly reduce
+the resource overhead.
+• The LGD solver is able to control the resulting sparsity
+accurately, and the probabilistic projection helps improve
+the algorithm convergence.
+• The effectiveness of our method was evaluated on various
+datasets, including the large-scale ImageNet.
+The rest of this paper is organized as follows: Section II
+introduces the crossbar architecture and the mapping strategy;
+Section III explains the details of our crossbar-aware neural
+network pruning framework; the technique analysis and performance evaluations are reported in Section IV ; finally, Section
+V concludes and discusses this paper.
+
+W/R
+
+ADC
+AcFunc
+Pooling
+
+RRAM
+PCRAM
+MRAM
+Modified SRAM
+Modified Flash
+
+...
+
+Fig. 1: Overview of crossbar-based architecture.
+A. Many-Crossbar Architecture
+The key component in each Func is the crossbar array. The
+weight parameters program the conductance of the memory
+array. After this mapping initialization, the input neuronal
+activations are injected into the crossbar word lines, and an inplace vector-matrix multiplication (VMM) can be performed
+by applying voltages to each row and reading currents from
+each column. Specifically, crossbar computing is in analog
+domain, thus many peripheral circuits are required for the
+complete functionality. For example, write and read driving
+circuits are used to program the memory cell and read the
+output state, respectively. Digital-to-analog converter (DAC)
+and analog-to-digital converter (ADC) switch signal format
+between the crossbar analog domain and the peripheral digital
+domain. In addition, additional digital circuits are required for
+activation function, pooling operation, and the timing schedule.
+Note that the memory cell can have many variants, including
+conventional memory devices with specialized modification
+(e.g. SRAM [4]–[7] and Flash [8]) or emerging non-volatile
+memory (NVM) devices with different material hierarchy and
+resistive mechanism (e.g. RRAM [1], [9]–[14], PCRAM [15]–
+[17], and MRAM [18]). Finally, each Func is equipped with a
+router for inter-crossbar communication which guarantees the
+scalability to a large-scale system.
+B. Semi-folded Mapping of Convolution Layer
+Because the crossbar architecture can improve the VMM
+performance, the FC layer can gain benefits naturally. However, some operations in neural network such as convolution
+cannot be directly deployed due to the large data reuse.
+Conventionally, there exist two schemes for convolution mapping on the crossbar architecture: fully-unfolded [22], [23]
+and fully-folded [1]. The former one that is widely used in
+neuromorphic field unfolds all the memory and computation,
+and then transforms them to VMM for crossbar execution.
+On the other hand, the latter one only assigns the physical
+resources for one sliding window, then it reuses these resources
+cycle by cycle until all the sliding windows are finished.
+Overall, the fully-unfolded mapping consumes large amount
+
+=== page 3 ===
+3
+
+TABLE I: Variable definition.
+Variable
+
+Definition
+
+Variable
+
+Definition
+
+P, p
+Q, q
+
+number, index of input FM
+number, index of output FM
+
+I, i
+J, j
+
+number, index of input FM group
+number, index of output FM group
+
+i
+gin
+j
+gout
+W p,q
+
+set of input FMs’ indexes in i-th input FM group
+set of output FMs’ indexes in j-th output FM group
+
+Kin
+Kout
+
+number of FMs in each input FM group
+number of FMs in each output FM group
+
+weight kernel connecting p-input and q-output FM
+weight tensor of q-th output FM
+
+i,j
+βL
+0
+j
+β , β jL0
+
+pruning mask value involving i-th input and j-th output FM group
+
+Wq
+Xp
+
+p-th input FM
+
+r, r0
+
+pruning coefficient, mask vector involving j-th output FM group
+L0 norm of β jL , relaxation factor in RPP
+
+Y p,q
+S
+Y i,q
+E
+Y qO
+F M LX
+
+initial convolution result of X p ~ W p,q
+partial summation of Y p,q
+S involving i-th input FM group and q-th output FM
+Complete summation of Y p,q
+S involving q-th output FM
+Tensor representation of input FMs for linear regression
+
+Y i,j
+C1
+Y jC2
+N
+FMY j
+
+set of Y i,q
+E involving j-th output FM group
+set of Y qO involving j-th output FM group
+number of image samples
+concatenation of all tensors in Y i,j
+C1 , i = 0, 1, ..., I − 1
+
+F M LY
+
+Tensor representation of output FMs for linear regression
+
+FMY j
+
+concatenation of all tensors in Y jO
+
+~
+
+convolution operation
+
+Sout
+
+the size of output FM
+
+C1
+O
+
+0
+
+p={0,1}
+
+p={0,1}
+
+p={2,3}
+
+p={2,3}
+
+(a)
+
+(c)
+
+(b)
+
+Fig. 2: Illustration of mapping convolutional neural networks onto crossbars: (a) a single convolutional layer; (b) semi-folded
+mapping on crossbar-based architecture; (c) matrix representation of each crossbar.
+of resources to achieve high throughput, while the fully-folded
+mapping consumes plenty of clock cycles to achieve minimum
+resources. In general, the resulting speed and overhead are
+greatly imbalanced. To address these issues, a semi-folded
+mapping [29] is proposed recently, which simultaneously folds
+the physical resources along the row dimension of feature
+maps (FMs) for resource saving and unfolds them along the
+column dimension for maintaining parallelism. Therefore, it
+can balance performance and overhead to a great extent. However, as mentioned earlier, it still consumes lots of resources.
+
+In this paper, we implement our pruning methodology based
+on the semi-folded mapping scheme to further reduce the
+overhead.
+Since the mapping of FC layer is much easier, we focus
+on the illustration of Conv mapping in this section. But note
+that it is quite easy to extend our method to FC layer. The
+variable definitions are listed in Table I. Figure 2(a) presents
+an example of a Conv layer, where both the number of input
+and output FMs are four, i.e. P = Q = 4. The size of
+each input and output FM is 2 × 3 and 1 × 2, respectively.
+
+=== page 4 ===
+4
+
+Here we just take this as an example. In fact the FM size
+can be much larger in semi-folded mapping. Specifically, the
+FM height has no limitation since the crossbar is reused
+along the FM row direction, and FM with larger width can
+be split onto independent crossbars for execution parallelism.
+We use X (orange rectangles) and Y (green rectangles) to
+denote the input and output FM tensors (here X ∈ R2×3×4
+and Y ∈ R1×2×4 ), respectively. In Conv layer, weight (blue
+rectangles) is a four dimensional tensor, in this example we
+have W ∈ R2×2×4×4 . Each output FM Y qO is the convolution
+result between the input FM tensor X and the weight filters
+W q.
+Figure 2(b) illustrates the semi-folded mapping of this
+example. We assume that the size of each crossbar is 12×4 (12
+rows and 4 columns) for simplicity. According to the mapping
+results, we can divide the input and output FMs into two
+groups I = J = 2, such that each input-output group pair
+occupies one crossbar. We use i and j to indicate the group
+index (here i ∈ {0, 1} and j ∈ {0, 1}). Each crossbar just
+generates the partial sum of the intra-group output FMs, and
+the additional accumulation of the results from the crossbars
+in one column can obtain the complete activations of output
+FMs. In this example, totally four crossbars are required to
+implement the Conv layer.
+Figure 2(c) shows the matrix representation of the crossbar
+mapping, where it is seen that each crossbar realizes eight
+convolution sliding windows, and each sliding window covers
+a single input FM with one of its weight kernel. And each
+crossbar generates a set of partial sums corresponding to its
+output FM group. Then we present all the corresponding
+calculations involved in Fig.2 as follows
+p
+p,q
+Y p,q
+S = X ~W
+
+Y i,q
+E =
+
+X
+i
+p∈gin
+
+q
+Y p,q
+S , YO =
+
+(1)
+X
+i
+
+Y i,q
+E
+
+(2)
+
+n
+o
+n
+o
+i,q
+j
+j
+q
+j
+Y i,j
+=
+Y
+|
+q
+∈
+g
+,
+Y
+=
+Y
+|
+q
+∈
+g
+(3)
+out
+out
+C1
+E
+C2
+O
+p,q
+where Y i,q
+E accumulates the initial convolution result Y S in
+the same input FM group, and we collect the indexes of input
+i
+FMs in i-th group to as an index set gin
+. Furthermore, Y qO
+i,q
+accumulates Y E across all input FM groups to generate a
+complete sum corresponding to the q-th output FM. In short,
+the complete sum of each output FM is the summation of
+all partial sums from its corresponding crossbars. Note that
+i,q
+the data size of Y p,q
+S and Y E are identical, which are same
+Sout
+with the size of output FM, Y p,q
+∈ RSout , Y i,q
+.
+S
+E ∈ R
+Here Sout usually equals to FM height multiplying FM width.
+Based on the grouping of input FMs on crossbars, the initial
+convolution result Y S ∈ RSout ×P ×Q shrinks to partial sums
+Y E ∈ RSout ×I×Q . Equation (3) organizes the tensors of
+partial sum and complete sum in the j-th output FM group
+as tensor sets, which represent all the partial sums from the
+(i, j)-th crossbar as Y i,j
+C1 and the complete sums involving the
+j-th output FM group as Y jC2 . The index set of output FMs
+j
+in j-th output FM group is denoted as gout
+.
+
+III. C ROSSBAR - AWARE P RUNING F RAMEWORK
+In this section, we will present a comprehensive analysis
+of how to explore the crossbar-aware sparsity with two grain
+levels: crossbar-grain and column-grain. Then we formulate
+our pruning problem as an L0 -norm constrained optimization
+problem and propose an L0 -norm constrained gradient descent
+(LGD) to solve it. Finally, we introduce our input FM reorder
+method to improve the model accuracy of sparse networks.
+A. Crossbar-grain and Column-grain Sparsity
+In Conv layer, the complete sum on one output FM is the
+summation of its partial sums produced by the convolution
+between all input FMs and its corresponding weight filter.
+The sparsity analysis is to identify that which partial sums
+contribute less and then prune them. After that, the remained
+partial sums are used to approximate the original output
+FMs. In this work, we design two pruning grains: crossbargrain sparsity and column-grain sparsity which provide usable
+sparsity for the crossbar architecture.
+In the crossbar-grain sparsity, our goal is to eliminate
+crossbars whose partial sum Y i,j
+C1 contributes less to its output
+FM group Y jC2 . We design a binary pruning mask βLi,j0 to
+indicate whether the crossbar will be pruned (βLi,j0 = 0) or
+not. Figure 3(a) shows an example of crossbar-grain pruning.
+In this case, the right top crossbar and the left bottom crossbar
+are pruned (marked as shadow). In detail, we initially have
+1,q
+Y qO = Y 0,q
+E + Y E , q = 0, 1, 2, 3
+
+(4)
+
+After pruning, each output FM can be calculated from the
+remained input FM group, i.e.
+(
+0,0
+Y 0,1
+Y 0O = βL0,0
+YE
+, Y 1O = βL0,0
+E
+0
+0
+(5)
+1,1 1,3
+1,1 1,2
+3
+2
+Y O = βL0 Y E , Y O = βL0 Y E
+Then we can formulate the approximated function after pruning as follows
+X i,j i,q
+j
+Y qO =
+βL0 Y E , q ∈ gout
+.
+(6)
+i
+
+In contrast to original dense accumulation, the accumulation
+of the partial sum from each crossbar is controlled by a binary
+pruning mask βLi,j0 ∈ {0, 1}. Each βLi,j0 is shared by all partial
+sums Y i,q
+E in the same j-th output FM group, which is usually
+in the same crossbar.
+Although the crossbar-grain sparsity can intuitively eliminate redundant crossbars, the output FM group after pruning
+may stray from original output FM group a lot, if the depeni,j
+dency among elements Y i,q
+E in Y C1 is poor. Considering the
+resource-accuracy tradeoff issue, a straightforward method is
+to shrink the size of Kout which is determined by the crossbar
+size in crossbar-grain sparsity. By reducing the number of
+output FMs in each output FM group, the dependency requirement among output FMs in the same output FM group can
+be mitigated. Thus, we further propose column-grain pruning
+to decrease the sparsifying grain for error reduction, which
+is shown in Figure 3(b). Now, each output FM group only
+contains one output FM, i.e. J = Q = 4 and Kout = 1. After
+pruning, each crossbar usually has non-zero columns, not fully
+
+=== page 5 ===
+5
+
+=1
+
+=1
+
+=0
+
+p={0,1}
+
+p={0,1}
+
+=0
+
+=1
+
+p={0,1}
+
+=0
+
+p={2,3}
+
+=0
+
+p={0,1}
+
+p={0,1}
+
+=1
+
+p={2,3}
+
+=0
+
+=1
+
+=1
+
+=0
+
+p={2,3}
+
+p={2,3}
+
+(a)
+
+p={0,1}
+
+Recombine
+
+p={2,3}
+
+p={2,3}
+
+(b)
+
+Fig. 3: Crossbar-aware pruning: (a) crossbar-wise pruning without recombination; (b) column-wise pruning with recombination.
+
+pruned like that in crossbar-grain pruning. In the example, the
+first input FM group X {0,1} contributes to the first output
+FM group Y 0C2 and the fourth output FM group Y 3C2 . So the
+first half columns in the left top crossbar can be recombined
+with the last half columns in the right top crossbar to form
+a new crossbar. The input of this new crossbar is still the
+first input FM group X {0,1} , whereas, after recombination the
+crossbar output is the first output FM group Y 0C2 and the fourth
+output FM group Y 3C2 . The crossbars involving the second
+input FM group can be shrunk by using the same pruning and
+recombination method. Furthermore, if each output FM has
+multiple non-pruned crossbars to receive its input FMs, the
+inter-crossbar accumulation of the partial sums is still required
+(Figure 3 omits this case for clarity). Usually, the column-grain
+pruning can achieve the similar sparsity with the crossbargrain pruning, but with significantly higher accuracy since the
+pruning is more elaborate.
+B. L0 -norm Constrained Optimization Problem
+In previous section we have analyzed the sparsity for
+crossbar architecture, in which we expect the summation of
+remained partial sums can approximate to the original Y jC2 as
+closely as possible. For the convenience of expression, here
+we concatenate all the complete sums in Y jC2 into a tensor
+and reshape it to a vector, then denote it as Y ∈ RSout Kout .
+X ∈ RSout Kout ×I is also obtained after similar concatenation
+and reshaping of all the partial sum sets Y i,j
+C1 involving jth output FM group. In this section we simplify the number
+
+of image samples to 1 for clarity, i.e. N = 1. The objective
+function of the pruning optimization problem of the j-th output
+FM group can be described as
+min
+kY − X β jL0 k22
+j
+βL
+
+s.t. kβ jL0 k0 = r, βLij0 ∈ {0, 1}
+
+(7)
+
+0
+
+where r is the L0 norm (number of non-zero elements, i.e.
+k · k0 ) of the binary pruning mask β jL0 , which determines
+the sparsity. The loss is the square of Euclidean distance
+between complete sums Y and the sparsified partial sums
+X β jL0 . After transforming the pruning issue into an L0 -norm
+constrained optimization problem, the object now is to find a
+binary pruning mask β jL0 that satisfies the L0 -norm constraint
+and minimizes the distance. However, the L0 -norm constrained
+problem is an NP problem. In this work we propose L0 -norm
+constrained gradient descent (LGD) to solve it.
+Before introducing the whole flow of how the LGD works,
+we discuss a relaxant probabilistic projection (RPP) method
+first. The RPP can transfer a pruning coefficient vector β j ∈
+RI to the corresponding pruning mask β jL0 whose L0 norm is
+r (not binary at this stage). Naturally, the largest r elements in
+|β j | indicates the most contributions. However, this intuitive
+and deterministic selection is so dictatorial that completely
+cuts off the opportunity of the ones that are out of the largest
+r elements but still large enough. Therefore, we introduce a
+relaxation factor r0 and a probabilistic projection method to
+determine the r non-zero elements, which is inspired from
+[40]. The detailed process is shown in Algorithm 1. The
+initial candidates are the largest r + r0 elements, instead of r.
+
+=== page 6 ===
+6
+
+Algorithm 1: Relaxant Probabilistic Projection (RPP)
+Data: β j , L0 norm r, relaxation factor r0
+Result: β jL0 with r nonzero elements
+
+Data: X , Y , L0 norm r, relaxation factor r0 , learning
+rate η
+Result: Binary pruning mask β jL0 with r ones
+
+β jabs ← abs(β j );
+// select r + r0 candidates with highest importance
+Canditates = sort descend(β jabs )[0 : r + r0 − 1];
+for all i do
+ij
+ij
+βabs
+← 0, if βabs
+∈
+/ Canditates;
+end
+// select r elements from the candidates through
+// iterative probabilistic sampling
+β jL0 = 0 ;
+while kβ jL0 k0 < r do
+// update sampling probability by normalizing β jabs
+for all i do
+P i0 j
+ij
+ij
+βprob
+= βabs
+/ i0 βabs
+;
+end
+// probabilistically sample at one iteration, and update
+// β jabs by removing the selected elements
+ij
+Samples = {β ij | βprob
+> rand[0, 1]};
+for all i do
+ij
+βLij0 ← β ij then βabs
+← 0, if β ij ∈ Samples;
+j
+break, if kβ L0 k0 = r;
+end
+end
+
+Then the RPP iteratively selects elements from the candidates
+through probabilistic sampling until the L0 norm of β jL0
+reaches r. The sampling probability is proportional to the
+ij
+absolute value of β ij (i.e. βabs
+). At each iteration, the selected
+elements will be removed from the candidate set.
+-η
+Gradient Descent
+
+t=t+1
+L0 Projection
+① Candidate
+Selection
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+Probabilistic
+Sampling
+1
+
+1
+
+1
+
+Iter 0
+
+Iter 1
+0
+
+0
+
+Algorithm 2: L0 norm constrained gradient descent (LGD)
+
+0
+
+Fig. 4: Illustration of LGD and RPP.
+Based on the RPP, now we explain the LGD for solving
+the L0 -norm constrained optimization problem in Equation
+(7). The overall idea is to integrate the RPP into the normal
+gradient descent at every iteration. Algorithm 2 shows the
+
+β jL0 = RP P (randn(0, 1));
+while not converge do
+// update β j through gradient descent in equation (8)
+β j = β jL0 − η(X T X β jL0 − X T Y );
+// transform β j to β jL0 with L0 -norm constraint
+β jL0 = RP P (β j , r, r0 )
+// optimize β jL0 through linear regression
+Z = X β jL0
+α = (Z T Z )−1Z T Y
+β jL0 = αβ jL0
+end
+for all i do
+βLij0 ← 1, if βLij0 6= 0
+end
+
+whole process. The gradient descent is governed by
+β j = β jL0 − η∇β j kY − Xβ jL0 k22
+L0
+
+= β jL0 − η(X T X β jL0 − X T Y ),
+
+(8)
+
+which is a modified version that frequently switches between
+the full space of β j and L0 -norm constrained space of β jL0 .
+The space switching is implemented by the aforementioned
+RPP. Note that at each LGD iteration, β jL0 is scaled by a
+factor α to minimize the loss function in Equation (7) through
+linear regression. In this work, the number of iterations for
+LGD is set to 50. At the end, we binarize all the elements in
+β jL0 , which generates the final binary pruning mask. β ij
+L0 = 0
+means the crossbar (crossbar-grain) or the crossbar columns
+(column-grain) connecting the i-th input FM group and j-th
+output FM group can be removed.
+Figure 4 illustrates the LGD work flow and shows an
+RPP example. It starts with a randomly initialized β j (0). In
+each outer loop, the pruning coefficient vector β j is firstly
+calculated through gradient descent, and then the L0 -norm
+constrained vector β jL0 is updated through RPP. The inner loop
+demonstrates how RPP works. Suppose the length of coefficient vector β j is 6, r = 3, and r0 = 1. The rectangle with
+darker shade indicates larger absolute value. Since the absolute
+value of β 2j and β 4j are smaller than others, they are screened
+2j
+4j
+out of candidate set at the beginning, i.e. βabs
+= βabs
+= 0.
+The rest four elements (r + r0 = 4) forms the candidate set.
+0j
+Through the probabilistic sampling strategy in RPP, βabs
+and
+5j
+βabs are sampled and removed from the candidate set at RPP
+3j
+iteration 0; furthermore, βabs
+is selected from the candidate set
+1j
+3j
+of {βabs , βabs } at the next iteration. Because the L0 norm of
+β jL0 (0) has reached 3, the RPP ends after two iterations in this
+1j
+3j
+example. It is interesting that, although we have βprob
+⩾ βprob
+,
+3j
+βprob
+is finally selected. This indicates that the RPP gives the
+
+=== page 7 ===
+7
+
+sub-largest elements some opportunities, and provides better
+convergence.
+In a nutshell, the proposed LGD along with RPP has several
+advantages: 1) it is able to convert the NP-hard L0 -norm constrained optimization problem to be approximately solvable;
+2) it can accurately control the final sparsity by tuning the
+value of r; 3) the smart relaxation factor r0 can provide better
+convergence by introducing probabilistic projection.
+C. Input FMs Reorder
+The crossbar-aware pruning considers the grouping effect of
+crossbars. The above analysis does not consider how to group
+the input or output FMs. Recall that in Figure 3, the order
+of output FMs has no influence on the final results because
+they are independent. However, the order of input FMs matters
+because all the crossbar columns share the same input rows.
+In above sections, we use the simplest original order when
+mapping the input FMs. In this section, we design a reorder
+strategy to tune the input FM order and reduce the pruning
+error.
+The reorder of input FMs tries to increase the possibility
+that the more important input FMs can be clustered into the
+same group. In this way, the impact of pruning other less
+important groups on model accuracy can be reduced. Usually,
+a larger partial sum |Y p,q
+S | indicates more contribution to final
+complete sum of output FM. The importance of each input
+FM is identified by summing all Y p,q
+S with the same p, which
+is calculated by
+X p,q
+Y pF =
+YS .
+(9)
+q
+
+Next, we reorder the input FMs according to the importance
+values. The following pruning process is the same as that
+without reorder. Note that we do not take the absolute value
+of Y p,q
+S , since the crossbar output tends to be zero, i.e. little
+contribution, if the largest positive Y p,q
+and the smallest
+S
+negative Y p,q
+(with
+similar
+absolute
+value)
+fall
+into the same
+S
+crossbar. This will lead to less distinguishable between the
+large partial sums and small partial sums.
+The input FMs reorder works well for the front layers,
+however the deeper layers cannot benefit much from this
+technique. This might be because that in deep layers, each
+input FM has extracted high-level abstraction and has ‘equal’
+importance. We provide a detailed discussion in Section IV.
+D. Crossbar-aware Single-layer Level Pruning
+Our pruning framework runs based on a pre-trained model.
+For the single-layer level pruning in this section, other layers
+keep unchanged except the layer to be pruned. Before implementing the pruning methodology presented in Algorithm
+3, the order of input FM groups should be fixed (with or
+without reorder). The layer pruning is conducted group by
+group along the output FM dimension (from j = 0 to
+j = J − 1). Suppose N images are sampled for pruning.
+F M Y j ∈ RN ×Sout ×I×Kout and F M Y j ∈ RN ×Sout ×Kout
+C1
+C2
+are the concatenation tensor representation of the partial sum
+and complete sum, respectively, involving the j-th output FM
+group. For each output FM group, we firstly reshape F M Y j
+C1
+
+and F M Y j to a matrix and vector format, respectively. Then,
+C2
+
+we run the LGD to generate the binary pruning mask β jL0
+for pruning the crossbars (crossbar-grain) or crossbar columns
+(column-grain). In the latter one, we need to recombine the
+non-zero crossbar columns to assemble new crossbars, like
+that in Figure 3. Note that as many pruning works do, a final
+linear regression is required to tune the weights [35], [38]. In
+particular, according to the pruning mask, we can collect the
+required input and output data for linear regression as LR X
+and LR Y , respectively. Then, the remained weights involving
+the j-th output FM group are tuned by
+W jrem = LR(LR X , LR Y ) = (LR TX LR X )−1LR TX LR Y .
+(10)
+Note that k 2 in Algorithm 3 is the size of each weight
+2
+kernel, e.g. 3×3, and we have F M Lx ∈ RN ×Sout ×k ×P and
+F M Ly ∈ RN ×Sout ×Q .
+Algorithm 3: Crossbar-aware pruning
+Data: F M Y j , F M Y j , F M LX , F M LY , L0 norm r,
+C1
+C2
+relaxation factor r0 , learning rate η
+Result: Weight update
+for j=0:J−1 do
+// reshape F M Y j to a 2-D matrix for pruning
+C1
+prune X = reshape(F M Y j , (N Sout Kout , I));
+C1
+
+// reshape F M Y j to a 1-D vector for pruning
+C2
+prune Y = reshape(F M Y j , N Sout Kout );
+C2
+
+// execute L0 -norm gradient descent (LGD) algorithm
+β jL0 = LGD(prune X , prune Y , r, r0 , η);
+// collect remained input FMs
+i
+Gin = {gin
+| β ij = 1, i = 0, 1, .., I − 1};
+// linear regression to minimize pruning loss
+LR X = reshape(F M LX [:, :, :, Gin ],
+(N Sout , k 2 length(Gin ));
+j
+LR Y = reshape(F M LY [:, :, gout
+], (N Sout , Kout ));
+j
+W rem ← LR(LR X , LR Y ); // linear regression
+end
+For clarity, Figure 5 compares the sparse pattern resulted
+from five different pruning strategies. In Figure 5(a)-(c), the
+matrix corresponds to the GEMM weight matrix after transforming the Conv operation into matrix-matrix multiplication
+[41], [42], rather than the crossbar grids in Figure 5(d)-(f).
+Although the element-wise pruning [30], [31] and vector-wise
+pruning [33], [34] can produce unstructured and structured
+sparsity, respectively, they only consider the original logic
+computational graph or the execution graph on general purpose platform (e.g. CPU/GPU). Therefore, they cannot be
+directly used by crossbar devices. The crossbar-grain pruning
+is straightforward to be used by the crossbar architecture,
+whereas, it suffers from larger accuracy degradation. The
+column-grain pruning produces sparsity in crossbar columns
+(not the matrix columns in the vector-wise pruning) which
+improves the accuracy with smaller pruning grain. By recom-
+
+=== page 8 ===
+8
+
+large
+
+(b)
+
+(c)
+
+small
+(d)
+
+(e)
+
+(f)
+
+Fig. 5: Comparison of sparse pattern resulted from different
+pruning strategies: (a) element-wise pruning [30], [31]. (b)
+vector-wise (row) pruning [33], [34]. (c) vector-wise (column)
+pruning [33], [34]. (d) crossbar-grain pruning. (e) columngrain pruning before recombination. (f) column-grain pruning
+after recombination. The grid in (d)-(f) denotes crossbars.
+bining the remained non-zero crossbar columns, column-grain
+pruning is able to remove many redundant crossbars.
+Note that the FC layer can also adopt our pruning framework to reduce crossbar overhead. FC layer corresponds to
+1×1 FM size in Conv layer. Since the number of output
+neurons in FC layer is large (e.g. 2048), we set Kout = 8
+in this case instead of employing the column-grain sparsity
+for Conv layer directly. The recombination of the non-zero
+columns is still used in FC layer pruning.
+
+IV. E XPERIMENTAL R ESULTS
+A. Experiment Setup
+CNN Model. We validate our experiments on CIFAR-10
+[24] and ImageNet [28] datasets. We use three CNN models
+to run our crossbar-aware pruning. On CIFAR-10 dataset, an
+eight-layer network (VGG8 [43], [44]) is adopted, and on
+ImageNet dataset, VGG16 [26] and ResNet18 [27] are used.
+3.0%
+
+(a)
+
+prune 70%
+
+prune 60%
+
+prune 50%
+
+2.5%
+
+Accuracy Drop
+
+(a)
+
+to maintain the final accuracy after pruning. The later two
+conditions try to control the resource overhead for each layer.
+There is no need to continue pruning if the pruning ratio in that
+layer is already small. In the large network like VGG16, the
+crossbar overhead presents a large variance among different
+layers due to different layer size. Therefore, the pruning ratio
+is not enough to accurately reflect the crossbar overhead. To
+this end, we introduce an additional threshold Tc to jointly
+control the resource consumption. A detailed example can be
+found in Figure 10. Then, we prune the whole network layer
+by layer according to the finally determined pruning ratios of
+all layers. A fine-tuning step is also required to restore the
+network accuracy at the end as previous work [30], [31].
+
+2.0%
+1.5%
+1.0%
+0.5%
+
+0.0%
+
+Kin=8 Kin=12 Kin=16 Kin=8 Kin=12 Kin=16 Kin=8 Kin=12 Kin=16
+
+E. Crossbar-aware Network Level Pruning
+8.0%
+
+(b)
+
+Kout=4
+prune 70%
+
+prune 60%
+
+Kout=8
+prune 50%
+
+7.0%
+
+Accuracy Drop
+
+A key principle in neural network pruning is to balance the
+model sparsity and accuracy loss [36]. Distinguishing from
+previous work, we consider the tradeoff between crossbar
+overhead and accuracy loss. Since the tolerance to sparsity for
+each layer is variable, different layers should adopt different
+pruning ratios (sparsity of β) to minimize redundant crossbars
+as much as possible, while maintaining the model accuracy.
+In network pruning we will first try single-layer pruning
+(each time only one layer is pruned) under different pruning
+ratios (i.e, from 20% to 70% with 5% interval) based on
+Algorithm 3. Then each layer’s tolerance to sparsity can be
+reflected from the accuracy drop curve. Thus, we determine
+how many crossbars can be pruned according to a pre-defined
+accuracy drop threshold Tdinitial . Specifically, we choose the
+pruning ratio that has the closest accuracy drop to Tdinitial (but
+larger than Tdinitial ) for each layer.
+Based on the initial pruning ratio, we further design three
+conditions to finally stop the single-layer pruning and determine the pruning ratio for every layer: 1) when the accuracy
+drop is larger than a threshold Td ; 2) when the pruning ratio
+is larger than a threshold Tp ; 3) when the number of remained
+crossbars are smaller than a threshold Tc . Once any of them is
+satisfied, the single-layer pruning stops and the pruning ratio
+is finally fixed for that layer. The first condition is designed
+
+Kout=1
+9.0%
+
+6.0%
+
+5.0%
+4.0%
+3.0%
+2.0%
+1.0%
+
+0.0%
+
+Kin=8 Kin=12 Kin=16 Kin=8 Kin=12 Kin=16 Kin=8 Kin=12 Kin=16
+Kout=1
+
+Kout=4
+
+Kout=8
+
+Fig. 6: Accuracy drop with different group size of output FMs:
+(a) Conv2-2 (VGG16), (b) Conv4-2 (VGG16).
+Crossbar Platform. For one-to-one comparison, we adopt
+the same semi-folded mapping compiler for the neural network
+chip in [29]. To reduce the development period and save
+fabrication cost, we use the off-the-shelf SRAM array with
+extra multipliers and accumulators to simulate the crossbarbased VMM engine, like that in [5] and [6]. Please note that
+our crossbar-aware pruning is a general framework for any
+crossbar architecture.
+Pruning Configuration. In the following experiments, 5000
+images are sampled from the training dataset, and each class
+
+=== page 9 ===
+Accuracy Drop
+
+9
+
+14.0%
+12.0%
+10.0%
+8.0%
+6.0%
+4.0%
+2.0%
+0.0%
+
+prune 70% (without reorder)
+prune 60% (without reorder)
+prune 50% (without reorder)
+
+Kin=8
+
+Kin=16
+
+Conv1_2
+
+Kin=8
+
+Kin=16
+
+prune 70% (reorder)
+prune 60% (reorder)
+prune 50% (reorder)
+
+Kin=8
+
+Conv2_2
+
+Kin=16
+
+Conv3_2
+
+Kin=8
+
+Kin=16
+
+Conv4_2
+
+Kin=8
+
+Kin=16
+
+Conv5_2
+
+120%
+
+(a)
+
+without reorder
+
+reorder
+
+100%
+
+80%
+60%
+40%
+
+20%
+0%
+
+Index of Input FM Group
+
+Input FM Group Contribution Rate
+
+B. Analysis of Single-layer Level Pruning
+In this section we will use the pruning result for single layer
+to analyze the influence of Kin , Kout , pruning ratio, and the
+input FM order. The analysis conclusions in this section can
+guide the next network pruning. Because the accuracy gap
+among different configurations could be narrowed down via
+fine-tuning technique, which will impede the sensitivity study,
+we abandon the final fine-tuning step in this section.
+Figure 6 shows the accuracy drop for two layers in VGG16
+(Conv2-2 and Conv4-2) under different Kin , Kout settings
+and pruning ratios (input FMs are grouped with reorder).
+As previous analysis in Section III-A, decreasing Kout can
+mitigate the dependency requirement among each YCi,q in the
+same j-th output FM group and then reduce the pruning
+error. Apparently, the smallest accuracy drop in both Conv2 2
+and Conv4 2 are produced from the column-grain sparsity
+(Kout = 1). This is consistent with our prediction in Section
+III-A that column-grain sparsity can achieve higher accuracy
+than crossbar-grain sparsity (Kout > 1). For the smaller
+pruning ratio (50% and 60%), the accuracy difference between
+Kout = 4 and Kout = 8 is not obvious. In contrast, for
+large pruning ratio (70%), Kout = 8 overally performs worse
+than Kout = 4. This indicates the influence of Kout will
+be amplified in the case of large pruning ratio. Generally
+speaking, smaller Kout often brings better accuracy. Similar
+to Kout , Kin also impacts the model accuracy. Larger Kin
+usually suffers from larger accuracy drop due to the coarser
+pruning grain. However, different Kin brings very different
+resource overhead in the semi-folded mapping framework [29]
+and it is deeply coupled with the mapping implementation. To
+simplify the problem and focus on our pruning framework, we
+initially determine Kin for each layer towards the minimum
+crossbar overhead when we mapping the dense model onto
+crossbar, and fix them during the next pruning process. The
+Kin configuration details can refer to previous work [29].
+Since the column-grain pruning can obviously outperform
+the crossbar-grain pruning from the perspective of model
+accuracy with the same sparsity, we will focus on the columngrain pruning in the following experiments. In other words, we
+will set Kout = 1.
+
+100%
+
+(b)
+
+without reorder
+
+reorder
+
+80%
+60%
+40%
+20%
+0%
+
+Index of Input FM Group
+Input FM Group Contribution Rate
+
+have the same number of images. For each image, 10 points
+are sampled from each FM (size of Sout ) for LGD, and we
+change 10 to 2 for the final linear regression.
+
+Input FM Group Contribution Rate
+
+Fig. 7: Accuracy drop under original index order (without reorder) and descending importance order (reorder) of input FMs
+for different layers in VGG16.
+
+100%
+
+(c)
+
+without reorder
+
+reorder
+
+80%
+
+60%
+40%
+20%
+
+0%
+
+Index of Input FM Group
+
+Fig. 8: Contribution rate of input FM groups under original
+index order (without reorder) and descending importance order
+(reorder) for different layers in VGG16: (a) Conv1 2, (b)
+Conv3 2, (c) Conv5 2.
+
+Next we study the influence of the reorder of input FMs. We
+select five layers in VGG16 to present the accuracy change by
+adding the reorder operation. The index reorder is according
+to the descending order of the importance of input FMs
+calculated by Equation (9). As shown in Figure 7, input FMs
+reorder significantly improves the accuracy in the front layers,
+especially for large pruning ratio (70%). While in deep layers,
+
+=== page 10 ===
+10
+
+40%
+
+Accuracy Drop
+
+35%
+
+(a)
+
+Conv2
+Conv4
+Conv6
+
+30%
+25%
+20%
+
+Conv3
+Conv5
+Fc1
+
+15%
+10%
+5%
+0%
+-5%
+50%
+
+55%
+
+60%
+
+65%
+
+70%
+
+75%
+
+80%
+
+85%
+
+90%
+
+5.0%
+
+(b)
+
+Acc Drop
+
+Total Crossar
+
+Comptue Crossbar
+
+2750
+
+4.0%
+
+Crossbars for input buffer
+and output reduce
+
+3.0%
+
+2250
+
+1750
+
+2.0%
+
+1250
+
+1.0%
+
+750
+
+0.0%
+
+Crossbar Consumption
+
+Pruning Ratio
+
+Accuracy Drop
+
+the improvement is degraded. As mentioned in Section III-C,
+the reason might be that in deep layers, each input FM has
+extracted high-level abstraction and has ‘equal’ importance.
+In order to clearly visualize how input FMs reorder works,
+Figure 8 shows the contribution rate of input FM groups
+from three difference layers in VGG16 with or without input
+FMs reorder. Here the contribution rate of input FM group
+indicates the percentage of output FM groups that uses this
+inputPFM group (i.e. it has contribution). It can be calculated
+by ( j βLij0 )/J. The global pruning rate in this figure is fixed
+at 50%. For the original index order, the contribution rate of
+input FM groups shows a fluctuated evenly distribution, which
+means no input FM group performs absolutely important or
+unimportant. This will cause larger pruning error. In stark
+contrast, after using the reorder strategy, we can cluster the
+trivial and non-trivial FMs into different FM groups. This
+phenomenon is quite clear in the front layers. For example,
+in Conv1 2, the contribution rates in middle input FM groups
+are much lower than those in head and tail, which indicates
+we successfully clustered the non-trivial input FMs into the
+two terminals and pruning the middle trivial input FMs can
+still maintain the model accuracy well. However, it should be
+noted that as the layer goes deeper, most of input FM groups
+tend to be equally important even if the ones in head and tail
+still have a little higher contribution rate. The reason has been
+explained earlier that each FM extracts high-level abstraction
+in deep layers so that all of them probably have necessary
+contribution to the final recognition.
+
+250
+10%
+
+20%
+
+30%
+
+40%
+
+50%
+
+60%
+
+70%
+
+80%
+
+90%
+
+Pruning Ratio
+
+Fig. 9: Accuracy drop and crossbar overhead in VGG8.
+buffer and output reduce cannot be saved. More details can be
+found in the original semi-folded mapping paper [29]. Note
+that Figure 9(a) doesn’t use the fine-tuning technique but 9(b)
+does. The underlying reason is that the single-layer pruning
+aims to help sensitivity analysis so we expect larger accuracy
+gap, while the network pruning always wants higher accuracy
+for practical implementation.
+
+C. Analysis of Network Level Pruning
+In this section we will conduct the pruning of the whole
+network. In our network pruning the first Conv layer and
+the last FC layer are not pruned. The reason is that these
+two layers serve as the first feature extraction layer and the
+last classification layer, pruning of which renders significant
+accuracy drop. Additionally, the resource cost in these two
+layers is negligible, so there is no need to prune them.
+Before stepping into our network pruning strategy described
+in Section III-E, we will first discuss the variance of sparsity
+tolerance in each layer, as well as the relation between
+accuracy drop and crossbar overhead. Figure 9(a) shows the
+accuracy drop when separately pruning each layer under
+different pruning ratio in VGG8. When the pruning ratio is
+less than 70%, all layers can maintain the accuracy drop
+within 3%. The accuracy drop will significantly increase when
+the pruning becomes more aggressive. Interestingly, different
+layers present different tolerance to sparsity. For example,
+Conv2, Conv6, and FC1 seem more robust compared to other
+layers. Figure 9(b) depicts the accuracy drop and resource
+overhead when pruning the whole network under different
+pruning ratio. For simplicity, here we prune all the layers with
+the same pruning ratio. The accuracy drop is controlled within
+0.5% when the pruning ratio is smaller than 50%. Similarly,
+more aggressive pruning will cause significantly increasing
+accuracy degradation. For the crossbar overhead, nearly linear
+resource saving is observed as pruning ratio increases. Only
+the compute crossbars are reduced, and the crossbars for input
+
+TABLE II: Comparison of crossbar overhead and model
+accuracy in VGG8 before and after pruning. Three different
+pruning ratios are used. ‘T’: total crossbar, ‘C’: compute
+crossbar.
+Pruning
+Ratio
+
+0% (dense)
+T
+C
+
+T
+
+C
+
+T
+
+C
+
+T
+
+C
+
+Conv2
+Conv3
+Conv4
+Conv5
+Conv6
+Fc1
+
+176
+224
+604
+364
+698
+167
+
+164
+208
+570
+352
+682
+161
+
+116
+152
+478
+296
+576
+122
+
+124
+156
+376
+222
+424
+120
+
+76
+100
+284
+166
+318
+81
+
+72
+88
+168
+94
+182
+71
+
+32
+36
+76
+38
+76
+32
+
+Accuracy
+T
+C
+
+128
+160
+512
+304
+592
+128
+
+94.29%
+2484
+1954
+
+10%
+
+50%
+
+94.27%
+2388
+1870
+
+90%
+
+93.84%
+1673
+1155
+
+90.18%
+926
+420
+
+In addition to maintain the model accuracy as high as
+possible after pruning, we also want to maximize the resource
+reduction. In Table II, we select three pruning ratios to show
+the crossbar overhead in each layer. Conv6 can reduce 516
+compute crossbars if the pruning ratio reaches 90%, however,
+under the same pruning ratio Conv3 can only save 124
+compute crossbars. From both accuracy drop in Figure 9(a)
+and resource saving perspectives, network pruning can benefit
+more from layer Conv6. Instead of pruning each layer with
+the same pruning ratio, a higher pruning ratio in Conv6 and a
+lower pruning ratio in Conv3 may achieve the same accuracy
+
+=== page 11 ===
+2600
+
+Compute Crossbar
+
+2100
+
+1708
+
+Td
+
+1600
+
+72%
+1524
+
+1372
+
+1100
+
+70%
+1192 1084
+
+971 901
+828 754
+714 648
+595 543
+
+912
+
+Tc 490 455 378 336 266
+
+600
+
+74%
+
+Accuracy After Pruning
+
+68%
+66%
+
+Accuracy
+
+Crossbar Consumption
+
+11
+
+64%
+
+100
+
+62%
+
+50% 55% 60% 65% 75%
+Tp
+Conv3_1
+
+50% 55% 60% 65% 70% 75%
+Tp
+Conv4_2
+
+25% 30% 35% 40% 45% 50% 55% 60% 0%
+Tp
+Conv5_2
+
+Fig. 10: Illustration of the three conditions for determining the final pruning ratio of each layer.
+TABLE III: Crossbar overhead in three networks under different pruning configuration.
+Total Crossbar
+
+Compute Crossbar
+
+ImageNet
+
+0% (dense)
+
+case1
+
+case2
+
+optimized case
+
+0% (dense)
+
+case1
+
+case2
+
+VGG16
+
+25801
+
+16428
+
+14319
+
+12749
+
+21720
+
+12403
+
+10294
+
+8724
+
+Td = 4%,
+
+ResNet18
+
+7300
+
+5148
+
+5815
+
+5107
+
+4724
+
+3718
+
+3017
+
+2634
+
+Td = 3.5%, Tp = 60%, Tc = 65
+
+CIFAR10
+
+0% (dense)
+
+case1
+
+case2
+
+optimized case
+
+0% (dense)
+
+case1
+
+case2
+
+optimized case
+
+VGG8
+
+2484
+
+1320
+
+1092
+
+1056
+
+1954
+
+802
+
+582
+
+546
+
+5.0%
+
+(a)
+
+4.16%
+
+Accuracy Drop
+
+4.0%
+
+3.61%
+
+3.24%
+
+case1
+case2
+optimized case
+
+3.0%
+
+2.20%
+1.71% 1.72%
+
+1.65%
+
+2.0%
+
+1.20%
+
+0.97%
+
+1.0%
+0.0%
+
+VGG16(ImageNet)
+100%
+
+Remained Crossbar
+
+Stop Conditions
+
+optimized case
+
+(b)
+
+ResNet18(ImageNet)
+
+case1 (T)
+case2 (T)
+optmized case (T)
+
+80%
+
+VGG8(CIFAR10)
+
+case1 (C)
+case2 (C)
+optimized case (C)
+
+60%
+40%
+20%
+0%
+
+VGG16(ImageNet)
+
+ResNet18(ImageNet)
+
+VGG8(CIFAR10)
+
+Fig. 11: Accuracy drop and crossbar overhead in three networks under different pruning configuration. ‘T’: total crossbar; ‘C’: compute crossbar.
+after pruning but reduce more resources.
+Motivated by above analysis, we introduce three conditions
+to determine the pruning ratio for each layer. Based on the
+conditions of Td (accuracy drop), Tp (pruning ratio), and Tc
+(crossbar overhead) in Section III-E, Figure 10 shows three
+layer examples in VGG16 for explaining how it works. Here
+we set Td = 4%, Tp = 60% and Tc = 400. For Conv3 1
+layer, the final determined pruning ratio is 60%. Although
+it doesn’t exceed the accuracy drop threshold Td and the
+pruning ratio threshold Tp , the crossbar overhead threshold
+Tc = 400 has been reached. Continuing to prune cannot
+gain more significant resource reduction. Similarly, Conv4 2
+selects pruning ratio of 65% (> Tp condition) and Conv5 2
+selects 55% (> Td condition).
+
+Td = 4%,
+
+Tp = 60%, Tc = 400
+
+Tp = 75%
+
+Figure 11 and Table III show the final results of the whole
+network pruning with optimized pruning configuration. Here
+‘case1’ means the determined pruning ratio for each layer
+causes Tdinitial = 1% accuracy drop when conducting singlelayer pruning. Similarly, ‘case2’ corresponds to Tdinitial = 2%
+in VGG16 and ResNet18 and Tdinitial = 3% in VGG8. The
+‘optimized case’ is the final pruning configuration determined
+by the three stop conditions for accuracy-resource balance.
+In VGG8 (CIFAR10), since the network size is much smaller
+than those on ImageNet, there is no need to design the crossbar
+threshold Tc . 30 extra epochs are used to fine-tune the models
+on ImageNet (learning rate 10−5 for the first 20 epochs and
+10−6 for the last 10 epochs), and 60 epochs are used for
+VGG8 on CIFAR10 (learning rate 10−2 for the first 30 epochs
+and 10−3 for the last 30 epochs). In general, the optimized
+case can reduce more resources, but at the cost of more
+accuracy degradation. Finally, we can save 59.8%, 44.2%, and
+72.1% compute crossbars in VGG16, ResNet18, and VGG8.
+Furthermore, we find that the ResNet18 is more sensitive
+against pruning than the VGG networks due to its compact
+structure.
+V. C ONCLUSION AND D ISCUSSION
+In this work we propose a crossbar-aware pruning framework to introduce usable sparsity in CNNs for crossbarbased architecture. We formulate the issue as a constrained
+optimization problem and design an L0 -norm constrained
+gradient descent (LGD) algorithm to solve it. In LGD, a relaxant probabilistic projection (RPP) is heuristically leveraged
+to switch between the full space and the sparse space for
+producing the pruning mask. The LGD can accurately control
+the sparsity and bring better convergence. In this way, we
+are able to achieve two pruning grains: crossbar grain and
+column grain. The former one is straightforward and easy to
+use, while the latter one can obtain better accuracy and the
+
+=== page 12 ===
+12
+
+same level of sparsity through a recombination of the non-zero
+crossbar columns. Furthermore, a reorder strategy of the input
+FMs is utilized to reduce the pruning error by clustering the
+FMs with similar importance. Based on an optimized pruning
+configuration with three elaborate pruning conditions, finally,
+44%-72% crossbars can be saved on three benchmarking
+networks on CIFAR10 and ImageNet. This work provides
+a new co-design solution for mapping CNNs onto various
+crossbar devices with significantly less resource overhead and
+the resulting energy consumption.
+100%
+3bit
+
+Accuracy
+
+80%
+
+4bit
+
+60%
+
+5bit
+
+8bit
+
+40%
+
+base line
+
+20%
+0%
+
+Device Variation
+
+Fig. 12: Influence of device quantization and variation.
+Although our crossbar-aware pruning framework is effective on all testing benchmarks, some limitations still deserve
+further investigation. (1) The accuracy drop resulted from
+the pruning of deep layers cannot be significantly improved
+by the proposed reorder strategy. It is preferred to design a
+more efficient reorder method for optimizing the tolerance for
+pruning. (2) We observe that there are many additional crossbars not for compute but for data buffer or activation reduce,
+which cannot be reduced in current framework. In the future,
+joint optimization of the mapping and pruning frameworks is
+required for a better trade-off between the resource overhead
+and model accuracy. (3) Although our method is applicable
+to any crossbar architecture, some real device defects should
+be sufficiently considered if we use memristor-based devices
+(e.g. RRAM or PCRAM). For example, each device usually
+has limited resistance states which causes quantization error
+and has state variation which causes noise error. Figure 12
+shows the additional analysis about influence of quantization
+and variation based on a pruned model. The model we choose
+is the VGG8 on CIFAR-10 and the sparsity we set here is
+50%. The weight with noise is governed by weθ , where θ
+is a random variable obeying a normal distribution whose
+mean is zero and standard deviation is the ‘device variation’
+in the figure. Obviously, the accuracy degrades along with
+larger variation and fewer quantized levels. In this case, >0.1
+variation or <5-bit quantization will cause obvious accuracy
+loss. The accuracy recovery can be obtained by fabrication
+improvement, as well as the design of programming strategy
+and model retraining [45].
+R EFERENCES
+[1] P. Chi, S. Li, C. Xu, T. Zhang, J. Zhao, Y. Liu, Y. Wang, and
+Y. Xie, “Prime: a novel processing-in-memory architecture for neural
+network computation in reram-based main memory,” in ACM SIGARCH
+Computer Architecture News, vol. 44, pp. 27–39, IEEE Press, 2016.
+
+[2] B. Li, Y. Shan, M. Hu, Y. Wang, Y. Chen, and H. Yang, “Memristorbased approximated computation,” in Proceedings of the 2013 International Symposium on Low Power Electronics and Design, pp. 242–247,
+IEEE Press, 2013.
+[3] M. Hu, H. Li, Q. Wu, and G. S. Rose, “Hardware realization of bsb
+recall function using memristor crossbar arrays,” in Proceedings of the
+49th Annual Design Automation Conference, pp. 498–503, ACM, 2012.
+[4] J. Zhang, Z. Wang, and N. Verma, “In-memory computation of a
+machine-learning classifier in a standard 6t sram array,” IEEE Journal
+of Solid-State Circuits, vol. 52, no. 4, pp. 915–924, 2017.
+[5] P. A. Merolla, J. V. Arthur, R. Alvarez-Icaza, A. S. Cassidy, J. Sawada,
+F. Akopyan, B. L. Jackson, N. Imam, C. Guo, Y. Nakamura, et al., “A
+million spiking-neuron integrated circuit with a scalable communication
+network and interface,” Science, vol. 345, no. 6197, pp. 668–673, 2014.
+[6] L. Shi, J. Pei, N. Deng, D. Wang, L. Deng, Y. Wang, Y. Zhang, F. Chen,
+M. Zhao, S. Song, F. Zeng, G. Li, H. Li, and C. Ma, “Development of a
+neuromorphic computing system,” in 2015 IEEE International Electron
+Devices Meeting (IEDM), pp. 4.3.1–4.3.4, Dec 2015.
+[7] M. Davies, N. Srinivasa, T.-H. Lin, G. Chinya, Y. Cao, S. H. Choday,
+G. Dimou, P. Joshi, N. Imam, S. Jain, et al., “Loihi: A neuromorphic
+manycore processor with on-chip learning,” IEEE Micro, vol. 38, no. 1,
+pp. 82–99, 2018.
+[8] X. Guo, F. M. Bayat, M. Bavandpour, M. Klachko, M. Mahmoodi,
+M. Prezioso, K. Likharev, and D. Strukov, “Fast, energy-efficient,
+robust, and reproducible mixed-signal neuromorphic classifier based on
+embedded nor flash memory technology,” in Electron Devices Meeting
+(IEDM), 2017 IEEE International, pp. 6–5, IEEE, 2017.
+[9] D. Garbin, O. Bichler, E. Vianello, Q. Rafhay, C. Gamrat, L. Perniola,
+G. Ghibaudo, and B. DeSalvo, “Variability-tolerant convolutional neural
+network for pattern recognition applications based on oxram synapses,”
+in Electron Devices Meeting (IEDM), 2014 IEEE International, pp. 28–
+4, IEEE, 2014.
+[10] L. Deng, G. Li, N. Deng, D. Wang, Z. Zhang, W. He, H. Li, J. Pei,
+and L. Shi, “Complex learning in bio-plausible memristive networks,”
+Scientific reports, vol. 5, p. 10684, 2015.
+[11] Y. Long, E. M. Jung, J. Kung, and S. Mukhopadhyay, “Reram crossbar
+based recurrent neural network for human activity detection,” in Neural
+Networks (IJCNN), 2016 International Joint Conference on, pp. 939–
+946, IEEE, 2016.
+[12] A. Shafiee, A. Nag, N. Muralimanohar, R. Balasubramonian, J. P. Strachan, M. Hu, R. S. Williams, and V. Srikumar, “Isaac: A convolutional
+neural network accelerator with in-situ analog arithmetic in crossbars,”
+ACM SIGARCH Computer Architecture News, vol. 44, no. 3, pp. 14–26,
+2016.
+[13] T. Tang, L. Xia, B. Li, Y. Wang, and H. Yang, “Binary convolutional
+neural network on rram,” in Design Automation Conference (ASP-DAC),
+2017 22nd Asia and South Pacific, pp. 782–787, IEEE, 2017.
+[14] L. Song, X. Qian, H. Li, and Y. Chen, “Pipelayer: A pipelined rerambased accelerator for deep learning,” in High Performance Computer
+Architecture (HPCA), 2017 IEEE International Symposium on, pp. 541–
+552, IEEE, 2017.
+[15] S. Ambrogio, P. Narayanan, H. Tsai, R. M. Shelby, I. Boybat, C. Nolfo,
+S. Sidler, M. Giordano, M. Bodini, N. C. Farinha, et al., “Equivalentaccuracy accelerated neural-network training using analogue memory,”
+Nature, vol. 558, no. 7708, p. 60, 2018.
+[16] G. W. Burr, R. M. Shelby, S. Sidler, C. Di Nolfo, J. Jang, I. Boybat,
+R. S. Shenoy, P. Narayanan, K. Virwani, E. U. Giacometti, et al.,
+“Experimental demonstration and tolerancing of a large-scale neural
+network (165 000 synapses) using phase-change memory as the synaptic
+weight element,” IEEE Transactions on Electron Devices, vol. 62, no. 11,
+pp. 3498–3507, 2015.
+[17] O. Bichler, M. Suri, D. Querlioz, D. Vuillaume, B. DeSalvo, and
+C. Gamrat, “Visual pattern extraction using energy-efficient 2-pcm
+synapse neuromorphic architecture,” IEEE Transactions on Electron
+Devices, vol. 59, no. 8, pp. 2206–2214, 2012.
+[18] D. Fan and S. Angizi, “Energy efficient in-memory binary deep neural
+network accelerator with dual-mode sot-mram,” in 2017 IEEE 35th
+International Conference on Computer Design (ICCD), pp. 609–612,
+IEEE, 2017.
+[19] P. Merolla, J. Arthur, R. Alvarez, J.-M. Bussat, and K. Boahen, “A multicast tree router for multichip neuromorphic systems,” IEEE Transactions
+on Circuits and Systems I: Regular Papers, vol. 61, no. 3, pp. 820–833,
+2014.
+[20] E. Painkras, L. A. Plana, J. Garside, S. Temple, F. Galluppi, C. Patterson,
+D. R. Lester, A. D. Brown, and S. B. Furber, “Spinnaker: A 1-w 18-core
+system-on-chip for massively-parallel neural network simulation,” IEEE
+Journal of Solid-State Circuits, vol. 48, no. 8, pp. 1943–1953, 2013.
+
+=== page 13 ===
+13
+
+[21] F. Akopyan, J. Sawada, A. Cassidy, R. Alvarez-Icaza, J. Arthur,
+P. Merolla, N. Imam, Y. Nakamura, P. Datta, G.-J. Nam, et al.,
+“Truenorth: Design and tool flow of a 65 mw 1 million neuron programmable neurosynaptic chip,” IEEE Transactions on Computer-Aided
+Design of Integrated Circuits and Systems, vol. 34, no. 10, pp. 1537–
+1557, 2015.
+[22] S. K. Esser, P. A. Merolla, J. V. Arthur, A. S. Cassidy, R. Appuswamy,
+A. Andreopoulos, D. J. Berg, J. L. McKinstry, T. Melano, D. R. Barch,
+C. di Nolfo, P. Datta, A. Amir, B. Taba, M. D. Flickner, and D. S.
+Modha, “Convolutional networks for fast, energy-efficient neuromorphic
+computing,” Proceedings of the National Academy of Sciences, vol. 113,
+no. 41, pp. 11441–11446, 2016.
+[23] Y. Ji, Y. Zhang, W. Chen, and Y. Xie, “Bridge the gap between
+neural networks and neuromorphic hardware with a neural network
+compiler,” in Proceedings of the Twenty-Third International Conference
+on Architectural Support for Programming Languages and Operating
+Systems, pp. 448–460, ACM, 2018.
+[24] A. Krizhevsky and G. Hinton, “Learning multiple layers of features from
+tiny images,” 2009.
+[25] A. Krizhevsky, I. Sutskever, and G. E. Hinton, “Imagenet classification
+with deep convolutional neural networks,” in Advances in neural information processing systems, pp. 1097–1105, 2012.
+[26] K. Simonyan and A. Zisserman, “Very deep convolutional networks for
+large-scale image recognition,” arXiv preprint arXiv:1409.1556, 2014.
+[27] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image
+recognition,” in Proceedings of the IEEE conference on computer vision
+and pattern recognition, pp. 770–778, 2016.
+[28] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, “Imagenet:
+A large-scale hierarchical image database,” in Computer Vision and
+Pattern Recognition, 2009. CVPR 2009. IEEE Conference on, pp. 248–
+255, IEEE, 2009.
+[29] L. Deng, L. Liang, G. Wang, L. Chang, X. Hu, X. Ma, L. Liu, J. Pei,
+G. Li, and Y. Xie, “Semimap: a semi-folded convolution mapping for
+speed-overhead balance on crossbars,” IEEE Transactions on ComputerAided Design of Integrated Circuits and Systems, Submitted 2018.
+[30] S. Han, J. Pool, J. Tran, and W. Dally, “Learning both weights and connections for efficient neural network,” in Advances in neural information
+processing systems, pp. 1135–1143, 2015.
+[31] S. Han, H. Mao, and W. J. Dally, “Deep compression: Compressing
+deep neural networks with pruning, trained quantization and huffman
+coding,” arXiv preprint arXiv:1510.00149, 2015.
+[32] J. Yu, A. Lukefahr, D. Palframan, G. Dasika, R. Das, and S. Mahlke,
+“Scalpel: Customizing dnn pruning to the underlying hardware parallelism,” in ACM SIGARCH Computer Architecture News, vol. 45,
+pp. 548–560, ACM, 2017.
+[33] W. Wen, C. Wu, Y. Wang, Y. Chen, and H. Li, “Learning structured
+sparsity in deep neural networks,” in Advances in Neural Information
+Processing Systems, pp. 2074–2082, 2016.
+[34] W. Wen, Y. He, S. Rajbhandari, W. Wang, F. Liu, B. Hu, Y. Chen,
+and H. Li, “Learning intrinsic sparse structures within long short-term
+memory,” arXiv preprint arXiv:1709.05027, 2017.
+[35] Y. He, X. Zhang, and J. Sun, “Channel pruning for accelerating very
+deep neural networks,” in International Conference on Computer Vision
+(ICCV), vol. 2, 2017.
+[36] H. Li, A. Kadav, I. Durdanovic, H. Samet, and H. P. Graf, “Pruning
+filters for efficient convnets,” arXiv preprint arXiv:1608.08710, 2016.
+[37] P. Molchanov, S. Tyree, T. Karras, T. Aila, and J. Kautz, “Pruning
+convolutional neural networks for resource efficient inference,” arXiv
+preprint arXiv:1611.06440, 2016.
+[38] J.-H. Luo, J. Wu, and W. Lin, “Thinet: A filter level pruning method for
+deep neural network compression,” arXiv preprint arXiv:1707.06342,
+2017.
+[39] A. Ankit, A. Sengupta, and K. Roy, “Trannsformer: Neural network
+transformation for memristive crossbar based neuromorphic system design,” in Proceedings of the 36th International Conference on ComputerAided Design, pp. 533–540, IEEE Press, 2017.
+[40] L. Deng, G. Li, J. Pei, and J. Huang, “L0 norm constraint based external
+control source allocation for the minimum cost control of directed
+networks,” ISA transactions, vol. 76, pp. 88–96, 2018.
+[41] M. Cho and D. Brand, “Mec: memory-efficient convolution for deep
+neural network,” arXiv preprint arXiv:1706.06873, 2017.
+[42] C. Ding, S. Liao, Y. Wang, Z. Li, N. Liu, Y. Zhuo, C. Wang, X. Qian,
+Y. Bai, G. Yuan, et al., “Circnn: accelerating and compressing deep
+neural networks using block-circulant weight matrices,” in Proceedings
+of the 50th Annual IEEE/ACM International Symposium on Microarchitecture, pp. 395–408, ACM, 2017.
+
+[43] F. Li, B. Zhang, and B. Liu, “Ternary weight networks,” arXiv preprint
+arXiv:1605.04711, 2016.
+[44] L. Deng, P. Jiao, J. Pei, Z. Wu, and G. Li, “Gxnor-net: Training
+deep neural networks with ternary weights and activations without fullprecision memory under a unified discretization framework,” Neural
+Networks, vol. 100, pp. 49–58, 2018.
+[45] A. Mohanty, X. Du, P.-Y. Chen, J.-s. Seo, S. Yu, and Y. Cao, “Random
+sparse adaptation for accurate inference with inaccurate multi-level rram
+arrays,” in Electron Devices Meeting (IEDM), 2017 IEEE International,
+pp. 6–3, IEEE, 2017.
+
+Ling Liang received the B.E. degree from Beijing
+University of Posts and Telecommunications, Beijing, China, in 2015, and M.S. degree from University of Southern California, CA, USA, in 2017. He
+is currently pursuing the Ph.D. degree at Department
+of Electrical and Computer Engineering, University
+of California, Santa Barbara, CA, USA. His current
+research interests include machine learning security
+and computer architecture.
+
+Lei Deng received his B.E. degree and Ph.D. degree from University of Science and Technology
+of China, Hefei, China, and Tsinghua University,
+Beijing, China, in 2012 and 2017, respectively. He
+is currently a Postdoc at Department of Electrical
+and Computer Engineering, University of California,
+Santa Barbara, CA, USA. His research interests
+include computer architecture, machine learning,
+computational neuroscience, tensor computing, and
+complex systems.
+
+Yueling Zeng received her B.S. degree from University of California, Santa Barbara, CA, USA, in
+2018. She will continue to pursue the Ph.D. degree at
+Department of Electrical and Computer Engineering,
+University of California, Santa Barbara, CA, USA.
+Her current research interests include machine learning and design automation.
+
+Xing Hu received the B.S. degree from Huazhong
+University of Science and Technology, Wuhan,
+China, and Ph.D. degree from University of Chinese
+Academy of Sciences, Beijing, China, in 2009 and
+2014, respectively. She is currently a Postdoc at
+Department of Electrical and Computer Engineering, University of California, Santa Barbara, CA,
+USA. Her current research interests include emerging memory system and domain-specific hardware
+computing.
+
+Yu Ji received his B.S. degree in physics from
+Tsinghua University, Beijing, China, in 2011. He is
+currently pursuing the Ph.D. degree at Department of
+Computer Science and Technology, Tsinghua University, Beijing, China. His research interests include
+neural network accelerator and compiler, as well as
+machine learning for system optimization.
+
+=== page 14 ===
+14
+
+Xin Ma received his B.S. and Ph.D degree in
+Physics from University of Science and Technology
+of China, Hefei, China, in 2009 and The College
+of William and Mary, VA, USA, in 2014 respectively. He is currently a Postdoc at Department of
+Electrical and Computer Engineering, University of
+California, Santa Barbara, CA,USA. His research
+interests include designing in-memory computing
+with emerging non-volatile memory technologies.
+
+Guoqi Li received the B.E. degree from the Xian
+University of Technology, Xian, China, in 2004, the
+M.E. degree from Xian Jiaotong University, Xian,
+China, in 2007, and the Ph.D. degree from Nanyang
+Technological University, Singapore, in 2011. He
+was a Scientist with Data Storage Institute and the
+Institute of High Performance Computing, Agency
+for Science, Technology and Research (ASTAR),
+Singapore, from 2011 to 2014. He is currently an Associate Professor with the Department of Precision
+Instrument, Tsinghua University, Beijing, China. He
+has published over 70 journal and conference papers. His current research
+interests include brain inspired computing, complex systems, neuromorphic
+computing, machine learning, and system identification.
+
+Yuan Xie received the B.S. degree from Electrical
+Engineering Department, Tsinghua University, Beijing, China, in 1997, and the M.S. and Ph.D. degrees
+from Electrical Engineering Department, Princeton
+University, Princeton, NJ, USA, in 1999 and 2002,
+respectively. He was with IBM, Armonk, NY, USA,
+from 2002 to 2003, and AMD Research China Lab,
+Beijing, China, from 2012 to 2013. He has been a
+Professor with Pennsylvania State University, State
+College, PA, USA, since 2003. He is currently a
+Professor with the Electrical and Computer Engineering Department, University of California at Santa Barbara, Santa Barbara,
+CA, USA. He has been inducted to ISCA/MICRO/HPCA Hall of Fame. He
+has been an IEEE Fellow since 2015. His current research interests include
+computer architecture, Electronic Design Automation, and VLSI design.

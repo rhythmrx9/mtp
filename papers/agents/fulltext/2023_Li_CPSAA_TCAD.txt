@@ -1,0 +1,3279 @@
+# CPSAA: Accelerating Sparse Attention Using Crossbar-Based Processing-In-Memory Architecture
+# id: W4390241252 | key: 2023_Li_CPSAA_TCAD | TCAD 2023 | card: ../cards/2023_Li_CPSAA_TCAD.md
+
+
+=== page 1 ===
+1
+
+CPSAA: Accelerating Sparse Attention using
+Crossbar-based Processing-In-Memory Architecture
+
+arXiv:2210.06696v2 [cs.AR] 7 Oct 2023
+
+Huize Li, Member, IEEE, Hai Jin, Fellow, IEEE, Long Zheng, Member, IEEE, Xiaofei Liao, Member, IEEE, Yu
+Huang, Member, IEEE, Cong Liu, Student Member, IEEE, Jiahong Xu, Student Member, IEEE, Zhuohui
+Duan, Member, IEEE, Dan Chen, Student Member, IEEE, Chuangyi Gui, Student Member, IEEE
+
+Abstract—The attention-based neural network attracts great
+interest due to its excellent accuracy enhancement. However,
+the attention mechanism requires huge computational efforts
+to process unnecessary calculations, significantly limiting the
+system’s performance. To reduce the unnecessary calculations,
+researchers propose sparse attention to convert some dense-dense
+matrices multiplication (DDMM) operations to sampled densedense matrix multiplication (SDDMM) and sparse matrix multiplication (SpMM) operations. However, current sparse attention
+solutions introduce massive off-chip random memory access since
+the sparse attention matrix is generally unstructured.
+We propose CPSAA, a novel crossbar-based processing-inmemory (PIM)-featured sparse attention accelerator to eliminate
+off-chip data transmissions. First, we present a novel attention
+calculation mode to balance the crossbar writing and crossbar
+processing latency. Second, we design a novel PIM-based sparsity
+pruning architecture to eliminate the pruning phase’s off-chip
+data transfers. Finally, we present novel crossbar-based SDDMM
+and SpMM methods to process unstructured sparse attention
+matrices by coupling two types of crossbar arrays. Experimental
+results show that CPSAA has an average of 89.6×, 32.2×, 17.8×,
+3.39×, and 3.84× performance improvement and 755.6×, 55.3×,
+21.3×, 5.7×, and 4.9× energy-saving when compare with GPU,
+FPGA, SANGER, ReBERT, and ReTransformer.
+Index Terms—processing-in-memory, domain-specific accelerator, attention mechanism, ReRAM.
+
+I. I NTRODUCTION
+Attention-based neural network shows accuracy leaps in
+machine learning applications, e. g., natural language processing (NLP) [10] and computer vision [8]. Different from
+the commonly used Convolutional Neural Network (CNN) or
+Recurrent Neural Network (RNN) models, Transformer [30]
+adopts a pure attention-based neural network to better identify
+the dependencies between tokens of the input sequence. Following this design, Transformer and its variants achieve great
+accuracy improvement in NLP tasks [10], such as machine
+translation [30] and question answering [6], etc. Attention is
+also widely used in computer vision tasks [8] including image
+classification [1] and object detection [18], etc.
+The vanilla attention mechanism [30] is usually implemented as DDMM and softmax operations. By computing an
+The authors are with the National Engineering Research Center for Big
+Data Technology and System, Services Computing Technology and System
+Lab, Cluster and Grid Computing Lab, School of Computer Science and
+Technology, Huazhong University of Science and Technology, Wuhan, China
+(e-mail: {huizeli, hjin, longzh, xfliao, yuh, congliu, jhxu, zhduan, cdhust,
+chygui}@hust.edu.cn). Accepted by TCAD in 01/05/2023.
+This work is supported by the NSFC (No. 61832006). The correspondence
+of this paper should be addressed to Yu Huang.
+
+attention score matrix, the attention mechanism can pay attention to these relevant token pairs. There is overwhelming computation pressure in processing these irrelevant token pairs,
+leading to intolerable execution time [7]. Researchers propose
+sparse attention by adding a sparsity pruning phase before
+the attention calculation to reduce irrelevant calculations [7],
+[19], since most tokens in the input sequence are unrelated
+to the current query. There are two types of sparse attention
+designs, i.e., software-based and software-hardware co-design
+methods [19]. Software-based methods [29], [38] aim to propose various optimization algorithms to reduce computational
+overhead by increasing sparsity. Software-hardware co-design
+solutions accelerate sparse attention by taking advantage of
+high-parallelism hardware, such as Field Programmable Gate
+Array (FPGA) [16], [40] and Application Specific Integrated
+Circuit (ASIC) [7], [19], [32].
+The above solutions only achieve limited speedups since
+both the sparsity pruning and attention calculation phases
+involve many off-chip data transfers. Emerging crossbar-based
+architectures are promising to solve the off-chip data transmission problem, such as Resistive Random Access Memory
+(ReRAM) and ReRAM-based content addressable memory
+(ReCAM) [12]. ReCAM is suitable for high parallel comparison, the core operation of content-based similarity search
+in the attention mechanism. ReRAM is ideal for vectormatrix multiplication (VMM) operation, which has superior
+performance handling the DDMM operations of attentionbased neural network. Utilizing the in-situ processing ability
+of ReRAM arrays, there emerge ReRAM-based PIM-featured
+solutions to accelerate traditional neural network [27] and the
+dense attention mechanism [11], [36]. However, these PIMbased solutions can hardly extend to accelerate the sparse
+attention for the following reasons.
+First, the ReRAM array’s write overhead cannot be ignored
+as it is in ReRAM-based CNN and RNN accelerators. Solving
+the ReRAM write overhead is urgent because many matrices
+in the attention mechanism cannot be reused and need to be
+written in runtime. Second, the sparse attention involves the
+sparsity pruning phase, which is not considered by current
+dense attention accelerators. Using the current software-based
+pruning algorithm can promote the PIM-based attention accelerator. However, the software-based pruning methods have
+poor performance because they need to load all input matrices
+from the off-chip memory to the processor. Moreover, the
+sparsity of the attention mechanism is pretty unstructured,
+which will introduce lots of off-chip random memory access
+
+=== page 2 ===
+2
+
+people
+
+Head1
+Head2
+Head3
+
+Queries
+
+Q = XWQ
+
+X
+
+WK
+
+K
+Values
+
+peace
+
+WV
+
+Z = SV
+X
+
+V = XWV
+
+Top Electrode
+
+V2
+
+X
+
+Metal Oxide
+Bottom Electrode
+
+DRV
+
+I1
+
+V
+
+(a) Computation stages of dense attention mechanism
+
+I2
+
+BNL
+
+BL
+
+DRV
+
+Word line
+
+...
+
+Vm
+
+SpMM
+Output
+
+G(1,3)
+
+G(2,3)
+
+R
+G(m,n)
+
+In
+
+DRV
+
+T
+
+V
+
+Z
+
+(a)
+
+Word line
+
+B(m,0)
+
+S&H
+
+S
+
+B(0,0)
+
+(b)
+
+B(0,n)
+
+...
+
+Bit-not line
+
+K = XWK
+X
+
+G(1,2)
+
+Bit line
+
+X
+
+Key
+G(1,1)
+
+DRV
+
+Mask
+
+X
+
+love
+
+S
+
+...
+
+Q
+Keys
+
+V1
+
+Bit line
+
+WQ
+
+KT
+
+Q
+
+S = QKT
+
+DRV
+
+SDDMM
+
+Softmax(S)
+
+X
+
+Word line
+
+Score
+
+...
+
+Weight
+
+Input
+
+T
+A
+G
+
+B(m,n)
+
+(c)
+
+X
+
+Z
+(b) Sparse attention calculation
+
+Fig. 1. Dataflow of attention mechanism
+
+Fig. 2. (a) One ReRAM cell, (b) The ReRAM crossbar architecture, and (c)
+The ReCAM array architecture
+Word line
+
+V1DRV
+
+pruning phase to save computationalG resources
+of the attention
+G
+G
+V
+calculation phase.顶部电极
+G
+ ...
+金属氧化物
+V
+1, i f S̃[i, j] ≥ θ
+G[i, j] = binarize(
+S̃[i, j], θ ) =
+(1)
+底部电极
+G
+I
+I
+0, I otherwise
+(1,1)
+
+i DRV
+
+(a)
+
+(1,2)
+
+(1,3)
+
+DRV
+
+...
+
+2
+
+Bit line
+
+to the attention calculation phase. Finally, the sparse attention
+involves the SDDMM and SpMM operations. Direct application of current ReRAM-based sparse methods [17], [28] to
+ReRAM-based SDDMM and SpMM operations will achieve
+inferior performance (for details to see § IV-C and § IV-D).
+Given this landscape, we propose CPSAA, a novel Crossbarbased PIM-featured Sparse Attention Accelerator. First, we design the attention calculation mode to increase the parallelism
+of CPSAA dataflow while hiding ReRAM writing overhead.
+Second, we design a novel PIM-based sparsity pruning architecture to support our calculation mode while removing
+the off-chip data transmissions. Finally, we couple ReRAM
+and ReCAM arrays and propose new PIM-based SDDMM and
+SpMM methods to utilize the unstructured sparsity. The main
+contributions of this paper are as follows:
+• We propose CPSAA, a PIM-based sparse attention accelerator, to speed up both the pruning and attention
+calculation phases of the neural network inference.
+• We design the pruning phase as a novel PIM architecture
+to eliminate off-chip data transfers. The attention calculation architecture involves novel ReRAM-based SDDMM
+and SpMM methods to increase the parallelism of sparse
+attention.
+• We evaluate and compare CPSAA with state-of-the-art
+attention mechanism solutions. The experimental results
+show that CPSAA has performance improvement in
+speedups and energy-saving.
+
+1
+
+2
+
+j
+
+S&H
+
+S&H
+
+S&H
+
+(2,3)
+
+(i,j)
+
+(b)
+
+SANGER [19] proposes a prediction-based pruning method
+and achieves high sparsity. The idea of their pruning method
+is to calculate the approximate score matrix S̃ using a lowprecision DDMM
+operation, S̃ = So f tmax(QU−1 (QU(Q) ·
+√
+T
+QU(K ))/ d), where d is the dimension of the input embeddings, and QU(x) = round(γx) is a quantization operator
+that maps input buffers to low-bit by a scaling factor γ and
+a rounding bit-shift. QU−1 (·) is the corresponding de-quant
+operator that transforms low-bit outputs back into high precision. Then, a binarization procedure described in equation (1)
+will convert the S̃ matrix to a binary mask matrix G, where
+θ is the threshold of this binarization function. Because the
+sparsity of the mask matrix is similar to the score matrix
+S, SANGER can convert the DDMM operation S = Q · K T
+to SDDMM operation. As Figure 1 (b) shows, SDDMM
+operation generates the sparse score matrix S with three input
+matrices (two dense matrices Q, K, and one sparse mask
+matrix), which can utilize the mask matrix to avoid calculating
+the zero-value (white cells) of the S matrix. Utilizing the sparse
+S matrix, people can convert the DDMM operation Z = S ·V
+to the SpMM operation. Figure 1 (b) shows the visualization
+of the SpMM operation, which is a VMM operation between
+a sparse matrix S and a dense matrix V .
+
+II. BACKGROUND AND M OTIVATION
+A. Sparse Attention
+
+B. ReRAM and ReCAM Basics
+
+The vanilla attention mechanism maps a query matrix Q
+and a key-value matrix pair K-V to an output matrix Z.
+Figure 1 (a) depicts the calculation procedure of the dense
+attention mechanism. First, the query (Q), key (K), and value
+(V ) matrices are obtained by multiplying the embedded input
+sequence X with the corresponding weight matrices, WQ , WK ,
+and WV . Next, the score matrix S is calculated by multiplying
+Q with K T . Then, the S matrix is normalized with a row-wise
+softmax function Softmax(S). Finally, S is multiplied by the
+V matrix to get the output Z.
+As Figure 1 (a) shows, S reveals the relevance between
+the tokens of Q and K matrices. Researchers find that most
+tokens in Q are irrelevant to K, making the S matrix inherently
+sparse [7]. The above fact makes it possible to utilize the sparsity of S to avoid computing these irrelevant token pairs [7].
+Thus, people propose sparse attention, which adopts a sparsity
+
+Figure 2 (a) shows one ReRAM cell, which is comprised of
+a top electrode, a metal oxide layer, and a bottom electrode.
+Following the Kirchhoff’s Current Law, ReRAM crossbar
+array can process VMM operation efficiently [33], denoted
+as In = ∑Nm=0 Vm × G(m,n) , as Figure 2 (b) shows. Utilizing
+this high parallel in-situ VMM operation, several ReRAMbased neural network accelerators [27] and graph processing
+accelerators [22], [28], [42] have been proposed.
+The ReCAM array architecture is shown in Figure 2
+(c), which is comprised of lots of two transistors and two
+memristors (2T2R) ReCAM bit-cells [12]. One ReCAM bitcell contains a couple of ReRAM cells. One ReCAM array
+contains a Key register, a ReCAM cells array, drivers (DRV),
+and tag registers (TAG). ReCAM arrays can perform vectorscalar comparisons in parallel [12]. The TAG will latch the
+‘1’ signal if one row matches with the Key register.
+
+=== page 3 ===
+3
+
+TABLE I
+C URRENT ATTENTION MECHANISM SOLUTIONS
+
+Features
+Spar. pattern
+Pruning plt.
+Attention plt.
+
+Sparsity
+visualization
+Sparsity
+regularity
+Sparsity
+Speedup
+
+Hardware-based
+[11], [36]
+CPSAA
+dense
+dynamic
+ReRAM
+ReRAM
+ReRAM
+
+-
+
+unstructured
+
+high
+
+high
+high
+
+Software-hardware co-design
+[16], [40]
+[7], [32]
+[19], [23]
+static
+dynamic
+dynamic
+CPU/GPU
+CPU/GPU
+CPU/GPU
+FPGA
+ASIC
+ASIC
+
+Software-based
+[2], [38]
+[3], [41]
+static
+dynamic
+CPU/GPU
+CPU/GPU
+CPU/GPU
+CPU/GPU
+
+coarse-grain
+structured
+low
+low
+
+coarse-grain
+structured
+low
+low
+
+coarse-grain
+structured
+medium
+medium
+
+C. Related Work
+
+fine-grain
+structured
+high
+high
+
+A T -C A
+
+M A -G E
+
+M A -G E -M
+
+M A -G E -P
+
+unstructured
+high
+low
+A T -C A -M
+
+A T -C A -P
+
+Q Q P
+
+R T E
+
+Table I lists the recent studies of the attention mechanism.
+Different from SANGER’s classification, we divide these
+works into three categories, i.e., software-based, softwarehardware co-design, and the new adding hardware-based. The
+software-based methods can be further divided into static and
+dynamic sparsity patterns. The static sparsity pattern can only
+get coarse-grained sparsity for data dependent [2], [38]. The
+dynamic sparsity pattern can achieve higher sparsity conditioned on individual input samples during runtime, but their
+unstructured sparsity increases the random memory access
+overhead [3], [41].
+Software-hardware co-design methods adopt more efficient
+hardware, such as FPGAs and ASICs. FTRANS [16] is an
+efficient acceleration framework for transformer-based NLP.
+Zhang et al. propose a novel pruning method and design the
+FPGA-based sparse attention accelerator [40]. A3 [7] can accelerate the attention mechanism with algorithmic approximation and hardware specialization. SpAtten [32] leverages token
+sparsity, head sparsity, and quantization opportunities to reduce
+redundent computation and random access. SANGER [19]
+presents a prediction-based pruning algorithm to reduce unnecessary calculations while designing the “splitting and packing” algorithm to reduce the massive random memory access
+overhead. DOTA [23] proposes a dynamic weak connections
+detector to avoid unnecessary attention calculation and promote sparse attention.
+Although these co-design solutions can relieve the random
+memory access by designing hardware-specific algorithms,
+many off-chip data transmissions exist because of their separate memory and processor architecture. Using SANGER as
+an example, the “splitting and packing” algorithm can reduce
+random memory access by converting the unstructured sparsity
+to fine-grained structured sparsity. However, the benefit of
+the fine-grained structured sparsity comes at the cost of the
+dynamically configured control signals, which are highly complex to scheduling processing elements and memory access
+in runtime. In addition, SANGER introduces off-chip random
+access and data dependency to their sparsity pruning phase.
+Thus, no current accelerators can solve the off-chip random
+memory access problem elegantly.
+We also list current hardware-based PIM-featured dense
+
+O p e r a tio n s R a tio (% )
+
+1 0 0
+8 0
+6 0
+4 0
+2 0
+0
+M N L I
+
+M R P C
+
+Q Q P
+
+S A N G E R
+
+Q N L I
+
+R T E
+
+M N L I
+
+M R P C
+
+Q N L I
+
+D O T A
+
+Fig. 3. Response time breakdown of SANGER and DOTA
+
+attention accelerators in Table I. These solutions use high
+parallel ReRAM arrays to significantly reduce the latency of
+DDMM operations [11], [36]. However, since the sparsity
+of the attention matrices is not considered, current PIMbased attention accelerators need to calculate all five DDMM
+operation steps, wasting lots of computational resources on
+irrelevant tokens. Therefore, how to design a PIM-based sparse
+attention accelerator and reducing unnecessary calculations
+become the key to achieve further accelerations.
+D. Motivation
+We find that current sparse attention accelerators have many
+off-chip data transmissions. We design experiments on two
+sparse attention accelerators, i.e., SANGER and DOTA, to
+confirm this statement. Figure 3 presents the operations ratio of
+SANGER [19] and DOTA [23] running five real-world datasets
+(details to see Section V). The ratio of the operation comes
+from breaking down the response time to the mask matrix
+generation (MA-GE) and the attention mechanism calculation
+(AT-CA). To assess the impact of off-chip memory access, we
+further break down the MA-GE and AT-CA to the processor
+execution time (MA-GE-P and AT-CA-P) and the memory
+access time (MA-GE-M and AT-CA-M). The memory access
+time is obtained by subtracting the average kernel runtime
+from the total execution time.
+First, the overhead of the mask generation and attention
+calculation phases both cannot be ignored. Figure 3 shows
+the MA-GE takes an average of 17.9% (14.3% in DOTA)
+response time, while the AT-CA takes 82.1% (85.7% in
+DOTA). The calculation overhead of the pruning phase is
+
+=== page 4 ===
+4
+
+Initialization
+Inference
+WQ
+Q= X·WQ
+
+WK
+
+time
+
+K= X·WK KT
+
+S= Q·KT
+
+WV
+V= X·WV V
+(a) ReBERT
+WQ
+
+Z= S·V
+
+Q= X·WQ
+
+WKT
+
+R= Q·WKT
+
+WV
+
+P= S·X Z= P·WV
+
+XT
+(b) ReTransformer
+
+S= R·XT
+
+WQ·WKT
+
+M= X·WS
+
+WV
+
+V= X·WV
+
+XT
+
+Writing
+VMM
+V
+
+Z= S·V
+
+S= M·XT
+
+Softmax(S)
+
+(c) CPSAA
+
+Fig. 4. The calculation mode of (a) ReBERT, (b) ReTransformer, and (c)
+dense-version CPSAA
+
+smaller than the attention calculation since the pruning phase
+of SANGER and DOTA uses low-precision computing.
+Second, most of the overhead of the mask generation
+phase comes from the off-chip memory access. The MAGE-M takes an average of 94.6% (92.7% in DOTA) response
+time while the MA-GE-P takes 5.4% (7.3% in DOTA). The
+reason is that the MA-GE of SANGER (DOTA) needs to
+access Q and K from the off-chip memory, which involves
+many off-chip data transfers and takes lots of response time.
+Third, the attention calculation also spends a lot of time
+on off-chip data transfers. The AT-CA-M takes an average
+of 71.2% (63.5% in DOTA) response time while the AT-CAP takes 28.8% (36.5% in DOTA). That is because all the
+input matrices, Q, K, V , and S, need to be sent from the
+off-chip memory to the ASIC-based processor. These off-chip
+data transmissions greatly increase access latency and further
+hurts performance. The massive off-chip data transmissions
+motivate us to design a novel sparse attention accelerator to
+simultaneously accelerate MA-GE and AT-CA with pretty low
+off-chip random access.
+III. C ALCULATION M ODE
+In conventional ReRAM-based CNN and RNN accelerators,
+the write overhead of their weight matrices can be ignored
+because these matrices can be reused for different inputs.
+Unfortunately, the pretty high ReRAM write overhead of
+the K and V matrices in the attention mechanism cannot
+be ignored because these matrices vary for different input
+sequences. Even worse, the write operation works serial with
+the VMM operation and greatly increases the latency, just as
+the calculation mode of ReBERT [11] shown in Figure 4 (a).
+ReBERT uses the same calculation mode as SANGER, which
+has pretty high VMM parallelism since it can get Q, K, and V
+simultaneously. However, the VMM operation S = Q · K T has
+to wait for the write operations of matrices K T , which greatly
+hurts the performance of ReBERT.
+To reduce the performance impact of ReRAM writing, ReTransformer [36] depicts a novel calculation mode as Figure 4
+(b) shows. To avoid the VMM operations waiting a long
+time for the writing of K T , the authors avoid generating
+
+K and V . With the weight matrices WQ , WK , and WV used
+in serial, their new computational mode achieves the goal
+that the VMM operations can work concurrently with the
+writing. However, three challenges limit this calculation mode
+to efficiently support sparse attention: 1) Data dependency.
+As Figure 4 (b) shows, ReTransformer has to sequentially get
+matrix Q → R → S → P → Z with high data dependency, while
+Q, K, and V matrices could be parallel computed in ReBERT.
+2) Poor performance when extending to mask generation.
+Things get worse in sparse attention because there is a mask
+generation phase. Suppose ReTransformer wants to get the
+quantized S (i.e., mask matrix). ReTransformer should get Q
+first; then use the quantized Q to get the quantized R; finally,
+to get quantized S. Therefore, the generation of Q (DDMM
+operation) becomes the critical path of the mask generation. 3)
+Data dependency between the mask generation and attention
+calculation. The mask generation of ReTransformer must wait
+for its attention calculation (i.e., data dependency). Because
+ReTransformer must generate Q and R matrices to get the
+mask matrix. Therefore, the mask generation of ReTransformer can not work concurrently with its attention calculation,
+i.e., ReTransformer does not see the potential of parallel
+execution between mask generation and attention calculation.
+S = Q · K T = (X ·WQ ) · (X ·WK )T
+(2)
+S = (X ·WQ ) · (WKT · X T ) = X · (WQ ·WKT ) · X T
+
+(3)
+
+We develop a novel calculation mode to solve the above
+challenges, as Figure 4 (c) shows. We find that the above
+three challenges are the victims of the data dependency of
+Q. To unbind the data dependency of Q, we pre-calculate
+the weight matrix WS by performing WS = WQ · WKT , and we
+pre-store WS and WV in ReRAM arrays. The calculation of
+S described in equation (2) can be converted to equation (3)
+due to the combination law of matrix multiplication. Based
+on equation (3), we can get the score matrix S by performing
+two VMM operations, i.e., M = X · WS and S = M · X T . To
+further unbind the data dependency between P and Z in
+Figure 4 (b), we calculate V in advance as Figure 4 (c)
+shows. After V = X ·WV is calculated, we can get the output Z
+matrix by performing S ·V . Our novel computational mode can
+unbind the data dependency of Q and achieve parallel VMM
+operations, while the VMM operations can also run parallel
+with write operations in an asynchronous manner. Further,
+this new calculation mode can also significantly improve the
+performance of mask generation (for details to see Figure 7).
+IV. CPSAA
+A. Overview
+Figure 5 shows the overview architecture of CPSAA,
+which contains several Tiles, and each Tile has two main
+parts, i.e., the peripheral components (red-dotted rectangle
+B ) and ReRAM arrays. The peripheral components (PC)
+contain a controller (CTRL), several Buffers, Quant and DeQuant Units (QU and DQU), one Softmax Unit (SU), one
+Binarization Unit (BU), and two ReCAM arrays worked as
+Scheduler. The ReRAM arrays are classified as read-only
+arrays (ROA) and write-enable arrays (WEA). The parameters
+
+=== page 5 ===
+CB
+
+DQU
+
+6
+
+BU
+
+...
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+XB
+
+...
+
+...
+
+...
+
+...
+
+DAC
+
+...
+
+DAC
+
+S&H
+
+AG
+
+Tiles
+
+S+A
+
+...
+
+XB
+
+XB
+
+...
+
+XB
+
+...
+
+...
+...
+
+4 3
+
+...
+
+2' 3'
+WEA
+
+...
+
+XB
+
+S&H
+
+4
+
+2
+Read-only Mark
+
+...
+...
+
+DAC
+
+S&H
+
+Address Information Table
+3
+ROA
+
+...
+...
+
+DAC
+
+...
+
+Data Transfer Controller
+
+5
+
+...
+
+QU
+
+...
+...
+
+ReCAM
+Scheduler
+
+5
+
+...
+
+...
+...
+
+Softmax
+Unit
+
+...
+
+7
+
+2
+
+1
+
+...
+
+...
+
+PCIe
+
+Input
+Buffer
+
+...
+
+1
+
+CTRL
+
+A
+
+...
+
+Next Layer (Z)
+
+Peripheral Components B
+PCIe
+
+...
+
+Previous Layer (X)
+
+5
+
+S&H
+
+IR
+
+OR
+
+ADC
+
+C
+
+QU: Quant Unit DQU: De-Quant Unit CB: Crossbar Buffer BU: Binarization Unit (X): Input matrix (Z): Output matrix
+ROA: Read-only Arrays WEA: Write-enable Arrays XB: Crossbar Array
+IR: Input Register
+OR: Output Register
+DAC: Digital-to-Analog Converter
+ADC: Analog-to-Digital Converter
+AG: Arrays Group
+S+A: Shift and Add Unit
+: For Storage
+
+: For Control
+
+: For Processing
+
+: Attention Calculation Dataflow
+
+ROA. The read-only arrays will pre-store those matrices
+that can be reused for different inputs, i.e., QU(WS ), WS , and
+WV . The ROA contains several Arrays Group (AG), and we
+set a read-only mark for the ROA.
+WEA. The write-enable arrays will store these matrices that
+are generated in the runtime, i.e., QU(X T ), X T , and V .
+AG. The Arrays Group ( C ) is the basic storage and
+computing units, which contains one shift and add Unit (S+A),
+one input register (IR), one output register (OR), one analogdigital-converter (ADC), and several ReRAM arrays.
+
+: Pruning Dataflow
+
+B. Dataflow
+Fig. 5. CPSAA architecture
+× Mutiplier
+
+- Subtractor
+
+> Comparator
+
+S
+×
+
+>
+
+>
+
+Max
+
++= Accumulator
+
+Exp Table
+(Upper Half)
+Exp Table
+(Lower Half)
+
+(a)
+
+/ Division
+Score
+
+×
+
+/
++=
+
+Sum
+
+(b)
+
+Fig. 6. (a) Details of QU, (b) details of SU
+
+obtained from pre-training are evenly distributed to the readonly arrays in each tile of CPSAA. The tiles assigned to the
+same attention head communicate with each other through
+on-chip bus. Because real-world applications usually need
+multiple attention layers working together, we also show the
+input matrix from the previous layer and the output matrix
+to the next layer, which is the off-chip data transmission
+managed by the data transfer controller (DTC A ). We use
+the circled color numbers to show the CPSAA dataflow, which
+is corresponded to the numbers in Figure 7. The functions of
+all components are as follows:
+CTRL. The controller will generate control signals for all
+components in one Tile.
+Buffers. The Input Buffer (IB) will store the input embeddings, i.e., X matrices. The Crossbar Buffer (CB) will store the
+matrices generated at running time. The address information
+table (AIT) will record the address information of matrices
+in the ReRAM arrays, which will be useful when we need to
+know the location of a specific sub-matrix.
+QU and DQU. The Quant Unit will quantize the matrix to a
+low-precision representation (via QU(·) function), and the Dequant Unit will convert the low-precision representation back
+to high precision (via QU−1 (·) function). The architecture of
+the QU is shown in Figure 6 (a), and the DQU is designed in
+the inverse process.
+SU and BU. The Softmax Unit will perform the softmax
+function, and the detailed architecture of the SU is the same
+as A3 [7], shown in Figure 6 (b). The input of SU is matrix
+S, which is calculated by multiple crossbar arrays in one
+tile. While crossbar arrays calculate matrix S in different
+tiles, CPSAA will gather these results to generate S. The
+Binarization Unit will convert a given matrix to the ‘01’
+matrix, which is performed by a binarization comparator.
+ReCAM Scheduler. The ReCAM arrays will store the mask
+matrices, which will be used to generate control signals for the
+ReRAM-based VMM operations.
+
+The color-circled numbers in Figure 7 show two CPSAA visualization dataflows, i.e., the pruning phase’s dataflow (bluecircled numbers) and attention calculation dataflow (yellowcircled numbers). To illustrate the dataflow more clearly, we
+divide the CPSAA dataflows into four steps, as Figure 7
+shows. Step1 is a PIM-based pruning method to generate the
+mask matrix. Step2 contains the calculation of M = X · WS ,
+V = X · WV , and the write of the matrix X T (Noting that
+Step1 and Step2 can run in parallel since we remove the
+datapath dependency of Q between these two steps). Step3
+contains the SDDMM operation S = M · X T and the write of
+matrix V . Step4 performs the SpMM operation Z = S · V . It
+is worth noting that Step2-Step4 is the detailed version of the
+computational mode in Figure 4 (c).
+Pruning Dataflow. The pruning algorithm of SANGER
+needs to use the full-precision Q and K matrices to generate
+the mask matrix, which makes the pruning phase wait for the
+calculation of these intermediate matrices Q and K. To avoid
+the waiting of the pruning phase (i.e., Step1 waiting for Step2),
+we fine-tune the mask generating algorithm as equation (4),
+where Bi(·) is the binarization function and So f t(·) is the
+softmax function, and the QU(X), QU(WS ), and QU(X T )
+denotes the low-precision X, WS , and X T . Our new pruning
+algorithm can use the input embedding matrix and the weight
+matrix to calculate the mask matrix, which does not need to
+use the results of Step2, i.e., M or V .
+√
+mask = Bi(So f t(QU−1 (QU(X)QU(WS )QU(X T ))/ d)) (4)
+As Step1 in Figure 7 shows, we pre-store the low-precision
+QU(WS ) in ROA. When an input matrix X arrives at CPSAA,
+the system will send X to the QU and get QU(X) ( 1 ). Then,
+QU(X T ) will be written to WEA ( 2’ ), and a VMM operation
+will be performed between QU(X) and QU(WS ) to get QU(M)
+( 2 ). Next, the system will perform a VMM operation between
+QU(M) and QU(X T ) to generate QU(S) ( 3 ). After that,
+QU(S) will be sent to the DQU, SU, and BU to get the
+mask matrix ( 4 ). Finally, the mask matrix will be written
+to a ReCAM array ( 5 ). The sparsity of the mask is similar
+to the matrix S, so we can use the mask matrix to convert the
+DDMM operation S = M · X T to the SDDMM operation.
+Attention Calculation Dataflow. As shown in Figure 7,
+the weight matrices WS and WV are pre-stored in ROA. At the
+beginning, CPSAA receives and stores an input embedding
+matrix X to the Input Buffer ( 1 ). Then, the following three
+phases will be performed in parallel: 1) CPSAA will write
+
+=== page 6 ===
+6
+
+Step1
+
+Step2
+
+3
+
+...
+
+X in IR X
+
+2'
+
+...
+
+...
+
+3
+
+...
+
+...
+
+4
+
+X
+
+XT
+
+S&H
+
+...
+
+...
+
+DAC
+
+...
+
+S&H
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+3'
+
+Write to
+
+DQU
+
+S
+
+...
+
+DAC
+
+S&H
+4
+
+5
+
+S&H
+
+2
+
+X
+
+...
+
+XT
+
+QU(S)
+
+...
+
+...
+
+...
+
+...
+
+DAC
+
+M
+DAC
+
+...
+
+...
+
+...
+
+...
+
+QU(WS)
+
+Mask as
+sample
+
+...
+
+X
+
+...
+
+...
+
+...
+
+QU(M)
+
+Step4
+
+WS
+
+AIT
+
+QU(X)T
+Write to
+
+Step3
+
+SU
+
+SU & BU
+
+QU(X)
+
+X
+
+6
+
+AIT
+
+QU
+2
+
+X in IR
+
+Input
+Buffer
+
+AIT
+
+V
+
+WV
+
+3
+
+End
+
+Mask
+
+1
+
+5
+
+...
+
+...
+
+4
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+DAC
+TAG
+
+Driver
+
+Start
+
+...
+
+...
+
+...
+
+Key/Mask
+
+Previous
+Layer (X)
+
+Mask
+
+Write to
+
+ReCAM Scheduler
+
+1
+
+...
+
+...
+
+X
+
+Write to
+V
+
+...
+
+DAC
+
+Z
+7
+
+S&H
+
+S&H
+
+Next Layer
+
+Fig. 7. CPSAA visualization dataflow
+
+Row-wise
+Search
+
+...
+
+...
+
+...
+
+...
+
+...
+
+IR
+
+...
+
+...
+
+...
+
+...
+
+...
+
+DAC
+
+S&H
+
+...
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+DAC
+
+S&H
+
+...
+
+...
+
+...
+
+...
+...
+
+DAC
+
+j
+
+f
+IR
+
+...
+
+...
+
+...
+
+S&H
+
+...
+
+S&H
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+DAC
+
+...
+
+IR
+
+f
+n
+
+...
+
+...
+
+...
+
+IR
+
+...
+
+S&H
+
+...
+
+DAC
+
+...
+
+...
+
+...
+
+...
+
+b
+j
+
+...
+...
+
+DAC
+
+i
+
+...
+
+IR
+
+...
+
+S&H
+
+IR
+
+a b c d
+e f g h
+i j k l
+m n o p
+
+...
+...
+
+DAC
+
+e
+
+...
+
+IR
+
+...
+
+(a)
+4×128 Q matrix
+
+e
+m
+
+...
+
+...
+
+TAG
+
+Write to IR
+
+Write to IR
+
+a
+i
+
+IR
+
+Key/Mask
+
+4×4 mask matrix in
+ReCAM Scheduler
+
+...
+
+DAC
+
+S&H
+
+S&H
+
+32 records
+
+(b)
+
+...
+
+...
+
+IR
+
+...
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+...
+
+S&H
+
+...
+
+...
+
+...
+
+l
+
+...
+
+DAC
+
+S&H
+
+...
+
+S&H
+
+...
+
+...
+
+...
+...
+
+DAC
+
+...
+
+h
+IR
+
+...
+
+...
+
+...
+
+...
+
+DAC
+
+S&H
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+DAC
+
+...
+
+IR
+
+h
+p
+
+...
+
+...
+
+...
+
+IR
+
+...
+
+S&H
+
+...
+
+S&H
+
+...
+
+...
+
+...
+
+...
+
+d
+l
+
+...
+...
+
+DAC
+
+k
+
+...
+
+IR
+
+...
+
+S&H
+
+IR
+
+(d)
+
+...
+...
+
+DAC
+
+g
+
+...
+
+IR
+
+...
+
+DAC
+
+Output
+
+g
+o
+
+...
+
+...
+
+(c)
+4×4 S matrix
+
+c
+k
+
+IR
+
+128×4 KT matrix
+in 16 32×32 XBs
+32 records per XB
+32 columns store
+one 32-bit number
+
+...
+
+DAC
+
+S&H
+
+(e)
+
+Fig. 8. Novel ReRAM-based SDDMM method with (a) the mask matrix in
+the ReCAM Scheduler, (b) the 4×128 Q matrix, (c) mapping rules of K T
+matrix, which is a brief introduction to the K T matrix in Figure 8 (e), (d)
+parallel-accessible elements in S matrix, and (e) visualization of the SDDMM
+operation in CPSAA
+
+X T to WEA ( 3’ ), 2) CPSAA will send X to the IR via AIT
+to perform the DDMM operation M = X · WS ( 2 3 ), and 3)
+CPSAA will perform the DDMM operation V = X · WV to
+generate matrix V ( 2 3 ). After that, CPSAA can use mask
+matrix to perform the SDDMM operation S = M ·X T to get the
+score matrix S while writing V to WEA ( 4 ). After CPSAA
+performs the softmax function on S ( 5 ), CPSAA will use the
+mask matrix to perform a SpMM operation Z = S · V to get
+the final result ( 6 7 ).
+C. SDDMM Method
+CPSAA can use the mask matrix to convert the DDMM
+operation to SDDMM operation. However, current SDDMM
+
+solutions such as DOTA [23] and SANGER [19] can hardly
+extend to ReRAM-based sparse attention for the following reasons. 1) Vector-wise unmatched with matrix-wise. DOTA and
+SANGER adopt vector-wise parallelism to utilize the spatial
+locality and reduce the random memory access, i.e., dividing
+the matrix into single vectors for processing. ReRAM naturally
+has matrix-wise parallelism (spatial locality failure). Thus, it
+is not feasible to map a vector-wise approach to matrix-wise
+hardware. 2) Less flexible matrix storage in ReRAM. The input
+matrix Q and K can both be reordered and scheduled in DOTA.
+However, CPSAA can only reorder and schedule Q because
+the K matrix must be fixed in the crossbar arrays. The failure
+of scheduling K makes the overall scheduling methods of
+DOTA and SANGER fail in ReRAM. 3) Difficult to remove
+all random memory access. The SDDMM scheduling methods
+of DOTA and SANGER cannot eliminate the random memory access because they cannot access every non-zero value
+without access zero-values. Therefore, they can never achieve
+their ideal performance when extending to ReRAM. Three
+main challenges led to no available ReRAM-based SDDMM
+method, i.e., vectors binding, fixed K, and random memory
+access.
+Here we use the 4×128 Q and K matrices as the example
+to explain our SDDMM acceleration method. As Figure 8 (b)
+shows, the elements of the Q matrix are marked from ‘a’ to ‘p’,
+where ‘a’ is a row vector with 32 32-bit numbers. The most
+popular ReRAM-based mapping strategy (used in ReBERT
+and ReTransformer) of K T uses 32 arrays to store each bit of
+32-bit K T (one array for one bit K T ). This mapping binds all
+vectors of K T and makes it impossible to utilize the vectorwise parallelism. So we map all bits of one vector into the
+same ReRAM array as Figure 8 (c) shows. Each ReRAM array
+has 32 rows and 32 columns, and each ReRAM array stores 32
+
+=== page 7 ===
+7
+
+S matrix
+
+Z matrix
+
+V matrix
+64 XBs
+
+Mask matrix in ReCAM Scheduler
+
+S matrix
+
+V matrix
+
+1
+
+64 XBs
+
+2
+
+...
+
+...
+
+...
+
+...
+...
+
+...
+
+(b)
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+
+(a)
+
+320 XBs
+
+Key
+
+10 XBs
+
+X
+
+3
+
+(a)
+
+(c)
+
+Fig. 9. The problem of current ReRAM-based SpMM method, (a) sparse S
+matrix, (b) dense V matrix, and (c) output Z matrix
+
+(b)
+
+(c)
+
+Fig. 10. Novel ReRAM-based SpMM design, (a) sparse mask matrix in the
+ReCAM Scheduler, (b) dense V matrix, and (c) sparse S matrix
+
+D. SpMM Method
+32-bit numbers, with each row storing one number. We further
+adopt a ReCAM scheduler to generate the control signals for
+SDDMM operation, which can eliminate the random memory
+access of Q as Figure 8 (a) shows. Although K T is fixed in
+ReRAM arrays as shown in Figure 8 (e), our new mapping
+strategy can work well with the ReCAM scheduler to achieve
+a better scheduling results vs. DOTA. Next, we will introduce
+how our ReCAM scheduler controls the SDDMM operation.
+ReRAM-ReCAM Coupling. We assume that the 4×4
+matrix shown in Figure 8 (a) is the sparse mask matrix stored
+in a ReCAM array. In the beginning, the ReCAM array will
+perform the row-wise searching row-by-row as the colored
+arrows in Figure 8 (a) shows. We are taking the second row
+(green arrow line) in Figure 8 (a) as an example. The matching
+result of the second row indicates that the second row of S
+has two zero elements (white cells), so we need to avoid the
+calculation of these zero-value cells. To locate the address of
+non-zero elements, the coordinates ⟨α, βi ⟩ of these matched
+‘1’ cells will be sent to the CTRL. Then, the CTRL will
+utilize the row coordinate α to find the corresponding row
+of Q as the green arrow in Figure 8 (b) shows. At the same
+time, the CTRL will utilize the column coordinate βi to find
+the corresponding ReRAM arrays in Figure 8 (e). As these
+green arrow lines in Figure 8 (e) show, the row indicated by
+α will be sent to the IR of these arrays indicated by βi . The
+searching of the ReCAM array will iterate four times, and
+the other three iterations are marked with red arrow lines in
+Figure 8 (a). When all iterations are finished, the Q matrix will
+be distributed to the IR of the ReRAM arrays, like these red
+and purple rectangles in Figure 8 (e) show. Finally, all arrays
+can perform the VMM operations using the topmost vector in
+their IR until all vectors are processed. To visually represent
+the advantage of our new approach, Figure 8 (d) uses the same
+color to present the elements which can be parallel calculated.
+We can see that our new method can finish the calculation of
+a 4×4 S matrix in two cycles.
+Effect of Sparsity. The sparsity of Figure 8 (a) is 0.5, so
+our novel method can reduce the latency from four cycles to
+two cycles. Note that the sparsity of the attention mechanism
+is around 0.1, so our approach can save up to 10× latency
+in real-world applications. In summary, our new method can
+finish the calculation of SDDMM with fewer latency iterations
+and higher parallelism. Further, our method can efficiently
+utilize the unstructured sparsity without complex scheduler
+and control signals.
+
+Current Problems. Many ReRAM-based SpMM solutions [17], [28] have been proposed. We classify them into two
+categories while extending to ReRAM-based sparse attention.
+One chooses to store sparse ST in ReRAM while using dense
+V T as the input. Another chooses to store the dense V in
+ReRAM while using sparse S as the input. A heavy waitfor-write latency occurs if we choose the first one. That is
+because we can not perform Z = S · V = (V T · ST )T until
+we finish the write of ST (the write of ST will become the
+critical datapath). Figure 9 shows the visualization limitation
+of the second solution. As set in BERT [4] and A3 [7], S is
+a 320×320 sparse matrix and V is a 320×64 dense matrix.
+With the dense matrix V stored in the ReRAM arrays (Figure 9
+(b)), people can perform the VMM operation row-by-row with
+the sparse matrix S as the input (Figure 9 (a)). Because many
+elements of S are zero-value, current solutions choose to set
+zero signals for these zero values. However, these solutions
+will cause the array wasting problem, as Figure 9 (b) shows.
+Taking the first row of S (marked in red frame rectangle) as an
+example, many rows (rows other than red) in ReRAM arrays
+keep idle. Therefore, the parallelism and the runtime memory
+utilization of ReRAM is quite low. In addition, the SpMM
+method in Figure 9 can only save energy but cannot save
+execution cycles.
+Detailed Designs. The sparsity of matrix S is the same as
+the mask matrix, so it is possible to re-arrange the storage
+of the V matrix using the mask matrix. Here we also use a
+320×320 sparse S matrix and a 320×64 dense V matrix as an
+example to illustrate the details. As Figure 10 (a) shows, the
+mask matrix is stored in a ReCAM array (blue cells are ‘1’
+and white cells are ‘0’). First, the ReCAM array will perform
+a row-wise searching operation (red arrow line), which can
+find the coordinates ⟨α, βi ⟩ of these matched ‘1’ values ( 1 ).
+Then, the coordinates of these matched cells will be sent to
+the CTRL, and the CTRL will use the column coordinates
+βi to find the corresponding rows of the V matrix (red frame
+rectangle in Figure 10 (b)), which will be stored to the same
+ReRAM arrays (red lines in Figure 10 (b) 2 ). This mapping
+phase will iterate to each row of the ReCAM array, and we
+further show the mapping of the second row (green lines and
+rectangles) and the last row (yellow lines and rectangles). At
+the same time, the CTRL will also send the column coordinate
+βi to the sparse S matrix. The S matrix can find these elements
+(marked with red cells in Figure 10 (c)) corresponding to βi
+and send these cells to the corresponding IR (red cells in
+Figure 10 (b) 3 ). After all vectors are well mapped, CPSAA
+can simultaneously perform a VMM operation between the
+
+=== page 8 ===
+8
+
+vectors in the IR and the V matrix stored in the ReRAM array
+to calculate all rows of the output Z matrix.
+Advantages. Assuming that the sparsity of the S matrix is
+0.1, so we need around 320×64 32×32 ReRAM arrays to store
+the matrix V . Meanwhile, the SpMM operation Z = S ·V will
+be finished in one cycle. Following the traditional mapping
+shown in Figure 9, 10×64 32×32 ReRAM arrays are required
+for storage V matrix, and 320 cycles will be taken to generate
+the Z matrix. The comparison shows that our novel SpMM
+method saves 320× execution time at the cost of 32× memory
+space. When memory space is limited, we can process the S
+matrix in batches. In the case of two batches, we can get 160×
+execution time at the cost of 16× memory space.
+E. Processing Long Sequences
+This section describes the memory and time complexity of
+CPSAA when processing long sequences. We assume the input
+matrix X has ‘T’ tokens, and the dimension of each token are
+set to ‘D’.
+Memory Complexity. CPSAA has two types of memory,
+i.e., on-chip buffer and crossbar arrays. Four matrices are
+stored in the crossbar arrays, i.e., WS , WV , X T , and V . The
+memory complexity of WS and WV are O(D2 ). The memory
+complexity of X T and V are O(D × T ). Four matrices are
+stored in the on-chip buffer, i.e., X, M, S, and Z. The memory
+complexity of X, M, and Z are O(D × T ) while the memory
+complexity of S is O(T 2 ). Therefore matrix S is the only one
+that has quadratic memory complexity depending on sequence
+length ‘T’
+Time Complexity. In general, assume we are given two
+matrices A and B of sizes α × β and β × γ, respectively.
+The multiplication of A ∗ B requires α ∗ β ∗ γ multipliplyaccumulate operations, and the result matrix C = A ∗ B is of
+size α × γ. Following the notations in Figure 4 (c), we have
+S = M ×X T , where M and X are of sizes T ×D. Therefore, the
+time complexity of matrix S is O(T 2 ). We also have Z = S ×V ,
+and the sizes of S and V are T × T and T × D, respectively.
+Therefore, the time complexity of matrix Z is O(T × D).
+F. Application-level Designs
+CPSAA is designed to eliminate the massive off-chip data
+transmissions in the current sparse attention accelerators.
+However, real-world NLP applications usually involve several
+attention layers working with full-connection (FC) layers, such
+as BERT [4]. The encoder is the basic computation unit of
+BERT, which contains one attention layer and several FC
+layer. We configure one CPSAA chip that works with several
+ReRAM-based FC layer to make up one encoder, and several
+encoders work together to make up the BERT-based solution.
+We perform a pre-training and fine-tuning model to get the
+weight matrices, WQ , WK , and WV , for a BERT-based text
+classification task [4]. Then, we pre-calculate WS = WQ · WKT
+and QU(WS ). We pre-store the WS , WV , and QU(WS ) matrices
+in some ROAs. Note that all the above procedures are preprocessing because these matrices can be reused for different
+input sequences. In the beginning, an input matrix X arrives
+at the Input Buffer (IB). First, the X matrix will be processed
+
+TABLE II
+CPSAA CONFIGURATIONS
+
+Component
+
+Area
+(mm2 )
+
+Power (mW)
+
+Params.
+
+Spec.
+
+PCs properties
+ReCAM
+Scheduler
+
+0.0013
+
+1.398
+
+AIT
+IB
+CB
+CTRL
+
+0.0608
+0.0302
+0.1217
+0.0015
+
+36.89
+18.47
+74.21
+0.382
+
+SU
+
+0.0072
+
+1.134
+
+QU&DQU
+PC Total
+
+0.0016
+0.2235
+
+0.121
+132.62
+AG properties
+
+ADC
+XB Array
+S/H
+DAC
+IR
+OR
+S+A
+AG Total
+ROA
+WEA
+
+Tiles
+DTC
+CPSAA
+
+Bits per Cell
+1
+Size
+512 × 512
+Total
+2
+Size
+64KB
+Size
+32KB
+Size
+128KB
+Total
+1
+LUT Size
+512B
+Total
+1
+Total
+1
+Size
+288KB
+
+Resolution
+Total
+Bits per Cell
+4.78e-5
+0.581
+Size
+Total
+4.69e-7
+0.074
+Total
+6.38e-5
+1.513
+Total
+0.00049
+0.294
+Size
+0.00036
+0.108
+Size
+0.00006
+0.051
+Total
+0.00252
+4.623
+Size
+AGs
+0.0278
+50.87
+Size
+AGs
+0.1421
+258.93
+Size
+CPSAA properties
+Total
+25.18
+28.32K
+Size
+2.26
+494.07
+Total
+27.47
+28.83K
+Size
+0.0015
+
+2.0
+
+8 Bits
+1
+1
+32 × 32
+12
+12
+32 × 12
+512B
+128B
+1
+2.1KB
+11
+23.1KB
+56
+117.6KB
+64
+27.5MB
+1
+27.5MB
+
+by the CPSAA with no off-chip memory access to generate
+the Z matrix. Second, the Z matrix will be sent to the FC
+layer to generate the result of this encoder, which is processed
+following the ReRAM-based dot-product method proposed in
+ISAAC [27]. Finally, the result of the previous encoder will
+be sent as the next encoder’s input until the final inference
+results are obtained.
+V. M ETHODOLOGY
+CPSAA Configurations. We employ a Python cycleaccurate simulator to model the CPSAA attention accelerator.
+We use the 1000GB/s On-Chip Interconnect (OCI) for the onchip transfer bandwidth [9]. ReRAM’s energy consumption
+is obtained with 7pJ per bit as in [35]. As configured in
+ISAAC [27], the “cycle” in CPSAA means the time of ADC
+processing 32 column signals, i.e., 25ns.
+The CPSAA configurations are shown in Table II. We
+configure CPSAA with 64 tiles, and each tile includes one
+group of peripheral components, 11 ROAs, and 56 WEAs.
+We use two 512×512 ReCAM arrays as the Scheduler to
+store the mask matrices, while we use 32×32 crossbar as the
+ReRAM array to perform the VMM operation. The crossbar
+configurations used in CPSAA are designed under the 32nm
+
+=== page 9 ===
+9
+
+F P G A
+
+S A N G E R
+
+R e B E R T
+
+C P S A A
+
+3 2
+
+8
+
+2
+
+0 .5
+
+B E R T
+
+G P T -2
+
+(a )
+
+B A R T
+
+N o r m a liz e d
+E x e c u tio n T im e
+
+E n e r g y E ffic ie n c y
+
+S p e e d u p s
+
+R e T ra n s fo rm e r
+1 0 0 0
+
+1 0 0
+
+1 0
+
+G P U
+
+1 2 8
+6 4
+3 2
+1 6
+
+F P G A
+
+S A N G E R
+
+R e B E R T
+
+R e T ra n s fo rm e r
+
+C P S A A
+
+T h ro u g h p u t
+
+105
+
+T h ro u g
+h tp u t
+Throughput
+（GOPS）
+(G O P
+S /s )
+
+G P U
+1 2 8
+
+104
+103
+8
+4
+
+102
+2
+1
+C o L A
+
+S S T -2
+
+M R P C
+
+S T S -B
+
+Q Q P
+
+M N L I
+
+W
+
+N L I
+
+R T E
+
+S Q u A D
+
+101
+
+Fig. 12. Execution time normalized to CPSAA
+1
+B E R T
+
+G P T -2
+
+B A R T
+
+(b )
+
+Fig. 11. (a) Average speedups of various models, (b) Average energy
+efficiency of various models
+
+process with 533MHz clock frequency [21]. Based TaOx
+ReRAM cells from [21], we conduct SPICE simulation for
+the area and power of crossbar configuration. We use CACTI
+6.5 [20] in 32nm technology to evaluate the power and area
+of all registers. To obtain parameters of other peripheral
+components, we use Cadence-simulator [13] for S/H, S+A in a
+crossbar. The power, area, and latency of a 2-bit precision DAC
+and a 2.0 mW 8b 1.0 GS/s ADC in 32nm CMOS are obtained
+from [26] and [14], respectively. The crossbars are read and
+written in a row parallel manner, and the SET/RESET latency
+is 1.52/2.11 ns for single-level cells (SLC) [34]. The area and
+energy of SU, BU, QU, DQU, and CTRLs are established by
+SPICE circuits, too. The write endurance of the ReRAM cell
+can be alleviated greatly. For instance, considering up to 1012
+ReRAM write endurance [39], CPSAA can achieve hundreds
+of millions (108 ) of inferences when processing millions of
+tokens documents (104 times writing).
+Benchmarks. We use three typical attention-based NN
+models and get the weight matrices by pre-training, i.e.,
+BERT-Base [4], GPT-2 [24], and BART [15]. BERT-Base
+(12 encoders) utilizes the encoder in Google Transformer to
+solve many NLP tasks. GPT-2 (12 decoders) uses the decoder
+of Transformer to process various NLP tasks. BART (six
+encoders and six decoders) is an optimized version of the
+Google Transformer. Our evaluation datasets include eight text
+classification tasks from the General Language Understanding
+Evaluation (GLUE) benchmark [31] (CoLA, SST-2, MRPC,
+STS-B, QQP, MNLI, WNLI, RTE) and Stanford Question
+Answering Dataset (SQuAD) V2.0 [25].
+As configured in Transformer [30], BERT [4], A3 [7], and
+SANGER [19], we set the model dimension dmodel = 512
+and dK = dQ = 64 for all workloads. In addition, model
+dimension (d) is not likely to vary widely since a choice of
+too large d can lead to a decrease in model accuracy [37].
+To fit the memory space of CPSAA, we divide all datasets
+into some little batches, and each batch has 320 embeddings,
+as set in BERT [4] and A3 [7]. Embeddings in the same
+batch can be parallel processed by CPSAA without off-chip
+data transmission, and embeddings in different batches are
+processed in serial with small off-chip data transfers. We use
+the Giga Operations per second (GOPS) as the performance
+metric (throughput) and the throughput per Watt (GOPS/W)
+as the energy metric (energy efficiency).
+Data Overflow Prevention. The precision of input and
+weight matrices are set to 32-bit. The learning rate for GLUE
+and SQuAD v2.0 datasets are 2e-5 and 3e-5, and the number
+of fine-tuning epochs is set to 3 and 2, respectively. The
+
+attention mechanism involves lots of matrix multiplication
+calculations, so preventing data overflow is as important as
+ensuring accuracy. We extract the Exponential Bit (EB) of the
+whole array to make the Fraction Bit (FB) remaining 32-bit
+fixed-point as in [5]. Thus, all VMM operations in CPSAA
+can be performed between 32-bit fixed-point numbers. After
+we get the results of the VMM operation between the FB, we
+can multiply the EB by the FB and get the final results.
+Comparison Platforms. CPSAA is compared with stateof-the-art platforms as follows.
+We choose GPU as the NVIDIA TITAN RTX
+GPU@1770MHz, 576 Tensor cores, 4608 CUDA cores,
+24GB memory, 672GB/s memory bandwidth, and 280 Watt
+TDP. We choose Bigbird as the attention algorithm for the
+GPU [38]. We measure power consumption via nvidia-smi
+and execution latency using CUDA Event. We measure the
+performance of GPUs using PyTorch with cuBLAS 11.2.
+We choose the FPGA-based software-hardware co-design
+accelerator proposed in [40] as the FPGA platform for
+comparison. The configurations are also following [40]. We
+choose the configurations of SANGER as the ASIC-based
+attention accelerator for comparison [19]. We choose two
+architectures, ReBERT [11] and ReTransformer [36], as
+the PIM-featured attention accelerator for comparison.
+The configurations of crossbars used in ReBERT and
+ReTransformer are the same as CPSAA.
+VI. E VALUATION
+A. Performance and Energy Efficiency
+Figure 11 (a) and (b) present the average speedup and
+energy efficiency of different models, respectively. Because
+BERT, GPT-2, and BART are all based on encoders and
+decoders, while the current sparse attention accelerators can
+accelerate both the encoders and decoders. Therefore, the current sparse attention accelerators are effective in accelerating
+all models. The speedups of these three models have the same
+trend while the specific values vary by 10%. To make the
+experimental results more concise, we present the results of
+BERT model to reveal the differences between CPSAA and
+other platforms.
+CPSAA against GPU and FPGA. As shown in Figure 12,
+the average throughput of GPU and FPGA platforms are
+102 GOPS and 284 GOPS. Compared with the average 9142
+GOPS of CPSAA, CPSAA has 89.6× and 32.2× performance
+improvement vs. the GPU and FPGA platforms, respectively.
+As for the energy efficiency shown in Figure 13, GPU, FPGA,
+and CPSAA have an average of 0.63 GOPS/W, 8.6 GOPS/W,
+and 476 GOPS/W energy efficiency, respectively. Therefore,
+CPSAA can save 755.6× energy and 55.3× energy compared
+with GPU and FPGA platforms. CPSAA can achieve far better
+
+=== page 10 ===
+10
+
+S A N G E R
+
+R e B E R T
+
+R e T ra n s fo rm e r
+
+C P S A A
+
+E n e r g y - e ffic ie n c y
+104
+
+103
+
+102
+
+102
+
+101
+
+101
+
+100
+
+100
+
+10-1
+
+10-1
+
+C o L A
+
+S S T -2
+
+M R P C
+
+S T S -B
+
+Q Q P
+
+M N L I
+
+W
+
+N L I
+
+R T E
+
+S Q u A D
+
+R e B E R T -T
+
+2 .0
+
+Fig. 13. Comsumed energy normalized to CPSAA
+
+performance and energy-saving than GPU and FPGA platforms for the following reasons. First, CPSAA is a PIM-based
+platform, which can save lots of execution time by eliminating
+the massive off-chip random memory access. As shown in
+§ II-D, these off-chip data transmissions will take up to 60%
+latency. Second, CPSAA elegantly exploits the high parallel
+VMM operation of ReRAM arrays by developing two sparse
+attention-specific methods. Compared with GPU- and FPGAbased platforms, these ReRAM-based matrix multiplication
+methods can achieve higher in-situ processing parallelism.
+CPSAA against SANGER. As Figure 12 and Figure 13
+show, SANGER has an average of 513 GOPS throughput and
+22.4 GOPS/W energy efficiency. Therefore, CPSAA has an
+average of 17.8× throughput improvement and 21.3× energysaving compared with the ASIC-based platform SANGER.
+SANGER proposes a prediction-based pruning method to
+reduce the unnecessary calculations of the attention mechanism. SANGER also presents the “splitting and packing”
+method to reduce the random memory access. The above
+optimizations make SANGER achieve 5.03× and 1.81 performance improvement compared with the GPU- and FPGAbased sparse attention accelerators. However, there are some
+unsolved issues left by SANGER, which CPSAA solves to
+achieve further speedups. First, SANGER adopts a softwarebased pruning method to generate its mask matrices, which
+has full data transfers between the memory and the offchip processor. By proposing a PIM-based pruning method,
+CPSAA can generate the mask matrix while avoiding off-chip
+data transfers. Second, SANGER design the pruning phase to
+work serial with the attention calculation phase, while CPSAA
+can perform the pruning phase parallel with the attention
+calculation. Finally, CPSAA can directly and efficiently exploit
+unstructured sparsity by coupling ReCAM arrays to generate
+control signals for VMM operations, which can avoid the
+pretty high “splitting and packing” overhead and the processing elements reconfiguration overhead in SANGER.
+CPSAA against ReBERT and ReTransformer. The
+throughput and energy efficiency of ReBERT and ReTransformer are also shown in Figure 12 and Figure 13. ReBERT and ReTransformer have 2696 GOPS and 2381 GOPS
+throughput, respectively. Therefore, CPSAA achieves 3.39×
+and 3.84× performance improvement vs. ReBERT and ReTransformer. ReBERT and ReTransformer have an average
+of 83.7 GOPS/W and 97.1 GOPS/W energy efficiency, respectively. Thus, CPSAA has an average of 5.7× and 4.9×
+energy saving compared with ReBERT and ReTransformer.
+We also analyze the reasons for these results as follows.
+ReBERT and ReTransformer are both PIM-based platforms,
+and they can achieve performance improvement against the
+GPU- and FPGA-based platforms since they do not contain the
+off-chip data transfers. Compared with ReBERT and ReTrans-
+
+R e T ra n -T
+
+C P D A A -T
+
+R e B E R T -E
+
+R e T ra n -E
+
+C P D A A -E
+
+1 .5
+
+N o r m a liz e d
+R e s u lts
+
+F P G A
+
+1 .0
+0 .5
+0 .0
+
+C o L A
+
+S S T -2
+
+M R P C
+
+S T S -B
+
+Q Q P
+
+M N L I
+
+W
+
+N L I
+
+R T E
+
+S Q u A D
+
+Fig. 14. Compared CPDAA with ReBERT and ReTransformer, which is
+normalized to CPDAA
+R e B E R T -W
+
+4 W
+
+R e T ra n -W
+
+4 W
+
+C P D A A -W
+
+4 W
+
+R e B E R T -P
+
+R e T ra n -P
+
+C P D A A -P
+
+4
+3
+
+N o r m a liz e d
+R e s u lts
+
+G P U
+
+103
+
+E n e r g y E ffic ie n c y
+(G O P S /W )
+
+N o r m a liz e d
+E n e rg y
+
+104
+
+2
+
+0
+
+1
+C o L A
+
+S S T -2
+
+M R P C
+
+S T S -B
+
+Q Q P
+
+M N L I
+
+W
+
+N L I
+
+R T E
+
+S Q u A D
+
+Fig. 15. Compared CPDAA with ReBERT and ReTransformer, which is
+normalized to ReTransformer
+
+former, CPSAA designs efficient ReRAM-based SDDMM
+and SpMM methods, which can save lots of execution time
+by avoiding these unnecessary VMM operations. Moreover,
+the novel attention calculation mode of CPSAA can hide
+the pretty high ReRAM write overhead while maintaining
+the VMM parallelism. Although CPSAA introduces an extra
+sparsity pruning phase, it can work parallel with the attention
+calculation and not introduce extra latency.
+B. Effectiveness of Calculation Mode
+This work proposes a new calculation mode to hide the
+ReRAM write overhead while improving parallelism by removing data dependency. Therefore, we also design experiments to evaluate the effectiveness of our calculation mode,
+as shown in Figure 14. We design a dense-version of CPSAA,
+called CPDAA, to eliminate the acceleration effect of the
+sparsity. Figure 14 shows the execution time and energy
+consumption of ReBERT, ReTransformer, and CPDAA, which
+is normalized to the execution time of CPDAA (CPDAAT) and the energy consumption of CPDAA (CPDAA-E). It
+is shown that ReBERT and ReTransformer take 1.31× and
+1.64× execution time against CPDAA, respectively. As for the
+energy consumption, ReBERT and ReTransformer consume
+1.30× and 1.21× than CPDAA. To further reveal the reasons
+for these results, we design more experiments as follows.
+We further design two metrics to compare the calculation
+mode of CPDAA with ReBERT and ReTransformer, i.e., the
+execution time of waiting for write (CPDAA-W4W) and the
+number of arrays for parallel VMM operation (CPDAA-P).
+The experimental results in Figure 15 are all normalized
+to ReTransformer (ReTran-W4W and ReTran-P). ReBERT
+and CPDAA take 1.94× and 1.48× execution time on write
+operations compared with ReTransformer. In contrast, the
+VMM parallelism of ReBERT and CPDAA is 2.88× and
+2.03× compared with ReTransformer. ReTransformer has the
+minimal write latency but the worst VMM parallelism because it is designed to reduce the write overhead as much
+as possible. However, they turn the VMM operations that
+could be executed in parallel into strictly serial execution,
+reducing the wait time for write operations while increasing
+the wait time for the previous VMM operations. ReBERT has
+the maximal write overhead but the best VMM parallelism
+because they use a write-then-calculate computational mode,
+
+=== page 11 ===
+11
+
+P r u n in g - T
+
+A tte n tio n - T
+
+V M M -N
+
+C T R L -T
+
+A c c u ra c y
+
+N o r m a liz e d
+R e s u lts
+
+D D M M -T
+
+1 0 0
+
+N o r m a liz e d
+R e s u lts
+
+1 2 8
+6 4
+3 2
+1 6
+8
+4
+2
+
+S D D M M -T
+
+S p M M -T
+
+D D M M -E
+
+S D D M M -E
+
+S p M M -E
+
+1 0
+1
+
+1
+
+0 .1
+S S T -2
+
+M R P C
+
+S T S -B
+
+Q Q P
+
+M N L I
+
+W
+
+N L I
+
+R T E
+
+S Q u A D
+
+Fig. 16. Compared the pruning method of CPSAA with SANGER
+
+which maximizes the VMM execution efficiency but takes
+longer to wait for write. CPDAA takes a trade-off between
+ReBERT and ReTransformer, which reduces unnecessary write
+overhead while preserving necessary VMM parallelism.
+In the experiments shown in Figure 15, ReTransformer
+optimizes the write operations, but the performance of which
+is worse than ReBERT for the following reason. Taking into
+account the non-negligible write overhead, this work designs
+all ReRAM-based platforms to use a single-level cell (SLC)
+with lower write latency and lower write energy consumption.
+If a multi-level cell (MLC) with higher write overhead is used,
+the advantage of ReTransformer will be revealed.
+C. Acceleration of Pruning Architecture
+CPSAA proposes a novel ReRAM-based PIM-featured
+pruning method to generate the mask matrix. Therefore, we
+also develop experiments to evaluate the effectiveness of our
+novel pruning architecture. As Figure 16 shows, we choose five
+indicators to reveal the advantages of our novel method against
+the state-of-the-art pruning method proposed in SANGER.
+They are the execution time of the pruning phase (PruningT), the execution time of the attention calculation phase
+(Attention-T), the number of pruning phase’s VMM operations
+(VMM-N), the CTRL runtime scheduling time (CTRL-T), and
+the accuracy comparison (Accuracy). The results in Figure 16
+are all normalized to CPSAA, i.e., the multiple of SANGER
+divided by CPSAA.
+The pruning phase in SANGER takes 85.1× execution time
+compared with our novel pruning method. That is because our
+novel method eliminates the off-chip data transfers and greatly
+improves the computational parallelism when generating mask
+matrices, which can save lots of execution times. Moreover, the
+Attention-T of SANGER is 18.7× of CPSAA, which comes
+from two aspects. First, CPSAA eliminates massive off-chip
+data transfers compared with SANGER. Second, CPSAA can
+leverage the high parallel VMM operations of the ReRAM
+arrays, which can greatly reduce the latency of the VMM
+operations. Figure 16 also shows that CPSAA can save around
+16.37× VMM operations when generating the mask matrix.
+CPSAA can generate the mask matrix directly using the input
+matrices, while SANGER needs lots of VMM operations to
+generate some intermediate matrices Q and K first.
+Experimental results show that SANGER takes 11.4× execution time on CTRL-T when compared with CPSAA. That
+is because SANGER’s “splitting and packing” algorithm has
+complex scheduling control signals for sparse S and pretty
+high processing elements re-configuration overhead. CPSAA
+can use ReCAM Scheduler to reduce the control signals
+and eliminate the re-configuration overhead by designing a
+ReRAM-ReCAM coupling SDDMM and SpMM methods.
+
+C o L A
+
+S S T -2
+
+M R P C
+
+S T S -B
+
+Q Q P
+
+M N L I
+
+W
+
+N L I
+
+R T E
+
+S Q u A D
+
+Fig. 17. Compared the SDDMM and SpMM methods with the DDMM
+methods in ReBERT, which is normalized to the DDMM operation
+D D M M
+
+1 0
+
+S D D M M
+
+S p M M -B
+
+1 0 0 0
+
+8
+
+S p M M -M
+
+S p M M -T
+
+S p M M -R
+
+1 0 0
+
+N o r m a liz e d
+R e s u lts
+
+C o L A
+
+N o r m a liz e d
+T h ro u g h p u t (G O P S )
+
+0 .5
+
+6
+4
+
+1 0
+
+1
+
+0
+
+2
+
+3 2 x 3 2
+
+6 4 x 6 4
+
+1 2 8 x 1 2 8
+
+2 5 6 x 2 5 6
+
+5 1 2 x 5 1 2
+
+0 .1
+
+M N L I
+
+(a)
+
+M R P C
+
+Q Q P
+
+Q N L I
+
+R T E
+
+(b)
+
+Fig. 18. (a) Throughput with different size of crossbar, (b) compared the
+SpMM method in Figure 9 with our SpMM method in Figure 10
+
+CPSAA also adopts a new equation using the low-precision
+weight matrix WS and quantified M to generate the mask
+matrix. Therefore, it is necessary to evaluate the accuracy of
+our pruning method. Figure 16 shows that CPSAA loses less
+than 0.2% of accuracy compared to SANGER.
+D. Novel SDDMM and SpMM Designs
+Compared to current PIM-based dense attention accelerators ReBERT and ReTransformer, CPSAA designs two novel
+ReRAM-based methods to accelerate the SDDMM and SpMM
+operations, respectively. Therefore, we also design experiments to reveal the effectiveness of the novel SDDMM and
+SpMM methods. As shown in Figure 17, the metrics of this
+evaluation are the execution time and the consumed energy.
+The baseline is the execution time of the DDMM operations
+(DDMM-T) and the consumed energy of the DDMM operations (DDMM-E) in ReBERT. All experimental results are
+normalized to DDMM-T (100) and DDMM-E (100). The
+latency of the SDDMM and the SpMM methods are 17.5%
+and 0.54% of the DDMM method, respectively. The reason
+for the speedups of the SDDMM operation is as follows. The
+SDDMM approach can minimize these unnecessary VMM
+calculations and greatly reduce the latency by using ReCAM
+Scheduler to guide the generation of control signals. Our new
+SpMM method can significantly reduce the number of idle
+rows in VMM operations, greatly increasing the parallelism
+and reducing the latency. Figure 17 also shows that the
+consumed energy of the novel SDDMM and SpMM methods
+are 32.9% and 25.2% of the DDMM method. It is easy to
+understand that the SDDMM method can save energy by
+using the mask matrix to avoid computing unnecessary VMM
+operations. The novel SpMM method can save energy by
+avoiding a large number of idle rows of the ReRAM array.
+We also design experiments to reveal how the proposed
+SDDMM performance is affected by the crossbar size, as
+Figure 18 (a) shows. The X-axis indicates the crossbar size,
+and the Y-axis indicates the average (average of running all
+datasets) speedup of our SDDMM method vs. the ReRAMbased DDMM solution. We can find that the speedups of
+the SDDMM method decrease as crossbar size increases.
+
+=== page 12 ===
+12
+
+G P U
+
+F P G A
+
+S A N G E R
+
+R e B E R T
+
+R e T ra n s fo m e r
+
+C P S A A
+
+G P U
+
+1 0 0 0 0
+
+T h ro u g h p u t (G O P S )
+
+T h ro u g h p u t (G O P S )
+
+1 0 0 0 0
+
+1 0 0 0
+
+1 0 0
+
+1 0
+
+1 /1 6 X
+
+1 /8 X
+
+1 /4 X
+
+1 /2 X
+
+1 0 0 0
+
+1 0 0
+
+1 0
+
+1
+
+W N L I
+
+C P S A A
+
+2 L
+
+4 L
+
+(a)
+
+8 L
+
+1 6 L
+
+3 2 L
+
+(b)
+
+T h ro u g h p u t (G O P S )
+
+Fig. 19. (a) Throughput with different size of datasets, (b) throughput with
+different encoder layers
+1 0 0 0 0
+
+G P U
+
+F P G A
+
+S A N G E R
+
+R e B E R T
+
+R e T ra n s fo rm e r
+
+C P S A A
+
+1 0 0 0
+1 0 0
+1 0
+
+1 2 8
+
+2 5 6
+
+5 1 2
+
+1 0 2 4
+
+2 0 4 8
+
+4 0 9 6
+
+Fig. 20. Throughput with different sequence lengths
+
+That is because the key idea of our SDDMM method is
+to convert the matrix-wise parallelism of the ReRAM array
+to vector-wise parallelism. As the crossbar size arise, more
+vectors can be stored in the same array, and the vector-wise
+parallelism will decrease. Based on the above phenomena,
+we recommend using an array size that matches the value
+precision to maximize vector-wise parallelism.
+In Figure 18 (b), we design experiments to reveal the
+runtime memory utilization, throughput, and data replication
+between the SpMM method in Figure 9 and Figure 10. SpMMB refers to the baseline SpMM method in Figure 9 and all its
+runtime memory utilization, throughput, and data replication
+are normalized to 1. SpMM-M, SpMM-T, and SpMM-R
+refer to the runtime memory utilization, throughput, and data
+replication of our SpMM method. For all five datasets, our
+SpMM method has an average of 9.36× runtime memory
+utilization improvement, 298× throughput improvement, and
+30.4× data replication overhead. These experimental results
+are consistent with the CPSAA design principle of using space
+cost in exchange for low SpMM latency.
+E. Scalability
+First, we study the scalability concerning the data volume
+of input embeddings on the WNLI dataset. Because we cannot get datasets with multiplied data volumes in real-world
+datasets, we randomly select 1/16 to 1/2 input embeddings
+in the WNLI dataset to evaluate the effect of the data volume. Figure 19 (a) shows the throughput of GPU, FPGA,
+SANGER, ReBERT, ReTransformer, and CPSAA processing
+various sizes of the WNLI dataset. The throughput of CPSAA
+can be maintained at a relatively stable value. That is because
+we divide the input embeddings into small batches with
+320 sequences, and different batches are processed serially.
+Therefore, a larger dataset has more batches and takes more
+execution time, making the number of Giga operations per
+second (GOPS) remain stable.
+We study the scalability concerning the number of encoder
+layers in BERT. We set the number of the encoder from
+two layers (2L) to 32 layers (32L), and we choose the GPU
+baseline as the comparison platform. As Figure 19 (b) shows,
+the throughput of GPU-based platforms declines noticeably
+
+when the number of encoder layers increases. Unlike the
+trend in the GPU platform, the throughput of CPSAA remains
+stable. That is because more encoder layers will introduce
+more computational tasks, generate more intermediate matrices, and require more memory space. Therefore, the GPUbased platform has more random memory access while taking
+more execution time. But in the PIM-based platform such
+as CPSAA, more memory space means more computational
+resources, and the throughput of CPSAA will not increase as
+the number of encoder layers increases.
+We design experiments to reveal the sequence lengths scalability. We configure six sequence lengths, i.e., 128, 256, 512,
+1024, 2048, and 4096. Figure 20 shows the average throughput
+of running all datasets. The three von Neumann accelerators,
+GPU, FPGA, and SANGER, show the same trend of sequence
+length scalability. The CPU-, FPGA- and SANGER-based
+accelerators can maintain stable throughput when the sequence
+lengths ≤512. When the sequence lengths are greater than 512,
+the throughput of the above platforms decreases significantly
+as the sequence lengths increase. That is because the increased
+sequence length generates a large amount of intermediate data,
+which exacerbates the random access and off-chip transfers
+of the von Neumann accelerators, thereby reducing system
+efficiency. The above results are consistent with the time
+complexity analysis in Section IV-E. The throughput of the
+PIM-based accelerators, ReBERT, ReTransformer, and CPSAA, do not vary significantly with sequence lengths. That
+is because the PIM-based accelerators can on-chip process all
+the intermediate data without transferring them to the main
+processor.
+VII. CONCLUSION
+We investigate current sparse attention accelerators and find
+the reasons for their limited speedups. This work presents
+a crossbar-based PIM-featured sparse attention accelerator,
+CPSAA, to tackle current problems. We design a novel calculation mode of attention mechanism to hide the write overhead
+while maintaining the VMM parallelism. We also present
+a new PIM-based pruning method to eliminate the off-chip
+memory access when generating the mask matrix. To solve the
+challenges that all current ReRAM-based attention accelerators can hardly efficiently extend to sparse attention, we design
+novel ReRAM-based SDDMM and SpMM methods. Finally,
+we design experiments to evaluate the effectiveness of all
+designs proposed in this work. Our experimental results show
+that in performance and energy-saving, CPSAA outperforms
+state-of-the-art accelerators, ranging from GPU, FPGA, ASIC,
+and PIM. The experimental results also reveal the effectiveness
+of all these core designs mentioned in this work.
+R EFERENCES
+[1] C.-F. R. Chen, Q. Fan, and R. Panda, “Crossvit: Cross-attention multiscale vision transformer for image classification,” in Proceedings of the
+IEEE/CVF international conference on computer vision, 2021, pp. 357–
+366.
+[2] R. Child, S. Gray, A. Radford, and I. Sutskever, “Generating long
+sequences with sparse transformers,” arXiv:1904.10509, 2019.
+
+=== page 13 ===
+13
+
+[3] B. Cui, Y. Li, M. Chen, and Z. Zhang, “Fine-tune BERT with sparse selfattention mechanism,” in Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International
+Joint Conference on Natural Language Processing (EMNLP-IJCNLP).
+Hong Kong, China: Association for Computational Linguistics, Nov.
+2019, pp. 3548–3553.
+[4] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “Bert: Pre-training
+of deep bidirectional transformers for language understanding,” arXiv
+preprint arXiv:1810.04805, 2018.
+[5] B. Feinberg, U. K. R. Vengalam, N. Whitehair, S. Wang, and E. Ipek,
+“Enabling scientific computing on memristive accelerators,” in Proceedings of 2018 ACM/IEEE 45th Annual International Symposium on
+Computer Architecture (ISCA). IEEE, 2018, pp. 367–382.
+[6] G. Geigle, N. Reimers, A. Rücklé, and I. Gurevych, “Tweac:
+Transformer with extendable QA agent classifiers,” arXiv preprint
+arXiv:2104.07081, 2021.
+[7] T. J. Ham, S. J. Jung, S. Kim, Y. H. Oh, Y. Park, Y. Song, J.-H. Park,
+S. Lee, K. Park, J. W. Lee, and D.-K. Jeong, “A3 : Accelerating attention
+mechanisms in neural networks with approximation,” in Proceedings of
+2020 IEEE International Symposium on High Performance Computer
+Architecture (HPCA), 2020, pp. 328–341.
+[8] K. Han, Y. Wang, H. Chen, X. Chen, J. Guo, Z. Liu, Y. Tang, A. Xiao,
+C. Xu, Y. Xu, Z. Yang, Y. Zhang, and D. Tao, “A survey on vision
+transformer,” IEEE Transactions on Pattern Analysis and Machine
+Intelligence, vol. 45, no. 1, pp. 87–110, 2023.
+[9] N. P. Jouppi, D. Hyun Yoon, M. Ashcraft, M. Gottscho, T. B. Jablin,
+G. Kurian, J. Laudon, S. Li, P. Ma, X. Ma, T. Norrie, N. Patil,
+S. Prasad, C. Young, Z. Zhou, and D. Patterson, “Ten lessons from three
+generations shaped google’s tpuv4i: Industrial product,” in Proceedings
+of 2021 ACM/IEEE 48th Annual International Symposium on Computer
+Architecture (ISCA). IEEE, 2021, pp. 1–14.
+[10] K. S. Kalyan, A. Rajasekharan, and S. Sangeetha, “Ammus: A survey
+of transformer-based pretrained models in natural language processing,”
+arXiv preprint arXiv:2108.05542, 2021.
+[11] M. Kang, H. Shin, and L.-S. Kim, “A framework for accelerating transformer-based language model on ReRAM-based architecture,”
+IEEE Transactions on Computer-Aided Design of Integrated Circuits
+and Systems, vol. 41, no. 9, pp. 3026–3039, 2022.
+[12] R. Kaplan, L. Yavits, R. Ginosar, and U. Weiser, “A resistive CAM
+processing-in-storage architecture for DNA sequence alignment,” IEEE
+Micro, vol. 37, no. 4, pp. 20–28, 2017.
+[13] O. Krestinskaya, I. Fedorova, and A. P. James, “Memristor load current
+mirror circuit,” in Proceedings of 2015 International Conference on
+Advances in Computing, Communications and Informatics (ICACCI),
+2015, pp. 538–542.
+[14] L. Kull, T. Toifl, M. Schmatz, P. A. Francese, C. Menolfi, M. Braendli,
+M. Kossel, T. Morf, T. M. Andersen, and Y. Leblebici, “A 3.1 mw 8b 1.2
+GS/s single-channel asynchronous SAR ADC with alternate comparators
+for enhanced speed in 32 nm digital SOI CMOS,” IEEE Journal of SolidState Circuits, vol. 48, no. 12, pp. 3049–3058, 2013.
+[15] M. Lewis, Y. Liu, N. Goyal, M. Ghazvininejad, A. Mohamed, O. Levy,
+V. Stoyanov, and L. Zettlemoyer, “Bart: Denoising sequence-to-sequence
+pre-training for natural language generation, translation, and comprehension,” arXiv preprint arXiv:1910.13461, 2019.
+[16] B. Li, S. Pandey, H. Fang, Y. Lyv, J. Li, J. Chen, M. Xie, L. Wan, H. Liu,
+and C. Ding, “Ftrans: Energy-efficient acceleration of transformers using
+FPGA,” in Proceedings of the ACM/IEEE International Symposium on
+Low Power Electronics and Design. New York, NY, USA: Association
+for Computing Machinery, 2020, p. 175–180.
+[17] J. Lin, Z. Zhu, Y. Wang, and Y. Xie, “Learning the sparsity for
+ReRAM: Mapping and pruning sparse neural network for ReRAMbased accelerator,” in Proceedings of the 24th Asia and South Pacific
+Design Automation Conference. New York, NY, USA: Association for
+Computing Machinery, 2019, p. 639–644.
+[18] Z. Liu, Y. Lin, Y. Cao, H. Hu, Y. Wei, Z. Zhang, S. Lin, and
+B. Guo, “Swin transformer: Hierarchical vision transformer using shifted
+windows,” arXiv preprint arXiv:2103.14030, 2021.
+[19] L. Lu, Y. Jin, H. Bi, Z. Luo, P. Li, T. Wang, and Y. Liang, “Sanger: A
+co-design framework for enabling sparse attention using reconfigurable
+architecture,” in Proceedings of 54th Annual IEEE/ACM International
+Symposium on Microarchitecture. New York, NY, USA: Association
+for Computing Machinery, 2021, p. 977–991.
+[20] N. Muralimanohar, R. Balasubramonian, and N. P. Jouppi, “Cacti 6.0:
+A tool to model large caches,” HP Laboratories, vol. 27, p. 28, 2009.
+[21] D. Niu, C. Xu, N. Muralimanohar, N. P. Jouppi, and Y. Xie, “Design
+of cross-point metal-oxide ReRAM emphasizing reliability and cost,” in
+
+Proceedings of 2013 IEEE/ACM International Conference on ComputerAided Design (ICCAD). IEEE, 2013, pp. 17–23.
+[22] X. Qian, “Graph processing and machine learning architectures with
+emerging memory technologies: a survey,” SCIENCE CHINA Information Sciences, vol. 64, no. 6, pp. 160 401–, 2021.
+[23] Z. Qu, L. Liu, F. Tu, Z. Chen, Y. Ding, and Y. Xie, “Dota: Detect and
+omit weak attentions for scalable transformer acceleration,” in Proceedings of the 27th ACM International Conference on Architectural Support
+for Programming Languages and Operating Systems. Association for
+Computing Machinery, 2022, p. 14–26.
+[24] A. Radford, J. Wu, R. Child, D. Luan, D. Amodei, and I. Sutskever,
+“Language models are unsupervised multitask learners,” OpenAI Blog,
+vol. 1, no. 8, p. 9, 2019.
+[25] P. Rajpurkar, R. Jia, and P. Liang, “Know what you don’t know:
+Unanswerable questions for SQuAD,” arXiv:1806.03822, 2018.
+[26] M. Saberi, R. Lotfi, K. Mafinezhad, and W. A. Serdijn, “Analysis of
+power consumption and linearity in capacitive digital-to-analog converters used in successive approximation ADCs,” IEEE Transactions on
+Circuits and Systems I, vol. 58, no. 8, pp. 1736–1748, 2011.
+[27] A. Shafiee, A. Nag, N. Muralimanohar, R. Balasubramonian, J. P. Strachan, M. Hu, R. S. Williams, and V. Srikumar, “ISAAC: A convolutional
+neural network accelerator with in-situ analog arithmetic in crossbars,”
+in Proceedings of the 43rd International Symposium on Computer
+Architecture. IEEE Press, 2016, p. 14–26.
+[28] L. Song, Y. Zhuo, X. Qian, H. Li, and Y. Chen, “GraphR: Accelerating
+graph processing using ReRAM,” in Proceedings of 2018 IEEE International Symposium on High Performance Computer Architecture, 2018,
+pp. 531–543.
+[29] Y. Tay, D. Bahri, L. Yang, D. Metzler, and D.-C. Juan, “Sparse Sinkhorn
+attention,” in Proceedings of the 37th International Conference on
+Machine Learning, vol. 119, 13–18 Jul 2020, pp. 9438–9447.
+[30] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez,
+Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” in Advances
+in Neural Information Processing Systems, 2017, pp. 5998–6008.
+[31] A. Wang, A. Singh, J. Michael, F. Hill, O. Levy, and S. R. Bowman,
+“GLUE: A multi-task benchmark and analysis platform for natural
+language understanding,” arXiv preprint arXiv:1804.07461, 2018.
+[32] H. Wang, Z. Zhang, and S. Han, “SpAtten: Efficient sparse attention
+architecture with cascade token and head pruning,” in Proceedings of
+2021 IEEE International Symposium on High-Performance Computer
+Architecture (HPCA), 2021, pp. 97–110.
+[33] W. Wen, Y. Zhang, and J. Yang, “Wear leveling for crossbar resistive
+memory,” in Proceedings of 2018 55th ACM/ESDA/IEEE Design Automation Conference (DAC), 2018, pp. 1–6.
+[34] C. Xu, D. Niu, N. Muralimanohar, N. P. Jouppi, and Y. Xie, “Understanding the trade-offs in multi-level cell ReRAM memory design,”
+in Proceedings of 2013 50th ACM/EDAC/IEEE Design Automation
+Conference, 2013, pp. 1–6.
+[35] M. Yan, L. Deng, X. Hu, L. Liang, Y. Feng, X. Ye, Z. Zhang, D. Fan, and
+Y. Xie, “Hygcn: A GCN accelerator with hybrid architecture,” in Proceedings of 2020 IEEE International Symposium on High Performance
+Computer Architecture (HPCA). IEEE, 2020, pp. 15–29.
+[36] X. Yang, B. Yan, H. Li, and Y. Chen, “ReTransformer: ReRAMbased processing-in-memory architecture for transformer acceleration,”
+in Proceedings of the 39th International Conference on Computer-Aided
+Design (ICCAD), 2020, pp. 1–9.
+[37] Z. Yin and Y. Shen, “On the dimensionality of word embedding,” in
+Advances in Neural Information Processing Systems (NeurIPS), vol. 31.
+Curran Associates, Inc., 2018.
+[38] M. Zaheer, G. Guruganesh, K. A. Dubey, J. Ainslie, C. Alberti, S. Ontanon, P. Pham, A. Ravula, Q. Wang, L. Yang, and A. Ahmed, “Big Bird:
+Transformers for longer sequences,” in Advances in Neural Information
+Processing Systems (NeurIPS), vol. 33, 2020, pp. 17 283–17 297.
+[39] F. Zahoor, T. Z. A. Zulkifli, and F. A. Khanday, “Resistive random access
+memory (RRAM): an overview of materials, switching mechanism, performance, multilevel cell (MLC) storage, modeling, and applications,”
+Nanoscale Research Letters, vol. 15, no. 1, pp. 1–26, 2020.
+[40] X. Zhang, Y. Wu, P. Zhou, X. Tang, and J. Hu, “Algorithm-hardware codesign of attention mechanism on FPGA devices,” ACM Trans. Embed.
+Comput. Syst., vol. 20, no. 5s, pp. 1–24, 2021.
+[41] G. Zhao, J. Lin, Z. Zhang, X. Ren, Q. Su, and X. Sun, “Explicit Sparse
+Transformer: Concentrated Attention Through Explicit Selection,” arXiv
+e-prints, p. arXiv:1912.11637, Dec. 2019.
+[42] L. Zheng, J. Zhao, Y. Huang, Q. Wang, Z. Zeng, J. Xue, X. Liao, and
+H. Jin, “Spara: An energy-efficient ReRAM-based accelerator for sparse
+graph analytics applications,” in Proceedings of 2020 IEEE International
+Parallel and Distributed Processing Symposium, 2020, pp. 696–707.
+
+=== page 14 ===
+14
+
+Hui-Ze Li received his Ph.D. degree from the
+School of Computer Science and Technology,
+Huazhong University of Science and Technology
+(HUST), in 2022. He is now working as a Research
+Fellow in School of Computing, National University
+of Singapore (NUS). His current research interests
+include computer architecture, emerging non-volatile
+memory, and processing in memory.
+
+Hai Jin is a Chair Professor of computer science
+and engineering at Huazhong University of Science
+and Technology (HUST) in China. Jin received
+his PhD in computer engineering from HUST in
+1994. In 1996, he was awarded a German Academic
+Exchange Service fellowship to visit the Technical
+University of Chemnitz in Germany. Jin worked at
+The University of Hong Kong between 1998 and
+2000, and as a visiting scholar at the University of
+Southern California between 1999 and 2000. He was
+awarded Excellent Youth Award from the National
+Science Foundation of China in 2001. Jin is a Fellow of IEEE, Fellow of
+CCF, and a life member of the ACM. He has co-authored more than 20
+books and published over 900 research papers. His research interests include
+computer architecture, parallel and distributed computing, big data processing,
+data storage, and system security.
+
+Long Zheng is now an associate professor in
+the School of Computer Science and Technology,
+Huazhong University of Science and Technology
+(HUST), Wuhan. He received his Ph.D. degree in
+computer engineering at HUST, Wuhan, in 2016. His
+current research interests include program analysis,
+runtime systems, and configurable computer architecture with a particular focus on graph processing.
+
+Xiao-Fei Liao received his Ph.D. degree in computer science and engineering from Huazhong University of Science and Technology (HUST), Wuhan,
+in 2005. He is now a Professor in the School of Computer Science and Technology at HUST, Wuhan. He
+has served as a reviewer for many conferences and
+journal papers. His research interests are in the areas
+of system software, P2P system, cluster computing
+and streaming services. He is a member of IEEE and
+the IEEE Computer Society.
+
+Yu Huang received his Ph.D. degree from the
+Huazhong University of Science and Technology
+(HUST), in 2022. He is now working as a postdoc
+in the School of Computer Science and Technology,
+HUST, in China. His research interests focus on
+processing-in-memory architecture and graph processing.
+
+Cong Liu received the bachelor’s degree from
+Dalian Maritime University, China, in 2018. She
+is currently working toward the PhD degree with
+the Huazhong University of Science and Technology
+in China. Her research interests include in-memory
+computing and ReRAM-based accelerator.
+
+Jia-Hong Xu received his B.S. degree in the School
+of Control and Computer Engineering from North
+China Electric Power University, China, in 2018. He
+is currently pursuing his Ph.D. degree in the School
+of Computer Science and Technology, Huazhong
+University of Science and Technology, China. His
+research interests mainly include non-volatile memory and in-memory computing.
+
+Zhuo-Hui Duan is currently a postdoctoral fellow in the School of Computer Science and
+Technology, HUST, in China. He has presented
+papers in several conferences such as ASPLOS,SC,DAC,ICDCS,ICCD,DATE. His research interests are in hybrid memory and distribute memory
+pool.
+
+Dan Chen received the BS degree from the North
+China Electric Power University, in 2018. He is
+now working toward the PhD degree in the School
+of Computer Science and Technology, HUST, in
+China. His research interests focus on processingin-memory and graph neural network.
+
+Chuang-Yi Gui is currently a Ph.D. candidate in
+the School of Computer Science and Technology
+at Huazhong University of Science and Technology
+(HUST), Wuhan, China. He received his B.E. degree
+at HUST in 2017. His current research interests
+include graph processing and graph mining systems.

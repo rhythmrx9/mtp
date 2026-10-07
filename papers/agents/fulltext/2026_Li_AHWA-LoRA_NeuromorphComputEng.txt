@@ -1,0 +1,1345 @@
+# Efficient transformer adaptation for analog in-memory computing via low-rank adapters
+# id: W7127107108 | key: 2026_Li_AHWA-LoRA_NeuromorphComputEng | NeuromorphComputEng 2026 | card: ../cards/2026_Li_AHWA-LoRA_NeuromorphComputEng.md
+
+
+=== page 1 ===
+Efficient transformer adaptation for analog in-memory computing via
+low-rank adapters
+Chen Li‡ ,1 Elena Ferro‡ ,2 Corey Lammie,2 Manuel Le Gallo,2 Irem Boybat,2 and Bipin Rajendran∗1
+1) Department of Engineering, King’s College London, United Kingdom
+
+arXiv:2411.17367v4 [cs.AR] 21 Mar 2026
+
+2) IBM Research Europe, 8803 Rüschlikon, Switzerland
+
+Analog In-Memory Computing (AIMC) offers a promising solution to the von Neumann bottleneck. However, deploying transformer models on AIMC remains challenging due to their inherent need for flexibility and adaptability across
+diverse tasks. For the benefits of AIMC to be fully realized, weights of static vector-matrix multiplications must be
+mapped and programmed to analog devices in a weight-stationary manner. This poses two challenges for adapting a
+base network to hardware and downstream tasks: (i) conventional analog hardware-aware (AHWA) training requires
+retraining the entire model, and (ii) reprogramming analog devices is both time- and energy-intensive. To address
+these issues, we propose Analog Hardware-Aware Low-Rank Adaptation (AHWA-LoRA) training, a novel approach
+for efficiently adapting transformers to AIMC hardware. AHWA-LoRA training keeps the analog weights fixed as
+meta-weights and introduces lightweight external LoRA modules for both hardware and task adaptation. We validate
+AHWA-LoRA training on SQuAD v1.1 and the GLUE benchmark, demonstrate its scalability to larger models, and
+show its effectiveness in instruction tuning and reinforcement learning. We further evaluate a practical deployment
+scenario that balances AIMC tile latency with digital LoRA processing using optimized pipeline strategies, with RISCV-based programmable multi-core accelerators. This hybrid architecture achieves efficient transformer inference with
+only a 4 % per-layer overhead compared to a fully AIMC implementation. Code is availablea .
+Deep learning has revolutionized various fields, from computer vision to Natural Language Processing (NLP), achieving
+unprecedented performance in the solution of complex tasks1 . Much of this progress stems from scaling up Neural Network
+(NN) architectures and datasets, enabling models to capture more information and approximate complex functions that can be
+generalized to unseen samples. Among these advancements, the transformer architecture stands out as the backbone of LargeLanguage Models (LLMs), allowing more effective network scaling and data compression2 . However, as NNs grow in size and
+complexity, they demand more computational resources, leading to higher power consumption and carbon emissions3 . This
+raises sustainability concerns and drives research into more energy-efficient architectures tailored to NN computation.
+Analog In-Memory Computing (AIMC) has emerged as a promising computing paradigm to tackle these challenges, offering
+improved performance and energy-efficiency through computation directly within the memory array4,5 . However, distinct properties of AIMC, namely device noise and circuit non-idealities, introduce additional complexity to NN training and deployment6 .
+Analog devices are inherently non-deterministic and subject to temporal variations, impacting NN accuracy when deployed on
+AIMC-based accelerators7–10 . Analog Hardware-Aware (AHWA) training techniques have been demonstrated to enhance model
+robustness under these constraints for various NN architectures, effectively mitigating accuracy losses by injecting Gaussian
+noise during forward-propagation and simulating circuit-non-idealities11–13 . However, transformer-based architectures introduce several unique challenges that make the direct application of AHWA training techniques difficult. We summarize these
+limitations below, which motivate the development of a novel approach to efficiently adapt transformers for AIMC hardware.
+First, training large-scale networks with a high parameter count quickly becomes computationally challenging. Transformers,
+in particular, require significantly more parameters than traditional architectures like Convolutional Neural Networks (CNNs)
+and Long Short-Term Memory (LSTM) that have been the primary focus of AIMC research. While the larger size of transformers
+contributes to their strong performance across many tasks, it also makes AHWA training challenging. Training such large models
+with simulated hardware constraints using existing AHWA approaches often exceeds Graphics Processor Unit (GPU) memory
+limits and results in prohibitive computational costs.
+Second, while pre-trained transformer models generalize remarkably well across a wide range of natural language processing
+tasks due to extensive training on large and diverse corpora14 , conventional AHWA training methodologies typically optimize
+performance for only one task at a time12 . Such narrowly-focused, task-specific tuning under-utilizes the generalization potential
+of pre-trained models, resulting in hardware-optimized models that perform well on one task but struggle to generalize to others.
+While aggregating multiple tasks into a single unified corpus and conducting AHWA training on it might seem like a remedy, it
+often leads to degraded performance, as conflicting task objectives can interfere with the model’s learned representations.
+Another critical limitation is that existing AHWA methods are not designed for continual adaptation – a necessity for many
+real-world applications. In dynamic environments, transformers must adapt to new data and shifting user needs. However,
+current AHWA approaches achieve adaptation by reloading and retraining the full model weights on AIMC hardware – a process
+that is both time-consuming and energy-intensive, making frequent updates impractical15 .
+‡
+
+These authors contributed equally.
+Corresponding author. Email: bipin.rajendran@kcl.ac.uk
+a) https://github.com/chenlicodebank/lora_on_analog_hardware
+∗
+
+=== page 2 ===
+2
+(a)
+
+(b)
+
+Q
+
+=
+
++
+
+V
+DACs
+
+K
+LoRA
+B
+
+LoRA
+B
++
+
++
+
+x
+MultiHead
+Attention
+
+x
+
+Softmax
+
+Crossbar
+Control
+Unit
+
++
+
+XW
+
+Digital Affine Scaling
+
++
+
+Concat
+
+Dropout
+Transformer Block
+
+ADCs
+
+Output [XW+XAB]
+
+LoRA
+B
+
+LoRA
+A
+
+DACs
+
+LoRA
+A
+
+Input [X]
+
+LoRA
+A
+
+AIMC Tile
+
+LoRA
+A
+
+Feed Forward
+
+XAB
+
+LoRA
+A
+
+LayerNorm
+
+LoRA
+B
+
+Digital Compute
+Proj
+
++
+
+LoRA
+B
+
+X
+
+Dropout
+
++
+
+Multi-Head Attention
+
+XW
+
+Digital
+Processing
+Unit
+(DPU)
+
+XW + XAB
+M
+
+SL X
+
+R
+
+M A
+
+N
+R B
+
+LayerNorm
+
+(c)
+
+Required
+Memory:
+(SLxM+MxR+RxN)
+x16b
+
+(d)
+Conventional AHWA
+AIHW Training
+Conventional
+Training and
+and Deployment
+Deployment
+Pretrained
+Model
+
+Static
+MVMs
+
+AIHW-LoRA
+AHWA-LoRA Training
+Training and
+and Deployment
+Deployment
+
+AIMC
+Tiles
+
+Pretrained
+Model
+
+DPUs
+
+LoRA
+Adapters
+
+No Retraining
+
+AIHW Retraining
+Finetuned
+Model
+
+Analog
+Model
+
+Other Ops
+
+Other Ops
+
+AIMC
+Tiles
+Static
+MVMs
+DPUs
+
+Retraining
+
+FIG. 1. Implementation of AHWA-LoRA training to the multi-head attention block in the standard transformer architecture. a Within
+each transformer block, the weights of linear (dense) layers with fixed weights (W ∈ Rm×n ) are mapped to AIMC tiles. The LoRA weight
+matrices A ∈ Rm×r and B ∈ Rr×n can be trained to adapt the effective weights for different downstream tasks without altering the meta-weights
+W ∈ Rm×n . b The high-level proposed architecture, where each AIMC tile is paired with a PMCA. The latency of AIMC tiles and PMCAs
+is balanced. Computation of XAB is performed within the PMCA, alongside the required addition operation. c Conventional AHWA training
+and deployment methods require retraining of the meta-weights of the pre-trained model. d AHWA-LoRA training preserves the meta-weights
+from the pre-trained model and deploys them directly to the AIMC hardware. Only the LoRA weight matrices are trained and executed by the
+DPUs.
+
+Finally, real-world AIMC-based accelerators suffer from various device noise and circuit non-idealities. Industry-fabricated
+Phase Change Memory (PCM) devices, for example, display state-dependent programming and read noise, as well as drift in
+conductance states over time7–10 . While AHWA training has proven adept at addressing these hardware imperfections, a more
+advanced training methodology should preserve this strength while addressing the aforementioned limitations.
+Hence, we introduce AHWA-LoRA training – a method that leverages the principles of LoRA16 to address the challenges faced
+by AIMC systems17 . As shown in Figure 1, AHWA-LoRA training preserves the original, pre-trained weights of the transformer
+model, i.e., the meta-weights. These meta-weights are obtained through extensive pretraining and possess strong generalization
+capabilities. In conventional AHWA training, these meta-weights are overwritten during task-specific fine-tuning. We argue that
+these meta-weights should be preserved and instead introduce lightweight LoRA adapters to alter the effective weight values for
+different tasks. For task-specific retraining, this approach drastically reduces the memory overhead of AHWA training. During
+
+=== page 3 ===
+3
+inference, the inclusion of LoRA modules equips AIMC with on-chip adaptation ability, allowing models to dynamically respond
+to hardware constraints and evolving task demands. This flexibility is difficult to achieve using conventional methods.
+The complete AHWA-LoRA training pipeline consists of three main steps. First, pre-trained transformer weights are directly
+mapped onto AIMC hardware (meta weight deployment). Second, hardware constraints are applied to the meta-weights, but only
+the LoRA weights are updated (AHWA-LoRA training). Third, the trained LoRA weights are deployed onto Digital Processing
+Units (DPUs), allowing them to operate in parallel with analog computation on the meta-weights (LoRA weight deployment).
+A detailed description of these steps is provided in the Methods. We investigate the accuracy of our method using a realistic
+heterogeneous AIMC-based hardware configuration and statistical PCM device model calibrated on hardware measurements
+from a chip containing one million PCM devices.
+Simulation results confirm that our method is effective on a 25.3M-parameter transformer model, a practical size suitable
+for deployment on currently available AIMC chips18,19 . We demonstrate the scalability of our method to larger encoder-only
+transformer architectures of up to approximately 300 million parameters, including BERT-Base and BERT-Large, which may be
+supported by future AIMC chips. Results indicate our method constrains the size of the LoRA components at just 1% of the total
+model parameters. Furthermore, we extend our method to even larger decoder-only transformers, successfully applying it to the
+LLaMA 3.1 8B model for tasks in instruction tuning and mathematical reasoning, through supervised learning and reinforcement
+learning, respectively. Finally, we explore an optimized implementation that integrates AIMC computation with digital LoRA
+adaptation using RISC-V-based Programmable Multi-Core Accelerators (PMCAs) as DPUs. By strategically partitioning the
+workload, i.e., assigning the meta-weights to AIMC tiles and mapping LoRA layers onto digital PMCA units, our design offers
+a practical and efficient framework for serving transformer models onto these AIMC chips20 .
+
+METHODS
+AHWA-LoRA Training
+
+The complete AHWA-LoRA training pipeline consisted of three main steps. During the first step, the meta weights of the
+model were directly deployed to AIMC hardware without any training. The hardware-specific parameters, such as weight
+clipping thresholds and the bit resolutions of AIMC peripherals (e.g., Analog-to-Digital Converters (ADCs) and Digital-toAnalog Converters (DACs)), were determined and used to simulate hardware constraints in the subsequent training process.
+In the second step, hardware constraints were simulated by incorporating them into the forward pass of the meta weights.
+Gradients propagated back through these simulated constraints, but learning happened in LoRA and only the LoRA weights
+were updated. This structure allowed the meta-weights to "sense" the hardware limitations, while LoRA learned to compensate
+for them. Importantly, the model was trained using data from the downstream task, ensuring that it was optimized for the target
+application. This enabled joint optimization for both hardware compatibility and task performance via the introduced LoRA
+component. The loss function remained unchanged from standard AHWA training; no modification was needed to incentivise
+this behavior. Finally, the trained LoRA weights were deployed onto DPUs. These LoRA weights, though high in precision,
+were relatively small in number, making it feasible to parallelize their computation with the analog computation performed on
+the fixed meta-weights residing in AIMC tiles.
+In AHWA-LoRA training, the meta-weights, which are the pretrained base-model weights, are programmed onto AIMC hardware once and then kept fixed during adaptation. This choice improves long-term reusability: the same analog-programmed base
+model can be reused across multiple downstream tasks by swapping lightweight LoRA adapters, avoiding costly and frequent
+array reprogramming. Moreover, by not updating analog-mapped weights, AHWA-LoRA training avoids error accumulation
+commonly associated with repeated programming or on-chip learning. Temporal non-idealities after deployment (e.g., conductance drift) are mitigated via global drift compensation; when necessary, LoRA adapters can be refreshed off-chip and redeployed
+without reprogramming the AIMC arrays.
+
+Model Mapping to Hardware and Assumed Hardware Configuration
+
+Our approach mapped all linear layers of MobileBERT (comprising 20.4M parameters, ∼81% of the total parameters) onto
+AIMC tiles. This included the embedding transformation layer, the final output layer, and the linear layers within both FeedForward Network (FFN) and the QKV projection of multi-head attention. The AIMC tiles had 512 × 512 unit cells, and 8-bit
+DACs and ADCs. A digital affine scaling operation was applied after the ADCs. Due to the dynamic nature of matrix-matrix
+operations, the computation of attention scores was handled by PMCAs, as non-volatile memory-based AIMC computation
+was not well-suited for such operations. Additionally, PMCAs managed the LoRA adapters and integrated their outputs with
+those from the AIMC tiles. To accurately model the behavior and constraints of AIMC hardware, we used AIHWKIT, an opensource simulator for AIMC devices21 . AIHWKIT offered detailed models of PCM devices based on extensive experimental
+data and accurately modeled the peripheral circuitry. A differential channel-wise weight mapping scheme was applied to all
+
+=== page 4 ===
+4
+analog weights with maximum conductance Gmax = 25µS, and each channel was clipped to 3-sigma based on the fitted weight
+distribution.
+
+Training and Inference Details
+
+During forward propagations, we injected hardware constraints on the model, including Gaussian noise18 with an amplitude
+of 6.7% on analog weights and 4.0% on ADCs, among other hardware constraints. The 6.7% weight-noise level is not an
+immutable physical constant of PCM devices; rather, it is an effective noise amplitude used in our simulator to approximate the
+dominant stochastic behavior of the AIHWKIT PCM analog tile model21 , which is calibrated to measured device statistics and
+includes multiple non-idealities and parameters. For training efficiency, we summarize these effects using a zero-mean Gaussian
+perturbation model as a first-order approximation. Importantly, this amplitude is a tunable hyperparameter in our framework; we
+provide an ablation over noise amplitudes in the Supplementary Information (Table II), and select 6.7% as a strong accuracy–cost
+trade-off under our training budget.
+Noise is “injected” on-the-fly during each forward pass by forming a temporary noisy instance of the fixed meta-weights.
+Concretely, we maintain clean master meta-weights W throughout training, and for each minibatch we sample an i.i.d. perturbation and compute W̃ = W + ∆W , where ∆W follows a zero-mean Gaussian distribution with relative amplitude set by the chosen
+noise level (e.g., 6.7%). The noisy weights W̃ are used only for the current forward/backward computation and are discarded
+afterwards, ensuring that noise is uncorrelated across minibatches and that the expected noisy weights remain unbiased around
+W . In AHWA-LoRA training, gradients flow through the noisy forward path, but only the LoRA parameters are updated, while
+the meta-weights remain fixed. The Adam optimizer was used with an initial learning rate of 2 × 10−4 , following a linear decay
+schedule over 15 epochs. The maximum Sequence Length (SL) was set to 320. For inference, we evaluated accuracy and robustness under realistic hardware constraints, including programming noise, conductance drift, and read noise for a period ranging
+from 0 seconds to 10 years. All results were averaged over 10 trials. We used global drift compensation22 to mitigate temporal
+variations. We evaluated the impact of different rank values r on performance and computational overhead, determining that a
+rank of 8 provided an optimal balance (see Figure 2a).
+
+Instruction Tuning and Reinforcement Learning
+
+For instruction tuning, we utilized a carefully curated version of the Alpaca dataset23 , which enhanced data quality and consistency. Our experiments were conducted using the LLaMA-3.1 8B model, incorporating a LoRA rank of 16. This corresponded
+to approximately 0.52% of the model’s total parameters. The model mapping strategy was consistent with the method used in
+MobileBERT. All linear layers were mapped to AIMC tiles and attention was managed by PMCAs. During forward propagation,
+hardware constraints were emulated by injecting Gaussian noise with an amplitude of 6.7% by adding it to the meta weights,
+alongside additional hardware-induced limitations. Explicit modeling of ADC and DAC components was omitted, assuming
+these components operated at high resolution. Unlike the approach taken in MobileBERT experiments, we did not apply weight
+clipping, following recent insights from weight quantization research in large language models24,25 . Training was executed with
+the AdamW optimizer, using an initial learning rate of 2 × 10−4 , a linear decay schedule over 6,470 steps, and a brief warm-up
+period of 5 steps. The batch size and weight decay were set to 8 and 0.01, respectively. The maximum sequence length was
+limited to 2,048 tokens.
+In the reinforcement learning setup, we leveraged the GSM8K dataset to foster the model’s reasoning abilities, particularly
+encouraging the effective use of long Chain-of-Thought (CoT). We employed the Group Relative Policy Optimization (GRPO)
+algorithm26 for training, with the instruction-tuned Llama-3.1 8B model again featuring a LoRA rank of 16. Consistent with our
+earlier instruction-tuning approach, we applied the same model mapping strategy and refrained from applying weight clipping.
+However, the amplitude of Gaussian noise injected during RL training was reduced to 3.0%. We emphasize that this reduction
+does not imply that the underlying PCM noise is physically reduced; rather, it is a practical training choice for stable and
+compute-efficient reinforcement learning. In GRPO, the update relies on relative quality differences among multiple sampled
+completions for the same prompt to form effective advantage estimates. With 6.7% noise, the initial policy frequently produces
+uniformly low-quality (near-random) generations, yielding near-zero or non-informative reward differences within a sampling
+group and substantially weakening the learning signal. Using 3.0% preserves a meaningful gradient signal early in training
+while still operating in a noisy analog regime. A straightforward way to enable higher-noise RL is a curriculum strategy (e.g.,
+supervised adaptation at the target noise level before any reinforcement learning), which we leave for future work. Modeling
+of ADC and DAC components was reserved for future investigation. The maximum sequence length during RL training was
+1,024 tokens. Our RL approach incorporated four complementary reward functions to incentivize correct reasoning patterns
+and precise mathematical answers, allowing a maximum achievable reward of 9.5. For each GSM8K question, we generated
+16 sample outputs, which were grouped and utilized for advantage calculations by GRPO26 . RL training consisted of 500
+
+=== page 5 ===
+5
+optimization steps, including a 50-step warm-up phase, with a learning rate set at 5 × 10−6 and a comparatively higher weight
+decay of 0.1.
+To efficiently handle memory overhead during training, we adopted the aihwkit-lightning framework27 . Its low memory footprint, combined with LoRA, allowed us to perform all training and evaluations on a single GPU with 80 GB of memory. During
+inference, we evaluated model robustness against Gaussian noise applied to weights, following methodologies established in
+prior studies22,28 . The Gaussian noise levels during evaluation were set to match those used during training: 6.7% for instruction
+tuning and 3.0% for reinforcement learning. Additional evaluation results for a wider range of noise levels, as well as results
+using the PCM model with zero-second drift, were provided in the Supplementary Information.
+PMCA Performance Estimation Simulations
+
+We adopted a small version of the Snitch cluster29 , a RISC-V-based PMCA optimized for energy-efficient Floating-Point (FP)
+computation. It consisted of nine in-order RV32IMAF Snitch cores, each featuring a 32-bit SIMD-capable, mixed-precision
+Floating-Point Unit (FPU). Two key ISA extensions, FP Repetition29 and Stream Semantic Registers30 enhanced execution
+efficiency by automating FP loops and reducing memory overheads, enabling pseudo-dual-issue performance and achieving up
+to ∼90% FPU utilization on dense workloads. The cluster architecture included a shared L1 instruction cache and a 128KiB
+interleaved Tightly Coupled Data Memory (TCDM) connected via a single-cycle interconnect. One of the cores managed the
+Direct Memory Access (DMA) unit31 , while the remaining eight executed parallel computations. We integrated the RedMulE32
+accelerator to the cluster, an open-source, parametrizable accelerator optimized for reduced-precision Matrix-Vector Multiplications (MVMs) using FP16 and FP8. We configured RedMulE to have 32 fused-multiply-accumulate blocks to minimize the final
+area of the cluster. We performed cycle-accurate Register-Transfer Level (RTL) simulations to obtain the performance metrics
+on the PMCA.
+RESULTS
+Accuracy Validation
+
+We first validate the accuracy of the proposed method and compare it to conventional AHWA training22 . Table I presents
+the performance validation of AHWA-LoRA training applied to MobileBERT on the SQuAD v1.1 dataset under different drift
+durations. MobileBERT was chosen due to its relatively small size, making it practical for deployment on current AIMC
+chips18,19 . We will validate the effectiveness of our method on larger models in later sections. Evaluation metrics used in the
+experiments include the F1 score and Exact Match (EM). The baseline results in the table represent the performance of the digital
+model without hardware constraints during training or inference.
+The results demonstrate that AHWA-LoRA training achieves performance comparable to conventional AHWA training, with
+F1 and EM scores within 1% of those obtained through full AHWA training. Notably, at a drift time of 10 years, our approach
+outperforms the previous AHWA training method, achieving an F1 score of 85.36 versus 85.14, and an EM score of 76.92
+versus 76.40. We attribute this improvement to the difference in update mechanisms: standard AHWA training updates all model
+parameters, which may cause the model to deviate significantly from the local minima reached during pretraining. In contrast,
+AHWA-LoRA training updates only the low-rank components, helping the model stay closer to the flatter local minimum found
+during pretraining, which improves robustness under significant drift.
+It is also worth noting that AHWA-LoRA training updates only the LoRA weights, which make up approximately 6.6% of the
+model parameters. Despite this small proportion of trainable parameters, the model demonstrates strong robustness to hardware
+constraints, as indicated by F1 and EM scores that are on par with conventional AHWA training. This suggests that adapting a
+model to hardware constraints may not require the adaption of all parameters. Instead, hardware adaptation could be inherently
+a low-rank problem, where LoRA-style updates are sufficient. Since hardware adaptation is a critical challenge in AIMC, these
+findings offer new insights and indicate that full model retraining may not always be necessary.
+Training Performance Evaluation
+
+Table II benchmarks the number of trainable parameters and GPU memory usage during training. The results show that
+AHWA-LoRA training reduces the number of trainable parameters to approximately one million, which is more than a 15×
+reduction compared to conventional AHWA training. Additionally, GPU memory usage is reduced by 13%, saving over 4GB
+of VRAM, making training more accessible. Although MobileBERT only has 24.67M trainable parameters, the memory usage
+during AHWA training is significantly higher than during standard digital training due to the high overhead of modeling hardware
+constraints in both the forward and backward passes. This suggests that memory overhead is a key bottleneck in scaling AIMC
+
+=== page 6 ===
+6
+TABLE I. Comparison of AHWA training and AHWA-LoRA training. The dataset used is SQuAD v1.1 and the model is MobileBERT.
+Training Method
+
+Score after Conductance Drift
+
+Metric Baseline
+0s
+
+1h
+
+1d
+
+1w
+
+1m
+
+1y
+
+10y
+
+AHWA Training
+
+F1
+EM
+
+90.01
+82.60
+
+89.47 89.07 88.66 88.19 87.73 86.59 85.14
+82.42 81.75 81.28 80.60 79.94 78.41 76.40
+
+AHWA-LoRA Training
+
+F1
+EM
+
+89.17
+82.06
+
+89.06 88.71 88.36 87.97 87.49 86.51 85.36
+81.93 81.41 80.94 80.39 79.77 78.41 76.92
+
+to larger transformer models. LoRA offers a promising solution to reduce both trainable parameters and memory requirements.
+Moreover, optimizing the training framework can further improve training efficiency. For instance, recent work using Triton to
+reduce memory usage and accelerate AHWA training presents another promising direction33 .
+We further break down the effects of LoRA placement and rank. Applying LoRA only to the FFN achieves lower parameter
+counts and memory usage than full AHWA-LoRA training, while restricting adaptation to the QKV projections reduces parameters even further (0.22M) with the lowest memory footprint (28.02 GB). For varying LoRA ranks (r = 1, 2, 4, 8, 16), the number
+of parameters scales nearly linearly with r, whereas GPU memory usage remains largely unchanged.
+TABLE II. Comparison on trainable parameters and GPU memory usage across different training methods. The model used is MobileBERT and the dataset is SQuAD v1.1. Experiments are conducted on an NVIDIA H100 80GB GPU with a batch size of 32.
+Method
+
+Trainable Parameters (M) GPU Memory Usage (GB)
+
+AHWA
+AHWA-LoRA
+AHWA-LoRA (FFN)
+AHWA-LoRA (QKV)
+
+24.67
+1.63
+1.40
+0.22
+
+37.72
+32.92
+31.88
+28.02
+
+AHWA-LoRA (r = 1)
+AHWA-LoRA (r = 2)
+AHWA-LoRA (r = 4)
+AHWA-LoRA (r = 8)
+AHWA-LoRA (r = 16)
+
+0.20
+0.41
+0.82
+1.63
+3.27
+
+32.90
+32.90
+32.91
+32.92
+32.94
+
+Multi-Task Inference Evaluation
+
+TABLE III. AHWA-LoRA training on the GLUE benchmark for MobileBERT.
+GLUE
+Task
+
+Score after Conductance Drift
+
+Score
+0s
+
+1h
+
+1d
+
+1w
+
+1m
+
+1y
+
+10y
+
+SST-2
+92.8
+91.2
+90.9
+90.8
+90.6
+90.6
+90.4
+90.0
+MNLI-m/mm 83.3/82.6 82.8/83.3 82.6/83.0 82.4/82.7 82.1/82.6 82.0/82.4 81.7/82.0 81.2/82.6
+MRPC
+88.8
+87.6
+87.5
+87.5
+87.2
+87.3
+87.1
+86.4
+QNLI
+90.6
+90.9
+90.9
+90.8
+90.6
+90.3
+90.0
+89.5
+QQP
+70.2
+86.9
+87.0
+86.9
+86.7
+86.6
+86.4
+86.2
+RTE
+66.2
+52.9
+53.4
+54.3
+55.4
+54.2
+53.3
+53.4
+STS-B
+84.4
+87.5
+87.3
+87.0
+86.9
+86.7
+86.2
+85.6
+CoLA
+50.5
+46.0
+44.6
+42.7
+40.6
+39.8
+39.1
+37.3
+GLUE
+
+78.8
+
+78.8
+
+78.6
+
+78.3
+
+78.1
+
+77.8
+
+77.4
+
+76.9
+
+We also evaluate our method on multi-task inference. Conventional AHWA methods require at least N AIMC chips to handle
+N tasks. In contrast, our proposed AHWA-LoRA training method employs an elegant strategy wherein a single analog model is
+mapped to one AIMC chip with multiple sets of LoRA weights, each adapted to a specific task.
+We report the results on the 8 tasks from the GLUE benchmark in Table III. These tasks were achieved using a single analog
+model mapped to AIMC tiles, with 8 sets of LoRA parameters computed on DPUs, each containing 1.6M parameters, one
+for each task. To support all 8 tasks, a total of 8 × 1.6M LoRA parameters are required, in addition to the 20.4M mappable
+
+=== page 7 ===
+7
+parameters on AIMC tiles and 4.9M unmappable parameters on DPUs, resulting in a total of 38.1M parameters. In contrast,
+a conventional AHWA training approach22 would require developing and programming 8 separate models into the hardware,
+requiring at least (8 × 20.4 + 4.9)M parameters. Our method, therefore, achieves a more than 4-fold reduction in the number of
+parameters. Furthermore, our approach demonstrates robustness to the inherent constraints of AIMC hardware, with most tasks
+showing minimal performance degradation over time due to drift.
+AHWA-LoRA training also offers significant advantages, including on-chip task switching and on-chip adaptation to user
+data. For example, when AIMC hardware is initially configured for the SST-2 task, it can be easily switched to the MNLI task
+by simply updating the 1.6M LoRA weights from SST-2 to MNLI, without needing to reload AIMC weights. Additionally,
+the LoRA weights allow for on-chip adaptation; when new user-generated data becomes available, the LoRA weights can be
+updated accordingly, while the pre-trained model on the AIMC tiles remains unchanged.
+
+Optimal Allocation of LORA Parameters
+
+Optimizing the allocation of LoRA parameters is crucial for balancing model performance and resource efficiency. This
+challenge represents a typical resource allocation problem34 . While several methods exist for optimizing LoRA allocation35,36 ,
+our study evaluates two predefined strategies for the sake of simplicity and consistency, avoiding the use of adaptive LoRA
+allocation techniques.
+As shown in Figure 2a, increasing the LoRA rank generally improves the F1 score across all drift durations, though the gains
+eventually plateau. For instance, raising the LoRA rank from 1 to 2 results in an F1 score increase of approximately 2.2 for
+a 10-year drift. However, increasing the rank from 8 to 16 yields only a marginal improvement of 1.0. Since a higher rank
+introduces greater computational overhead, this diminishing return suggests that selecting an appropriate rank can effectively
+balance accuracy gains with efficiency. Specifically, we find that a rank of 8 represents an optimal sweet spot for practical
+AIMC constraints: it provides sufficient capacity to compensate for analog noise and drift (accuracy constraint) while remaining
+lightweight enough to fit within the memory and latency budget of the digital accelerators (hardware constraint).
+Figure 2b investigates the impact of different LoRA allocation strategies on model accuracy over varying drift times. The
+results indicate that applying LoRA to all linear layers reaches an initial accuracy of 89.06 (at 0 seconds), then shows a gradual
+performance decrease over time, reaching 85.36 after 10 years. This strategy has the highest LoRA parameter count (1.6M).
+In contrast, restricting LoRA to only the QKV linear layers or FFN layers reduces the parameter count to 0.2M and 1.4M,
+respectively, but results in consistently lower F1 scores across all drift times. These findings suggest that applying LoRA to all
+linear layers is essential for maintaining competitive F1 scores.
+(a)
+
+(b)
+
+FIG. 2. Resource optimization study for MobileBERT and SQuADv1.1 at different drift times. a Pareto front of the F1 score and total
+LoRA adapter memory for different rank values. A rank of 8 – highlighted using a vertical dashed line – provides a good tradeoff between
+these quantities. b The total number of LoRA parameters when adapters are applied to different layers of the multi-head attention block.
+
+=== page 8 ===
+8
+Dynamic Adaptation
+
+In conventional approaches, once a model is deployed, its weights remain fixed, limiting adaptability to evolving hardware
+conditions. Our proposed AHWA-LoRA training enables dynamic adaptation, which is crucial for real-world applications. For
+instance, as shown in Figure 3a, reducing the ADC/DAC precision from 8-bit to 6-bit results in a significant 25% F1 score drop
+after a 10-year drift period. Our approach addresses this issue by updating only the LoRA weights. This on-chip adaptation
+effectively mitigates performance degradation, improving the F1 score from 60.81 to 74.23 after ten years. Additionally, our
+method can adapt to other environmental variations, such as noise pattern shifts due to temperature fluctuations or changes in
+ADC reference current, by leveraging LoRA modules for targeted adjustments.
+
+(a)
+
+(b)
+
+FIG. 3. Dynamic adaptation and scalability studies at different drift times. a Different configurations for AHWA-LoRA training evaluated
+on MobileBERT and SQuAD v1.1. *LoRA weight reloading. b Scalability analysis using BERT-Base and BERT-Large.
+
+Scalability Studies
+
+As illustrated in Figure 3b, our method scales effectively to both BERT-Base (108M parameters, with 1.3M LoRA weights)
+and BERT-Large (334M parameters, with 3.5M LoRA weights), optimizing these models for AIMC hardware by training only
+the LoRA components. The results demonstrate that larger models not only achieve higher F1 scores but also exhibit increased
+robustness against hardware-induced degradation. For instance, a 10-year hardware drift leads to a performance drop of nearly 4
+points in general; however, BERT-Base experiences only a 0.63-point reduction, while BERT-Large sees just a 0.48-point drop.
+This indicates that larger models are more resilient to AIMC hardware limitations, highlighting AIMC’s potential to support
+transformer-based models at scale.
+Furthermore, BERT-Large is approximately 12 × larger than MobileBERT, yet the LoRA parameter count increases by only
+about 2 ×, and a LoRA rank of 8 remains sufficient. This highlights that our proposed method scales efficiently with minimal
+overhead. Encouraged by these results on encoder-based transformers, we next explore the application of our approach to
+decoder-only transformers, such as Large Language Models (LLMs).
+
+=== page 9 ===
+9
+Instruction Tuning and Reinforcement Learning on LLMs
+
+While previous sections have focused on encoder-only transformers, primarily due to their practical size for current LoRA
+hardware, we additionally demonstrate the broader applicability of our AHWA-LoRA training approach to decoder-only LLMs.
+Specifically, we investigate the LLaMA-3.1 model, containing 8 billion parameters, with a LoRA rank of 16, comprising approximately 0.52% of the model’s total parameters. Detailed experimental configurations are provided in the Methods.
+We first evaluate our approach in the context of instruction tuning using the Alpaca dataset, as shown in Table IX. The baseline
+digital Llama 3.1 8B achieves strong zero-shot accuracy across diverse benchmarks, whereas the analog counterpart prior to
+AHWA-LoRA training suffers severe degradation, with performance drops exceeding 40% on several tasks. This substantial loss
+is primarily attributed to analog hardware noise, which affects reasoning and knowledge-retrieval capabilities in decoder-only
+LLMs. Notably, applying our AHWA-LoRA training consistently restores a large portion of the lost performance, yielding
+absolute improvements of up to 38.23 percentage points (e.g., on HellaSwag) compared to the pre-tuning analog model. These
+results highlight that our method enables the model to recover general-purpose instruction-following abilities, demonstrating
+robust cross-task generalization without requiring full-precision retraining.
+We extend our evaluation to reinforcement learning using the GSM8K dataset, aiming to enhance the model’s reasoning
+capability through a long chain-of-thought (CoT), as shown in Table V. The digital baseline benefits from LoRA fine-tuning,
+improving accuracy from 67.63% to 85.06%. In the analog setting, the unadapted model starts at a much lower accuracy
+of 37.98%, reflecting its difficulty in conducting reasoning under hardware noise. After applying ourAHWA-LoRA training,
+the analog model reaches 70.74% accuracy, representing a remarkable 32.76 percentage point gain and narrowing the gap to
+the digital post-LoRA model by over half. These results show the versatility of AHWA-LoRA training, extending its benefits
+beyond supervised instruction tuning to reinforcement learning, and demonstrating its ability to optimize models for complex,
+reasoning-intensive tasks.
+Model Variant
+
+HellaSwag BoolQ PIQA WinoGrande ARC-c ARC-e SciQ COPA OpenBookQA
+
+Baseline: LlaMA 3.1 8B (Digital)
+Analog LlaMA 3.1 8B (Pre-AHWA-LoRA)
+Analog LlaMA 3.1 8B (Post-AHWA-LoRA)
+
+78.91
+29.48
+67.71
+
+82.11 81.23
+48.35 50.44
+69.36 69.64
+
+73.88
+51.78
+55.80
+
+53.41
+25.34
+35.67
+
+81.10 94.60 87.00
+29.42 42.10 55.00
+54.71 80.10 71.00
+
+44.80
+26.20
+33.60
+
+TABLE IV. Zero-shot accuracy (%) of LlaMA 3.1 8B across nine benchmarks under three settings: (1) baseline digital model, (2)
+analog model before AHWA-LoRA training, and (3) analog model after AHWA-LoRA training. The analog model shows substantial accuracy
+degradation compared to the digital baseline. Applying AHWA-LoRA training substantially narrows this gap, yielding consistent improvements
+across all tasks. Additional results in the Supplementary Information show that evaluation at lower noise levels can further boost accuracy,
+bringing it closer to the digital baseline.
+
+Digital (LlaMA 3.1 8B)
+
+Analog (LlaMA 3.1 8B)
+
+Benchmark Pre-LoRA Post-LoRA Pre-AHWA-LoRA Post-AHWA-LoRA
+GSM8K
+
+67.63
+
+85.06
+
+37.98
+
+70.74
+
+TABLE V. GSM8K evaluation accuracy (%) with chain-of-thought (CoT) reasoning. The LLM is trained using reinforcement learning to
+produce outputs in the following format: <start_working_out> reasoning steps <end_working_out> <SOLUTION> final answer
+</SOLUTION>. We compare the digital baseline (LLaMA 3.1 8B) and its analog counterpart, both before and after reinforcement learning
+via LoRA training. In the digital case, LoRA training improves performance from 67.63% to 85.06%. For the analog model, AHWA-LoRA
+training boosts accuracy from 37.98% to 70.74%, reducing the analog–digital performance gap from nearly 30% to about 15%. Additional
+results in the Supplementary Information show that, under reduced evaluation noise, this gap can shrink to 2.5%.
+
+Latency Analysis of Hardware Components and Network Layers
+
+We analyze the performance optimization of the proposed hybrid implementation, which utilizes AIMC tiles and PMCAs,
+with a focus on balancing their latencies. If the latency of the PMCAs is well balanced with that of the AIMC tiles, an efficient
+AIMC-PMCA pipeline parallelism can be implemented, leading to minimal performance loss due to the additional computations
+introduced by the LoRA modules. Then, we can enjoy the high accuracy on long drift time, efficient multi-task processing ability,
+and dynamic adaptation ability with minimal latency cost. We examine this balance by analyzing our architecture across different
+layer sizes of MobileBERT, with the rank of LoRA matrices fixed at 8. We consider AIMC tile integration times of 128, 256,
+and 512 ns, based on values reported in the literature for AIMC-based accelerators18 . Since processing one token at a time using
+
+=== page 10 ===
+10
+a PMCA does not fully exploit the parallelization capabilities of the cluster, we evaluate scenarios where multiple tokens are
+processed in parallel. Specifically, once the required static XW (i.e., activation×weight) MVMs on AIMC tiles are executed for
+t tokens and transferred to the PMCA, the PMCA then performs the required XAB MVM LoRA computations and element-wise
+addition operations. We consider t values of 8, 16, 32, 64, and 128.
+(a)
+
+(b)
+
+(c)
+
+FIG. 4. Performance analysis and latency balancing of the proposed architecture with AIMC tiles and coupled PMCAs. a The latency
+of two different MobileBERT layers with varying AIMC tile integration times and b PMCA’s TCDM requirement as a function of the number
+of parallel tokens. c The total latency for all the different layers of MobileBERT with an optimized AIMC-PMCA pipeline balancing the
+latency of the AIMC tiles and PMCAs. The latency without any LoRA adapters (AIMC) is also reported.
+
+The first step in our evaluation consists of analyzing and comparing the performance of AIMC tiles and PMCAs when generating different numbers of parallel tokens, t. Figure 4a shows the latency of AIMC tiles and PMCAs for different layer sizes,
+AIMC tile integration times, and t values. The results show that for a larger weight matrix size (512x128) and longer integration
+times (256 ns and 512 ns), the latencies of PMCA and AIMC are well-balanced. For the same matrix size with a shorter integration time of 128 ns, PMCA latency becomes the bottleneck. In the case of smaller weight matrix size (128x128) and longer
+integration times (256 ns and 512 ns), AIMC latency dominates, whereas for shorter integration time (128 ns) PMCA and AIMC
+latencies are balanced. For a smaller weight matrix size (128x128), an optimal balance between PMCA and AIMC computation
+latencies is achieved when processing 128, 8, and 8 parallel numbers of tokens t for integration times of 128, 256, and 512 ns, respectively. This corresponds to PMCA-to-AIMC latency ratios of approximately 1.04, 0.63, and 0.32, respectively. For the larger
+matrix size (512x128), the optimal balance is achieved for 128, 128, and 8 parallel tokens, corresponding to PMCA-to-AIMC
+ratios of approximately 2.57, 1.29, and 0.7 for the above respective integration times.
+Increasing the number of parallel tokens can enhance computational balance, but it also affects memory requirements. Figure 4b shows the memory requirements to store the inputs and low-rank weight updates in the PMCAs as a function of the
+number of parallel tokens t. We observed that the required PMCA memory varies significantly depending on the number of
+
+=== page 11 ===
+11
+parallel tokens. For smaller weight matrices, the memory requirement ranges from 8.2 KiB to 21 KiB, while for larger matrices,
+it increases to between 70 KiB to 172 KiB. Considering the PMCAs in our architecture have a TCDM size of 128 KiB, performing MVMs with large weight matrices and many parallel tokens requires either a larger TCDM or additional TCDM-SRAM
+communication.
+To further assess the impact of the proposed methodology, we evaluate the total MVM latency for processing a SL of 320
+tokens. Figure 4c shows the total latency for different MobileBERT layers across different AIMC tile integration times. It
+compares the performance of the proposed AHWA LoRA approach against a baseline AIMC system without LoRA integration.
+We implement the AIMC-PMCA pipeline while accounting for data transfer latency between AIMC and PMCA. As shown
+in Figure 4c, the layer size, AIMC integration time, and the parallel number of tokens, all impact the performance overhead
+introduced by the additional LoRA matrices. However, regardless of the integration time, when AIMC and PMCA latencies
+are well balanced, the additional latency from the LoRA matrices remains minimal. For large weight matrices (512×128), the
+latency overhead from adopting AHWA LoRA remains limited to 2.72 ×, 1.39 ×, and 1.05 × for integration times of 128, 256,
+and 512 ns, respectively. Notably, in the best scenario, our method incurs only a 4 % latency overhead compared to the AIMC
+baseline. This evaluation highlights that balancing AIMC and PMCA latencies minimizes the overall layer latency and keeps
+AHWA LoRA’s performance cost low.
+This evaluation highlights the importance of balancing the AIMC and PMCA latencies. When the AIMC latency to perform
+the static MVMs aligns closely with the PMCA latency, the overall latency for each layer is minimized and the performance cost
+associated with the additional LoRA matrices is kept minimal.
+
+DISCUSSION
+
+When deploying NNs on AIMC hardware, accuracy is often degraded due to hardware constraints. To mitigate this, researchers have introduced AHWA training, which adapts models to specific hardware characteristics. However, the trained models become tightly bound to the specific hardware settings and the dataset used during training, leading to over-specification.
+This limits both their flexibility and generalization ability.
+One of the core motivations for using transformer models is their strong generalization capacity – an advantage that is in direct
+conflict with the rigid nature of conventional AIMC deployment. Our proposed AHWA-LoRA training method addresses this by
+retaining the meta-weights and introducing minimal overhead through low-rank adaptation. This design significantly improves
+generalization performance while maintaining accuracy comparable to conventional AHWA training methods. Furthermore, it
+enables additional capabilities for AIMC, such as multi-task inference and continual adaptability using a shared set of analog
+weights.
+Importantly, our results provide concrete evidence that AHWA-LoRA training scales efficiently across model sizes and architectures. For encoder-only transformers, we evaluate MobileBERT (25M), BERT-Base (108M), and BERT-Large (334M),
+and observe that larger models exhibit smaller performance degradation under long-horizon drift (e.g., under 10-year simulated drift, MobileBERT drops by ∼4 points, while BERT-Base and BERT-Large degrade substantially less; see Table I). For
+decoder-only LLMs, we apply AHWA-LoRA training to LLaMA 3.1 8B for instruction tuning and reinforcement learning, where
+LoRA accounts for only 0.52% of parameters, demonstrating that the adaptation overhead remains low even at billion-parameter
+scale. A plausible intuitive explanation is that larger models may possess stronger and more redundant representations, making
+them inherently more robust to perturbations and reducing the burden on the LoRA adapters to compensate hardware noise.
+Together, these experiments highlight that the same AHWA-LoRA training mechanism transfers cleanly across architectures
+(encoder/decoder), diverse task families (SQuAD/GLUE), model sizes (million-scale model/billion-scale model), and training
+paradigms (finetuning/RL).
+The primary cost of our method lies in serving the LoRA components, whose overhead is proportional to their rank. Interestingly, we find that a rank of 8 is sufficient for most scenarios. This rank supports both learning a specific task and adapting to
+hardware variations – indicating that the noise inherent in analog hardware with limited dynamic range can be effectively and
+efficiently compensated for. These positive results are expected to encourage broader adoption of analog hardware, allowing
+more users to benefit from its high speed and ultra-low power consumption.
+Additionally, we found that the proposed architecture is well-suited for hardware implementations that parallelize AIMC tiles
+and PMCA for efficient execution. Our evaluation demonstrates that when the AIMC latency is well balanced with the PMCA
+latency, the latency overhead introduced by LoRA is minimal. In summary, our approach offers substantial improvements in the
+versatility and usability of AIMC, with only a modest latency cost.
+For future improvements, insights from LoRA and NN training can be adapted to the AIMC context with suitable modifications37,38 . While this study builds on existing LoRA methods, it also contributes back to that domain by demonstrating that
+LoRA can be used to compensate for noisy weights—a scenario that was not considered in early LoRA studies, which focused
+on full-precision17 or low-precision weights24 , but not statistical (noisy) weights.
+ADC plays a crucial role in bridging the analog and digital domains, but its limited precision can impact overall system performance. Enhancing ADC optimization to develop models resilient to lower bit-widths can accelerate inference or improve
+
+=== page 12 ===
+12
+accuracy at fixed bit settings. Advances in transformer activation quantization are particularly relevant here39 , as they help mitigate the adverse effects of quantization noise. Notably, recent work by Büchel et al.28 demonstrates that knowledge distillation
+can be used to overcome the precision limitations of ADC, highlighting a promising direction for future research. Our proposed
+method is inherently compatible with such quantization and distillation techniques, making it well-suited for integration with
+these advances. Future work will incorporate these methods to enhance both performance and robustness in our AIMC system
+design.
+Our initial results on instruction tuning and reinforcement learning provide promising insights into the broader applicability
+of the proposed methods and their scalability to LLMs. We emphasize that the low-memory footprint of the proposed AHWALoRA training is even more critical for LLMs than for MobileBERT, as it enables training LLMs with AIMC constraints on a
+single GPU, making the process much more accessible to a wider range of researchers. Other benefits of AHWA-LoRA training
+also extend naturally to LLMs, including multi-task support through LoRA reloading or multi-LoRA serving, as well as dynamic
+adaptation to user-specific data. A key challenge in this direction is to further improve the robustness of LLM training under
+hardware constraints. Our qualitative results in the Supplementary Information show that models can still generate coherent
+and meaningful outputs despite these hardware constraints. On the other hand, our quantitative results indicate that evaluation
+accuracy begins to degrade at a noise level of 4.0% for instruction tuning and 2.0% for reinforcement learning. A similar
+inflection point of 2–4% was also reported by Buchel et al.28 . This indicates that there remains significant room for optimization
+in model training. Advancements in AIMC hardware would also contribute to this goal by enabling operation at lower noise
+levels.
+Our results on GSM8K are closely related to the idea of noisy networks in reinforcement learning, which demonstrates that
+introducing controlled noise into neural networks can significantly enhance exploration capabilities and improve performance
+across both on-policy and off-policy methods. Similarly, the injection of noise in our method may encourage exploration. From
+this perspective, the inherent noise within AIMC is not a limitation to be overcome, but rather a beneficial feature that drives
+more effective learning. How to maximise this potential benefit can be an interesting future work.
+The proposed method in this paper may also be connected to the idea of mortal computations40,41 , which involves using analog
+hardware to perform neural network operations. In such systems, the algorithm is inherently tied to the analog substrate, meaning
+the computation is mortal – it dies with the analog hardware. While this tight integration enables high-speed and energy-efficient
+processing, it also presents challenges in training effectiveness, knowledge sharing, and scalability, as identified in a previous
+study41 . Our method introduces minimal digital parameters (i.e., LoRA weights) to augment the analog weights components.
+This approach addresses learning limitations without requiring precise knowledge of the analog weights’ exact values; instead,
+it only relies on their statistical noise profiles, making the mortal system learnable. The LoRA modules effectively compensate
+for the noise in the mortal system, enabling robust functionality. As a result, the architecture achieves an elegant balance: analog
+weights remain fast and large in number, while the digital weights, though less-efficient and slower, are kept minimal. When
+adaptation is needed, only the minimal digital weights are updated. This update process is simpler and more efficient than
+modifying all analog weights.
+
+=== page 13 ===
+13
+ACKNOWLEDGMENTS
+
+This work is supported in part by the NeuroSoC project funded under Horizon Europe Grant Agreement 101070634. The
+work of Bipin Rajendran was supported in part by EPSRC Open Fellowship under Grant EP/X011356/1 and in part by EPSRC
+under Grant EP/X011852/1. We also gratefully acknowledge valuable discussions with Dr. Abu Sebastian and help from Julian
+Büchel regarding the usage of AIHWKIT.
+AUTHOR CONTRIBUTIONS
+
+C. L. proposed the initial concept of AHWA LoRA training and performed the accuracy validation experiments. E. F. conducted the latency analysis. C. L. and E. F. co-authored the initial draft of the manuscript, with all authors contributing substantial
+feedback and revisions. B. R., M. G., and I. B. provided overall project supervision and guidance.
+
+=== page 14 ===
+14
+REFERENCES
+
+1 Y. LeCun, Y. Bengio, and G. Hinton, “Deep learning,” Nat. 521, 436 – 444 (2015).
+2 A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, L. u. Kaiser, and I. Polosukhin, “Attention is all you need,” in Advances in Neural
+
+Information Processing Systems, Vol. 30, edited by I. Guyon, U. V. Luxburg, S. Bengio, H. Wallach, R. Fergus, S. Vishwanathan, and R. Garnett (Curran
+Associates, Inc., 2017).
+3 D. Patterson, J. Gonzalez, Q. Le, C. Liang, L.-M. Munguia, D. Rothchild, D. So, M. Texier, and J. Dean, “Carbon emissions and large neural network training,”
+arXiv preprint arXiv:2104.10350 (2021).
+4 M. L. Gallo, A. Sebastian, R. Mathis, M. Manica, T. Tuma, C. Bekas, A. Curioni, and E. Eleftheriou, “Mixed-precision in-memory computing,” Nat. Electronics (2018).
+5 I. Boybat, T. Boesch, M. Allegra, M. Baldo, J. Bertolini-Agnoletto, G. W. Burr, A. Buschini, A. Cabrini, E. Calvetti, C. Cappetta, F. Conti, E. Ferro, E. F.
+Scarselli, A. Garofalo, F. Girardi, G. Islamoglu, V. P. Jonnalagadda, G. Karunaratne, C. Lammie, M. Le Gallo, C. Li, R. Massa, A. C. Ornstein, H. Pang,
+M. Pasotti, B. Rajendran, A. Redaelli, I. Sanli, W. A. Simon, A. Singh, S.-P. Singh, G. Urlini, A. Vasilopoulos, R. Zurla, G. Desoli, and A. Sebastian,
+“Heterogeneous embedded neural processing units utilizing pcm-based analog in-memory computing,” in 2024 IEEE International Electron Devices Meeting
+(IEDM).
+6 C. Lammie, H. Benmeziane, W. Simon, E. Ferro, A. Vasilopoulos, J. Büchel, M. Le Gallo, I. Boybat, and A. Sebastian, “Deep learning software stacks for
+analogue in-memory computing-based accelerators,” Nature Reviews Electrical Engineering (2025), 10.1038/s44287-025-00187-1.
+7 S. R. Nandakumar, I. Boybat, V. Joshi, C. Piveteau, M. Le Gallo, B. Rajendran, A. Sebastian, and E. Eleftheriou, “Phase-change memory models for deep
+learning training and inference,” in 2019 26th IEEE International Conference on Electronics, Circuits and Systems (ICECS).
+8 A. Sebastian, M. Le Gallo, R. Khaddam-Aljameh, and E. Eleftheriou, “Memory devices and applications for in-memory computing,” Nat. Nanotechnol. 15,
+529–544 (2020).
+9 S. R. Nandakumar, I. Boybat, J.-P. Han, S. Ambrogio, P. Adusumilli, R. L. Bruce, M. BrightSky, M. Rasch, M. Le Gallo, and A. Sebastian, “Precision of
+synaptic weights programmed in phase-change memory devices for deep learning inference,” in 2020 IEEE International Electron Devices Meeting (IEDM),
+pp. 29.4.1–29.4.4.
+10 I. Boybat, B. Kersting, S. G. Sarwat, X. Timoneda, R. L. Bruce, M. BrightSky, M. L. Gallo, and A. Sebastian, “Temperature sensitivity of analog in-memory
+computing using phase-change memory,” in 2021 IEEE International Electron Devices Meeting (IEDM).
+11 M. Le Gallo, C. Lammie, J. Büchel, F. Carta, O. Fagbohungbe, C. Mackin, H. Tsai, V. Narayanan, A. Sebastian, K. El Maghraoui, and M. J. Rasch,
+“Using the ibm analog in-memory hardware acceleration kit for neural network training and inference,” APL Machine Learning (2023), 10.1063/5.0168089,
+https://pubs.aip.org/aip/aml/article-pdf/doi/10.1063/5.0168089/19848543/041102_1_5.0168089.pdf.
+12 M. J. Rasch, C. Mackin, M. Le Gallo, A. Chen, A. Fasoli, F. Odermatt, N. Li, S. Nandakumar, P. Narayanan, H. Tsai, et al., “Hardware-aware training for
+large-scale and diverse deep learning inference workloads using in-memory computing-based accelerators,” Nature communications (2023).
+13 C. Lammie, J. Büchel, A. Vasilopoulos, M. Le Gallo, and A. Sebastian, “The inherent adversarial robustness of analog in-memory computing,” Nature
+Communications 16, 1756 (2025).
+14 J. Devlin, “Bert: Pre-training of deep bidirectional transformers for language understanding,” arXiv preprint arXiv:1810.04805 (2018).
+15 H. Benmeziane, C. Lammie, A. Vasilopoulos, I. Boybat, M. L. Gallo, H. Tsai, K. E. Maghraoui, and A. Sebastian, “Multi-task neural network mapping onto
+analog-digital heterogeneous accelerators,” in NeurIPS 2024 Workshop Machine Learning with new Compute Paradigms (2024).
+16 E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, and W. Chen, “Lora: Low-rank adaptation of large language models,” (2021),
+arXiv:2106.09685 [cs.CL].
+17 Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, et al., “Lora: Low-rank adaptation of large language models.” .
+18 M. Le Gallo, R. Khaddam-Aljameh, M. Stanisavljevic, A. Vasilopoulos, B. Kersting, M. Dazzi, G. Karunaratne, M. Brändli, A. Singh, S. M. Müller, J. Büchel,
+X. Timoneda, V. Joshi, M. J. Rasch, U. Egger, A. Garofalo, A. Petropoulos, T. Antonakopoulos, K. Brew, S. Choi, I. Ok, T. Philip, V. Chan, C. Silvestre,
+I. Ahsan, N. Saulnier, V. Narayanan, P. A. Francese, E. Eleftheriou, and A. Sebastian, “A 64-core mixed-signal in-memory compute chip based on phasechange memory for deep neural network inference,” Nature Electronics (2023).
+19 T.-H. Wen, J.-M. Hung, W.-H. Huang, C.-J. Jhang, Y.-C. Lo, H.-H. Hsu, Z.-E. Ke, Y.-C. Chen, Y.-H. Chin, C.-I. Su, W.-S. Khwa, C.-C. Lo, R.-S. Liu, C.-C.
+Hsieh, K.-T. Tang, M.-S. Ho, C.-C. Chou, Y.-D. Chih, T.-Y. J. Chang, and M.-F. Chang, “Fusion of memristor and digital compute-in-memory processing for
+energy-efficient edge computing,” Science (2024), 10/ms4p.
+20 A. Mohanty, X. Du, P.-Y. Chen, J.-s. Seo, S. Yu, and Y. Cao, “Random sparse adaptation for accurate inference with inaccurate multi-level rram arrays,” in
+2017 IEEE International Electron Devices Meeting (IEDM).
+21 M. J. Rasch, D. Moreda, T. Gokmen, M. Le Gallo, F. Carta, C. Goldberg, K. El Maghraoui, A. Sebastian, and V. Narayanan, “A flexible and fast pytorch
+toolkit for simulating training and inference on analog crossbar arrays,” in 2021 IEEE 3rd International Conference on Artificial Intelligence Circuits and
+Systems (AICAS).
+22 V. Joshi, M. Le Gallo, S. Haefeli, I. Boybat, S. R. Nandakumar, C. Piveteau, M. Dazzi, B. Rajendran, A. Sebastian, and E. Eleftheriou, “Accurate deep neural
+network inference using computational phase-change memory,” Nature Communications 11 (2020), 10.1038/s41467-020-16108-9.
+23 R. Taori, I. Gulrajani, T. Zhang, Y. Dubois, X. Li, C. Guestrin, P. Liang, and T. B. Hashimoto, “Stanford alpaca: An instruction-following llama model,”
+https://github.com/tatsu-lab/stanford_alpaca (2023).
+24 T. Dettmers, A. Pagnoni, A. Holtzman, and L. Zettlemoyer, “Qlora: Efficient finetuning of quantized llms,” Advances in neural information processing systems
+36, 10088–10115 (2023).
+25 E. Frantar, S. Ashkboos, T. Hoefler, and D. Alistarh, “Gptq: Accurate post-training quantization for generative pre-trained transformers,” arXiv preprint
+arXiv:2210.17323 (2022).
+26 D. Guo, D. Yang, H. Zhang, J. Song, R. Zhang, R. Xu, Q. Zhu, S. Ma, P. Wang, X. Bi, et al., “Deepseek-r1: Incentivizing reasoning capability in llms via
+reinforcement learning,” arXiv preprint arXiv:2501.12948 (2025).
+27 J. Büchel, W. A. Simon, C. Lammie, G. Acampa, K. E. Maghraoui, M. L. Gallo, and A. Sebastian, “Aihwkit-lightning: A scalable hw-aware training toolkit
+for analog in-memory computing,” in NeurIPS 2024 Workshop Machine Learning with new Compute Paradigms (2024).
+28 J. Büchel, I. Chalas, G. Acampa, A. Chen, O. Fagbohungbe, S. Tsai, K. E. Maghraoui, M. L. Gallo, A. Rahimi, and A. Sebastian, “Analog foundation models,”
+arXiv preprint arXiv:2505.09663 (2025).
+29 F. Zaruba, F. Schuiki, T. Hoefler, and L. Benini, “Snitch: A tiny pseudo dual-issue processor for area and energy efficient execution of floating-point intensive
+workloads,” IEEE Transactions on Computers 70, 1845–1860 (2021).
+30 F. Schuiki, F. Zaruba, T. Hoefler, and L. Benini, “Stream semantic registers: A lightweight risc-v isa extension achieving full compute utilization in single-issue
+cores,” IEEE Trans. Comput. 70 (2021).
+
+=== page 15 ===
+15
+31 T. Benz, M. Rogenmoser, P. Scheffler, S. Riedel, A. Ottaviano, A. Kurth, T. Hoefler, and L. Benini, “A high-performance, energy-efficient modular dma engine
+
+architecture,” IEEE Transactions on Computers (2023), 10.1109/TC.2023.3329930.
+32 Y. Tortorella, L. Bertaccini, D. Rossi, L. Benini, and F. Conti, “Redmule: a compact fp16 matrix-multiplication accelerator for adaptive deep learning on
+
+risc-v-based ultra-low-power socs,” in Proceedings of the 2022 Conference & Exhibition on Design, Automation & Test in Europe.
+33 J. Büchel, W. A. Simon, C. Lammie, G. Acampa, K. El Maghraoui, M. Le Gallo, and A. Sebastian, “Aihwkit-lightning: a scalable hw-aware training toolkit
+
+for analog in-memory computing,” in NeurIPS 2024 Workshop Machine Learning with new Compute Paradigms (2024).
+34 C. Lammie, Y. Wang, F. Ponzina, J. Klein, H. Benmeziane, M. Zapater, I. Boybat, A. Sebastian, G. Ansaloni, and D. Atienza, “Lionheart: A layer-based
+
+mapping framework for heterogeneous systems with analog in-memory computing tiles,” IEEE Transactions on Emerging Topics in Computing (2025),
+10.1109/TETC.2025.3546128.
+35 J. He, C. Zhou, X. Ma, T. Berg-Kirkpatrick, and G. Neubig, “Towards a unified view of parameter-efficient transfer learning,” arXiv preprint arXiv:2110.04366
+(2021).
+36 Q. Zhang, M. Chen, A. Bukharin, N. Karampatziakis, P. He, Y. Cheng, W. Chen, and T. Zhao, “Adalora: Adaptive budget allocation for parameter-efficient
+fine-tuning,” arXiv preprint arXiv:2303.10512 (2023).
+37 S.-Y. Liu, C.-Y. Wang, H. Yin, P. Molchanov, Y.-C. F. Wang, K.-T. Cheng, and M.-H. Chen, “Dora: Weight-decomposed low-rank adaptation,” in Forty-first
+International Conference on Machine Learning (2024).
+38 K. Jordan, Y. Jin, V. Boza, Y. Jiacheng, F. Cesista, L. Newhouse, and J. Bernstein, “Muon: An optimizer for hidden layers in neural networks,” (2024).
+39 G. Xiao, J. Lin, M. Seznec, H. Wu, J. Demouth, and S. Han, “Smoothquant: Accurate and efficient post-training quantization for large language models,” in
+International Conference on Machine Learning (PMLR, 2023) pp. 38087–38099.
+40 A. Ororbia and K. Friston, “Mortal computation: A foundation for biomimetic intelligence,” arXiv preprint arXiv:2311.09589 (2023).
+41 G. Hinton, “The forward-forward algorithm: Some preliminary investigations,” arXiv preprint arXiv:2212.13345 2, 5 (2022).
+
+=== page 16 ===
+16
+SUPPLEMENTARY NOTE 1: ABLATION STUDY ON AHWA-LORA TRAINING
+
+We conduct a comprehensive ablation study to analyze the impact of key hyperparameters in AHWA-LoRA training: learning
+rate, weight noise, and clipping method. All experiments use MobileBERT on the SQuAD v1.1 dataset, with performance
+evaluated using F1 scores after simulating conductance drift over different time periods.
+Learning Rate
+
+As shown in Table VI, a learning rate of 2 × 10−4 provides the best overall results. A very low learning rate, such as 5 × 10−6 ,
+results in a higher training loss and significantly lower F1 scores, indicating that the model fails to converge effectively. While
+increasing the learning rate to 5 × 10−5 improves performance, it remains suboptimal compared to 2 × 10−4 . Conversely, a high
+rate of 8 × 10−4 makes the training process unstable and causes the model to collapse.
+TABLE VI. Ablation study on learning rate. Results are obtained on SQuAD v1.1 using MobileBERT with AHWA-LoRA training.
+Learning Rate
+
+Metric
+5e-6
+
+5e-5
+
+2e-4
+
+8e-4
+
+Train Loss 1.9505 1.2004 0.9306 Collapse
+F1 Score after Conductance Drift
+0s
+1h
+1d
+1w
+1m
+1y
+10y
+
+73.49
+72.13
+71.07
+69.64
+68.08
+66.76
+63.27
+
+86.64
+86.30
+85.74
+85.08
+84.48
+83.26
+81.41
+
+89.06
+88.71
+88.36
+87.97
+87.49
+86.51
+85.36
+
+-
+
+Weight Noise
+
+We investigate how varying the standard deviation of Gaussian weight noise during training affects model performance. As
+shown in Table VII, moderate noise levels achieve optimal results. The F1 score following conductance drift initially improves
+with increasing noise levels, reaching peak performance between 0.067-0.075 before declining. A noise level of 0.067 delivers
+the highest overall performance, while 0.075 with extended training (20 epochs) provides marginally better long-term stability,
+sustaining an F1 score of 86.49 after 10 years, though this requires additional training epochs. Lower noise levels result in
+more severe performance degradation over time and reduced robustness to drift. Conversely, excessive noise (0.12) completely
+destabilizes the training process, causing training failure.
+TABLE VII. Ablation study on weight noise. Results are obtained on SQuAD v1.1 using MobileBERT withAHWA-LoRA training.
+Weight Noise Level
+
+Metric
+
+0.02 0.0377 0.067 0.075 0.075* 0.09
+
+0.12
+
+Train Loss 0.5392 0.6876 0.9306 1.0223 0.9373 1.1836 Collapse
+F1 Score after Conductance Drift
+0s
+1h
+1d
+1w
+1m
+1y
+10y
+
+∗
+
+87.46
+86.87
+85.50
+84.74
+83.26
+80.29
+74.97
+
+*20 epochs training, which is 5 epoches longer than others
+
+88.74
+88.28
+87.59
+87.08
+85.56
+84.00
+80.63
+
+89.33
+89.23
+88.28
+88.23
+87.86
+86.97
+85.76
+
+88.74
+88.65
+88.29
+88.08
+87.71
+86.89
+85.68
+
+89.18
+88.74
+88.37
+88.51
+87.98
+87.17
+86.49
+
+87.39
+87.36
+86.98
+86.62
+86.37
+85.83
+85.17
+
+-
+
+=== page 17 ===
+17
+Clipping Method
+
+Table VIII demonstrates that adaptive clipping at 2.5σ of the weight distribution provides optimal results, achieving the highest
+F1 scores both initially (89.51) and after long-term drift (86.01 at 10 years). The 3σ threshold used in our main experiments also
+performs well. However, overly restrictive clipping at 2σ causes training collapse, while non-adaptive fixed clipping (Fixed 1)
+yields suboptimal performance, highlighting the importance of distribution-aware adaptive clipping strategies.
+TABLE VIII. Ablation study on weight clipping method. Results are obtained on SQuAD v1.1 using MobileBERT with AHWA-LoRA
+training.
+Clipping Value
+
+Metric
+3σ
+
+2.5σ
+
+2σ
+
+Fixed 1
+
+Train Loss 0.9306 0.8345 Collapse 1.0299
+F1 Score after Conductance Drift
+0s
+1h
+1d
+1w
+1m
+1y
+10y
+
+89.06
+88.71
+88.36
+87.97
+87.49
+86.51
+85.36
+
+89.51
+89.13
+88.80
+88.42
+88.29
+86.95
+86.01
+
+-
+
+88.57
+88.11
+87.93
+87.56
+87.28
+86.11
+84.32
+
+SUPPLEMENTARY NOTE 2: ADDITIONAL QUANTITATIVE AND QUALITATIVE RESULTS FOR AHWA-LORA TRAINING ON
+INSTRUCTION TUNING
+
+Table IX reports the robustness of the analog LLaMA 3.1 8B model trained with AHWA-LoRA training when evaluated under
+varying inference noise levels. The model was trained with a noise level of 6.7%. On the HellaSwag dataset, the analog model
+maintains accuracy above 75% for noise levels up to 4.0%, with only a gradual degradation from 78.91% at 0.0% noise (digital
+baseline) to 75.34% at 4.0% noise. Performance declines more rapidly beyond 4.0% noise, dropping to 70.76% at 6.0% noise
+and 67.71% at the training noise level of 6.7%. When evaluated using the PCM model (no drift), it achieves 76.21% accuracy.
+TABLE IX. LLaMA 3.1 8B evaluation on HellaSwag accuracy (%) across different inference noise levels. The digital (noiseless) baseline
+is included at 0.0% noise for comparison. The analog model was trained with AHWA-LoRA training (training noise level 6.7%).
+Noise level (%)
+HellaSwag Accuracy (%)
+
+Digital (0.0)
+
+1.0
+
+2.0
+
+3.0
+
+4.0
+
+5.0
+
+6.0
+
+6.7
+
+PCM (0s drift)
+
+78.91
+
+77.65
+
+77.18
+
+76.54
+
+75.34
+
+73.36
+
+70.76
+
+67.71
+
+76.21
+
+Qualitative Example (Instruction-Following). Below is an example of the model’s output for a simple instruction-only prompt
+after AHWA-LoRA training. The response is concise, factual, and follows the instruction accurately.
+Instruction: What is a famous tall tower in Paris?
+Response: One famous tall tower in Paris is the Eiffel Tower. The Eiffel Tower is an iron lattice tower constructed
+in 1889 and was the tallest building in the world at the time of its construction. It stands at a height of 1,063 feet
+(324 meters) and is one of the most recognizable landmarks in the world.
+SUPPLEMENTARY NOTE 3: ADDITIONAL QUANTITATIVE AND QUALITATIVE RESULTS FOR AHWA-LORA TRAINING ON
+REASONING (GSM8K)
+
+Table X presents GSM8K evaluation results for the analog LLaMA 3.1 8B model trained with AHWA-LoRA training at a
+training noise level of 3.0%. The model exhibits strong robustness up to 2.0% noise, with only a modest drop from 85.06%
+(digital baseline) to 83.55%. At the training noise level (3.0%), accuracy drops sharply to 70.74%, indicating reduced reliability
+under higher noise. Evaluation with the PCM model (no drift) yields an accuracy of 77.71%.
+Evaluation Samples (Chain-of-Thought Reasoning). We present two examples from GSM8K (evaluation noise level 3.0%)
+showing the model’s reasoning traces and final machine-readable answers. Each answer follows the format:
+
+=== page 18 ===
+18
+TABLE X. LLaMA 3.1 8B evaluation on GSM8K accuracy (%) across selected noise levels. The digital (noiseless) baseline is included at
+0.0% noise for comparison. The analog model was trained with AHWA-LoRA training (training noise level 3.0%).
+Noise level (%)
+GSM8K Accuracy (%)
+
+Digital (0.0)
+
+1.0
+
+2.0
+
+3.0
+
+PCM (0s drift)
+
+85.06
+
+84.53
+
+83.55
+
+70.74
+
+77.71
+
+• A free-form reasoning trace between <start_working_out> and <end_working_out>.
+• A final answer enclosed in <SOLUTION> and </SOLUTION> tags.
+This structure allows for automated correctness checks and could enable reinforcement learning with verifiable outputs, encouraging the model to think before answering.
+Example 1 (Incorrect)
+Question:
+Josh decides to try flipping a house. He buys a house for $80,000 and then spends $50,000 on repairs. This increases
+the value of the house by 150%. How much profit did he make?
+Expected Answer:
+70,000
+Model Output: <start_working_out>
+Josh bought the house for $80,000 and added $50,000 in repairs.
+The total spent is $80,000 + $50,000 = $130,000.
+The value of the house increased by 150% of the original price:
+1.5 * $80,000 = $120,000.
+The profit is the new value minus the original price:
+$130,000 - $80,000 = $50,000.
+<end_working_out>
+<SOLUTION>50000</SOLUTION>
+Extracted:
+50,000
+Correct:
+False
+Example 2 (Correct)
+Question:
+A robe takes 2 bolts of blue fiber and half that much white fiber. How many bolts in total does it take?
+Expected Answer:
+3
+Model Output: <start_working_out>
+The robe needs 2 bolts of blue fiber.
+White fiber is half as much: 2 / 2 = 1 bolt.
+Total = 2 + 1 = 3.
+<end_working_out>
+<SOLUTION>3</SOLUTION>
+Extracted:
+3
+Correct:
+True

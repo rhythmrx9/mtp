@@ -1,0 +1,1022 @@
+# A Programmable Heterogeneous Microprocessor Based on Bit-Scalable In-Memory Computing
+# id: W2899641901 | key: 2020_Jia_ProgrammableIMCMicroprocessor_JSSC | JSSC 2020 | card: ../cards/2020_Jia_ProgrammableIMCMicroprocessor_JSSC.md
+
+
+=== page 1 ===
+A Microprocessor implemented in 65nm CMOS with
+Configurable and Bit-scalable Accelerator for Programmable In-memory Computing
+Hongyang Jia, Yinqi Tang1, Hossein Valavi1, Jintao Zhang, Naveen Verma
+Princeton University, Princeton NJ
+Abstract: This paper presents a programmable in-memory-computing processor, demonstrated in a 65nm
+CMOS technology. For data-centric workloads, such as deep neural networks, data movement often
+dominates when implemented with today’s computing architectures. This has motivated spatial architectures,
+where the arrangement of data-storage and compute hardware is distributed and explicitly aligned to the
+computation dataflow, most notably for matrix-vector multiplication. In-memory computing is a spatial
+architecture where processing elements correspond to dense bit cells, providing local storage and compute,
+typically employing analog operation. Though this raises the potential for high energy efficiency and
+throughput, analog operation has significantly limited robustness, scale, and programmability. This paper
+describes a 590kb in-memory-computing accelerator integrated in a programmable processor architecture,
+by exploiting recent approaches to charge-domain in-memory computing [1]. The architecture takes the
+approach of tight coupling with an embedded CPU, through accelerator interfaces enabling integration in the
+standard processor memory space. Additionally, a near-memory-computing datapath both enables diverse
+computations locally, to address operations required across applications, and enables bit-precision scalability
+for matrix/input-vector elements, through a bit-parallel/bit-serial (BP/BS) scheme. Chip measurements show
+an energy efficiency of 152/297 1b-TOPS/W and throughput of 4.7/1.9 1b-TOPS (scaling linearly with the
+matrix/input-vector element precisions) at VDD of 1.2/0.85V. Neural network demonstrations with 1-b/4-b
+weights and activations for CIFAR-10 classification consume 5.3/105.2 J/image at 176/23 fps, with accuracy
+at the level of digital/software implementation (89.3/92.4 % accuracy).
+1. INTRODUCTION
+Neural-network inference is dominated by computation of high-dimensionality matrix-vector multiplications
+(MVMs). While hardware acceleration has typically enabled significant increase in energy efficiency and
+performance of compute, high-dimensionality of MVMs makes data movement a significant cost, limiting the
+gains achievable from traditional digital acceleration. For instance, embedded memory, often relied on to
+exploit opportunities for data reuse, can dominate energy and delay over actual compute operations for even
+modest sized arrays, due to the costs of data-movement from the point of storage to the point of compute
+outside the array. This has motivated spatial architectures (e.g., systolic arrays), where storage and
+computation hardware is distributed in processing elements (PEs) arranged in a 2D array, explicitly having
+structural alignment with the dataflow in MVMs. Both the bottlenecks imposed by memory and the benefits
+of such structural alignment have recently motivated architectures based on in-memory computing. In terms
+of memory bottlenecks, in-memory computing enables accessing of a computation result over many stored
+bits, rather than accessing of individual bits, thereby amortizing the accessing energy and delay. In terms of
+spatial architectures, in in-memory computing, bit cells correspond to highly energy- and area-efficient PEs,
+where the costs of accessing from local storage, performing compute, and moving data to the next element
+are significantly reduced compared to digital PEs.
+The primary challenge with in-memory computing is integrating compute in constrained memory circuits.
+This has required going beyond restrictive switched-based abstractions associated with digital compute to
+richer abstractions based on analog compute. However, analog compute, in previous designs, has limited
+the robustness, scale, and programmability achieved. Recent work [1] has moved from current-domain
+1 Equal contributing authors.
+
+=== page 2 ===
+analog in-memory computing to charge-domain analog in-memory computing. While current-domain
+compute relies on transistor currents as the output signal from bit cells, charge-domain compute stores the
+output signal from bit cells as voltage on a localized capacitor. This directly corresponds to charge through
+the capacitance value (Q=C×V), and it has the benefit that capacitance can be precisely controlled in modern
+VLSI technologies (as it is primarily set by geometric parameters, thus benefitting from lithographic precision,
+in contrast to transistor parameters, which are subject to significant levels of semiconductor-device
+variations). Thus, in [1], moving to charge-domain compute substantially addressed robustness and scale.
+This work attempts to address programmability, by integrating charge-domain in-memory computing with
+near-memory interfaces, for configurability and integration in a microprocessor architecture, as well as nearmemory computing, for bit-precision scalability and flexible localized post-reduce compute.
+2. ARCHITECTURE AND CIRCUITS
+Fig. 1 shows the programmable processor architecture, including: (1) a 590kb Compute-In-Memory Unit
+(CIMU), partitioned into 16 (4×4) banks, as well as configurable digital periphery and near-memory compute
+datapath; (2) 128kB of standard program/data memory (P/DMEM); (3) 2-channel DMA; (4) RISC-V CPU [2];
+and (5) peripherals for external-memory control, bootloading, host-PC interfacing (UART), general-purpose
+IO (GPIO), and scheduling (timer).
+To E2PROM To DRAM Controller
+(data)
+(addr.)
+(data/addr.)
+8 13
+32
+Ext.
+Mem. I/F
+
+Bootloader
+
+Program
+Memory
+(128 kB)
+
+Compute-In-Memory
+Unit (CIMU)
+590 kb
+16 bank
+
+Data
+Memory
+(128 kB)
+
+Config.
+Regs.
+
+APB Bus 32
+32
+AXI Bus
+CPU
+(RISC-V)
+
+Config
+
+DMA
+
+Timers
+
+GPIO
+32
+
+UART
+Tx
+
+Rx
+
+Fig. 1. Architecture block diagram of programmable in-memory computing processor.
+
+The central block is the CIMU, shown in Fig. 2. Within this, the Compute-In-Memory Array (CIMA)
+performs mixed-signal matrix-vector multiplication (𝑦⃗ = 𝑨𝑥⃗), having 𝑥⃗ dimensionality up to 3*3*256=2304
+(especially to support 33 CNN filters) and 𝑨 dimensionality up to 2562304, with both dimensionalities
+configurable via activity-gating of CIMA banks.
+
+=== page 3 ===
+A
+32b
+
+Data
+
+Mask
+
+Memory Read/Write I/F
+
+Row Decoder/ WL Drivers
+
+Compute-InMemory Array
+(CIMA)
+
+<0>
+
+ADC
+& ABN
+
+x2303 xb2303
+
+<767>
+<63>
+<192>
+
+ADC
+& ABN
+
+32b
+
+<0>
+
+Bit
+Cell
+
+Sparsity/AND-logic Controller
+
+x
+
+w2b Reshaping Buffer
+
+x0 xb0
+
+<255>
+
+8b
+Near-Mem.
+Data Path
+<0>
+32b
+
+Near-Mem.
+Data Path
+<31>
+
+f(y = A x)
+
+Cycles:
+CRD/WR= 20; CCIMA= 50; CADC= 20; CABN= 20; CNEAR-MEM=8
+Fig. 2. Block diagram of Compute-In-Memory Unit (CIMU).
+
+The CIMA is based on the charge-domain in-memory-computing approach from [1], employing the bit
+cell shown in Fig. 3, to implement multiplication and accumulation. In addition to a standard 6T SRAM cell
+for local storage, this includes two PMOS transistors and a capacitor for local multiplication, and CMOS
+(NMOS+PMOS) shorting switch for accumulation across a CIMA column. We describe the operation of one
+CIMA column, but all columns operate in parallel, computing 𝑦⃗ = 𝑨𝑥⃗ at once. Operation starts by shorting
+all local capacitors in the CIMA column together (by asserting 𝑆/𝑆𝑏), and collectively discharging them to 0V
+(while holding 𝑥𝑛 /𝑥𝑏𝑛 bits high, to disable the PMOS transistors). Then, after de-asserting 𝑆/𝑆𝑏, local
+compute is performed, corresponding to binary multiplication, i.e., XNOR, between stored 1-b matrix element
+𝑎𝑚,𝑛 /𝑎𝑏𝑚,𝑛 bits and an inputted 1-b vector element 𝑥𝑛 /𝑥𝑏𝑛 bits. The 1-b outputs 𝑜𝑚,𝑛 are then stored as
+charge on the bit cells’ local metal-oxide-metal (MOM) capacitor, laid out above the transistors (thus
+consuming no area). Finally, accumulation is performed by shorting together charge from all bit-cell
+capacitors in each CIMA column by asserting 𝑆/𝑆𝑏.
+Thus, this approach performs binary multiplication in the digital voltage domain, exploiting the high
+efficiency of transistor switching and inherent linearity of a 1-b output (i.e., two states imply no deviation from
+line). Yet, it performs high-dynamic-range accumulation in the analog charge domain, exploiting excellent
+process/temperature stability of capacitors, to eliminate switching costs incurred in a high-dynamic range
+digital accumulator (which would require >13 b in this design), thus efficiently amortizing the bit-by-bit
+accessing costs otherwise incurred in standard memory.
+
+=== page 4 ===
+BLb
+xn
+bit
+
+WL
+
+am,n
+bit
+
+WL
+
+abm,n
+bit
+
+BL
+xbn
+bit
+
+S
+
+om,n
+bit
+
+ym
+(analog)
+Sb
+
+1.2fF
+
+Fig. 3. Charge-domain-computing bit cell [1].
+
+While the binary multiplications in [1] could efficiently support applications such as binarized neural
+networks (BNNs), for a programmable architecture meant to address broader applications, the CIMU extends
+to multi-bit compute. This is done via a bit-parallel/bit-serial (BP/BS) scheme, so that the efficient and linear
+bit-wise mixed-signal operation of CIMA columns can still be exploited. The BP/BS scheme is shown in Fig.
+4, where BA corresponds to the number bits in the matrix elements, BX corresponds to the number of bits in
+the input-vector elements, and N corresponds to the dimensionality of the input vector (𝑀𝑛 is a mask bit,
+used for sparsity and dimensionality control, as described later). The multiple bits of 𝑎𝑚,𝑛 are mapped to
+parallel CIMA columns and the multiple bits of 𝑥𝑛 are inputted serially. Multi-bit multiplication and
+accumulation can then be achieved either via bit-wise XNOR or via bit-wise AND, both of which are supported
+by the bit cell of Fig. 2; specifically, bit-wise AND is achieved by driving only the 𝑥𝑏𝑛 bit to the bit cell, and
+holding the 𝑥𝑛 bit high (see Fig. 3, not shown in Fig. 4 for simplicity). While bit-wise AND can support standard
+2’s complement number representation, bit-wise XNOR requires slight modification of the number
+representation (i.e., element bits map to +1/-1 rather than 1/0, necessitating two bits with LSB weighting to
+properly represent zero). Following each bit-wise CIMA-column operation, the output is then digitized and
+properly bit-shifted, before being added to other digitized and bit-shifted CIMA-column outputs, in order to
+
+Fig. 4. Bit-parallel/bit-serial (BP/BS) scheme for bit-scalable matrix and input-vector elements.
+
+=== page 5 ===
+derive the multi-bit operation. Thus, in the mixed-signal BP/BS scheme, the energy and area-normalized
+throughput scale linearly with the number of bits used for matrix and input-vector elements (BA×BX); this is
+more efficient than the exponential scaling typically expected with purely analog schemes.
+Both to combine bit-wise CIMA-column operations into multi-bit operations, and to perform configurable
+localized compute required across broad applications, the CIMU employs the near-memory datapath shown
+in Fig. 5. Each CIMA column feeds an 8-b successive-approximation register (SAR) analog-to-digital
+converter (ADC) and a binarizing analog batch normalization (ABN) block (ABN is similar to [1], employing a
+6-b DAC for analog reference generation). While the ABN supports BNNs, the ADC supports a range of
+subsequent post-reduce near-memory digital computation. Specifically, we note that while highdimensionality MVMs necessitate in-memory computing to address data-movement costs, typically other
+computations are substantially addressed by traditional digital acceleration. The ADC resolution is selected
+to balance dynamic-range requirements (discussed below) and energy/area overheads, with the 8-b ADC
+introducing 18/15 % area/energy increase of a CIMA column. The digital datapath following the ADC/ABN is
+multiplexed across 8 CIMA columns and ADCs, as shown. This is done for area savings and throughput
+matching (cycle numbers shown in Fig. 2). The datapath provides: (1) BP/BS compute for any bit precision,
+via digital barrel shifting and summation of digitized CIMA-column outputs in time and space; and (2) other
+post-reduce compute, especially supporting neural-network acceleration (global/local scaling/biasing, batch
+normalization, activation function). Note, purely analog multi-bit charge-domain compute is also possible, but
+requires exponential-weighting of capacitors, degrading energy/area.
+32b
+
+Global
+Offset
+9b
+11b
+
+19b
+
+32b
+
+ADC (8b)
+9b
+ABN (6b)
+
+8b
+
+Local Local Local Global
+Offset Scale Exp. Exp.
+
+ReLU Unit
+
+Fig. 5. Per-column ADC and ABN, and 8-way multiplexed near-memory digital datapath.
+
+In addition to in/near-memory compute, the CIMU includes specialized interfaces for dataflow in a
+programmable architecture. While a number of approaches exist for accelerator integration with a CPU, here
+tight accelerator-CPU coupling is pursued to address programmability, where interfaces are included to
+integrate the CIMU within the standard processor memory space. First, for input-vector elements 𝑥𝑛 , Fig. 6a
+shows the word-to-bit (w2b) Reshaping Buffer, which enables interfacing of external 32-b words to internal
+bit-wise operations. This minimizes data transfer to the CIMU by loading 1-to-8-b segments of incoming 32b words into double-buffering register files, whose parallel readout then provides bit-serial inputting to the
+CIMA. For implementing convolutional neural networks (CNNs), such buffering also enables input-element
+shifting for striding, reducing input-activation loading to only new pixel locations. Second, Fig. 6b shows the
+Sparsity/AND-logic Controller, which masks 𝑥𝑛 /𝑥𝑏𝑛 broadcasting over the CIMA array, both to exploit energy
+savings proportional to the number of zero-valued elements and to support bit-wise AND operations in the
+bit cells, as described above. While sparsity-proportional energy savings are inherently achieved with bitwise AND operations (due to 2’s compliment multi-bit representation), for bit-wise XNOR operations zero-
+
+=== page 6 ===
+<0>
+
+<23>
+
+Reg.
+File<7>
+
+Shifting
+(conv.)
+
+96b
+72b
+
+1-8b
+1-8b
+
+Reg.
+File<0>
+
+8b
+8b
+8b
+8b
+
+8b
+8b
+8b
+8b
+1-8b
+1-8b
+
+32b
+
+From Reg. File <0>
+72b
+
+Data Buffer
+
+Input-vector
+pair generation
+logic
+
+From Reg. File <7>
+
+(2304 parallel data)
+From Reg. File <0>
+72b
+
+Mask Buffer
+
+xn[bx-1]
+
+MN
+
+xn bit
+
+xbn bit
+
+From Reg. File <7>
+
+Offset
+To Near-Mem. Datapath
+
+To Sparsity/AND-logic Controller
+(2304 parallel input-vector pairs)
+
+(a) w2b Reshaping Buffer.
+(b) Sparsity/AND-logic Controller.
+Fig. 6. CIMU interfaces for integration in standard processor memory space.
+
+valued elements are explicitly located, to derive a mask bit 𝑀𝑛 to prevent broadcasting of all bits, and tallied,
+to provide an offset to the near-memory datapath required in order to account for capacitors left in their reset
+state. In addition to reducing energy (i.e., preventing 𝑥𝑛 /𝑥𝑏𝑛 broadcast and XNOR/AND compute energy,
+which account for ~50% of CIMA energy), exploiting sparsity in this way also benefits signal-to-quantizationnoise ratio (SQNR), considered below. Third, for loading matrix-elements 𝑎𝑚,𝑛 , a local buffer interfaces
+external 32-b words with 768-b parallel CIMA writes.
+3. DESIGN ANALYSIS
+Each CIMA column generates a high dynamic range analog signal, whose number of possible levels, set by
+the input-vector dimensionality N, is N+1 (i.e., accumulation of N different binary outputs from bit cells), with
+N being up to 2304 in this design. However, the 8-b ADC supports a dynamic range of up to 256 levels,
+chosen to limit its energy and area overhead. This mismatch impacts the SQNR of computation differently
+than standard integer computation. Specifically, Fig. 7a shows the simulated SQNR for bit-wise XNOR and
+Fig. 7b shows the simulated SQNR for bit-wise AND, both for different BX, as BA is scaled (SQNR’s for
+XNOR/AND are different due to dynamic range of number representation formats). If N is explicitly limited to
+255, through CIMA-bank activity gating, or the number of CIMA-column output levels is implicitly limited to
+255, through sparsity control, then the ADC dynamic range enables integer compute to be perfectly emulated,
+as shown. However, in all other cases, the SQNR is set not only by B A/BX, but also by N and the level of
+sparsity. Nonetheless, we point out that with 8-b ADC resolution, SQNR near standard integer compute is
+observed at operand quantization of typical interest in neural networks (2-6b).
+40
+30
+
+50
+Bx=8
+40
+30
+20
+10
+
+Bx=8
+
+20
+N=2304, 2000, 1500,
+1000, 500, 255
+
+SQNR (dB)
+
+10
+18
+14
+
+25
+
+Bx=4
+
+20
+
+N=2304, 2000, 1500,
+1000, 500, 255
+
+10
+
+10
+Bx=2
+
+4
+
+11
+N=2304, 2000, 1500,
+1000, 500, 255
+
+N=2304, 2000, 1500,
+1000, 500, 255
+
+Bx=2
+
+9
+N=2304, 2000, 1500,
+1000, 500, 255
+
+7
+
+2
+2
+
+Bx=4
+
+15
+
+6
+6
+
+3
+
+4
+
+5
+
+BA
+
+6
+
+7
+
+N=2304, 2000, 1500,
+1000, 500, 255
+
+8
+
+(a) SQNR with bit-wise XNOR.
+
+5
+
+2
+
+3
+
+4
+
+5
+
+BA
+
+6
+
+7
+
+8
+
+(b) SQNR with bit-wise AND.
+
+Fig. 7. SQNR analysis with respect to BA, BX, and N.
+
+=== page 7 ===
+Fig. 8 analyzes data bandwidth, affecting utilization, to/from the CIMU via 32-b DMA transfers (taking ~1
+cycle). First, considering 𝑥⃗/𝑦⃗, the transfer cycles Cx/Cy depend on the bit precisions Bx/By and vector
+dimensionalities N/M. Cx/Cy are shown along with the CIMU cycles CCIMU for different bit precisions (the nearmemory datapath sets By to 16 b if BX+BA5, else 32 b), at the maximum vector dimensionalities N=2304
+and M=256/BA (BA is number of matrix-element bits). As seen, CCIMU is typically highest, giving high CIMU
+utilization by pipelining data transfers and CIMU operation; however, considerable potential to push CIMU
+speed may eventually make dedicated high-bandwidth interfaces necessary. Next, considering 𝑨 (which is
+expected to be done infrequently), the CIMA is loaded one 768-b row segment at a time, requiring CLOAD=20
+cycles and 768 loads in total. The cycles required for DMA transfer of each 768-b row segment is CA=24
+(>CLOAD), implying 768CA=18k max. cycles for loading 𝑨.
+150
+
+CIMU Underutilization
+
+Bx=1
+
+50
+
+Cx
+CCIMU
+Cy
+
+100
+
+0
+200
+
+Bx=2
+
+Cycle Count
+
+150
+100
+50
+400
+
+Bx=4
+
+300
+200
+100
+0
+800
+600
+400
+200
+0
+
+Bx=8
+
+CIMU
+Underutilization
+
+1
+
+2
+
+BA
+
+4
+
+8
+
+Fig. 8. Data bandwidth analysis to and from CIMU.
+
+4. PROTOTYPE AND MEASUREMENTS
+The microprocessor is implemented in 65nm CMOS (die photo in Fig. 9). Fig. 10 shows measurements of
+the CIMU compute. The CIMA-column transfer functions (top) are obtained by setting matrix-element bits to
+‘1’ and sweeping the number input-element bits set to ‘1’. For the ADC, the digitized output is then plotted,
+and for the ABN, the DAC analog reference that causes output-comparator transition is plotted, both showing
+high linearity and low variation (error bars show  over the 256 columns). Multi-bit compute results (bottom)
+with uniformly-distributed input-vector and matrix elements, show excellent match with expected bit-true
+values and expected SQNR (from Fig. 7). Fig. 11 shows a neural-network demonstration for 1-b and 4-b
+input-activations/weights (topologies shown), on CIFAR-10 dataset. The chip achieves SW-simulated
+accuracy at energy and throughput of 5.31/105.2 J/class. and 176/23 images/s for 1/4-b input-activation
+and weight precisions. Summary and comparison tables (vs. recent neural-network accelerators) are shown.
+
+=== page 8 ===
+4.5mm
+
+4×4
+CIMA
+Tiles
+
+ABN
+
+ADC
+
+Near-mem. Datapath
+
+PMEM
+
+W2b Reshaping Buffer
+Sparsity Controller
+
+CPU
+
+3mm
+
+DMEM
+
+DMA etc.
+
+CIMU
+
+Fig. 9. Processor die photo, implemented in 65nm CMOS.
+
+CIMA-column Transfer Functions
+
+250
+
+150
+100
+
+(Error bars show std.
+deviation over 256 CIMA
+columns)
+
+50
+0
+
+0
+
+1000
+
+4000
+2000
+3000
+Ideal Pre-activation Value
+
+60
+
+ABN DAC Code for
+Output Transition
+
+ADC Output Code
+
+200
+
+50
+40
+30
+(Error bars show std.
+deviation over 256 CIMA
+columns)
+
+20
+10
+00
+
+5000
+
+1000
+
+4000
+2000
+3000
+Ideal Pre-activation Value
+
+5000
+
+Multi-bit Matrix-Vector Multiplication
+SQNR (dB)
+
+8
+
+20
+
+Bx=2
+
+6
+
+25
+
+Bx=4
+
+15
+
+4
+
+10
+
+2
+2
+
+4
+
+Bit-true Sim.
+N=1152
+N=1728
+
+8 52
+
+6
+
+4
+
+Compute Value
+
+-40
+
+Bx=2, BA=2
+20
+
+40
+
+60
+
+80
+
+-500
+
+52
+
+4
+
+6
+
+8
+
+×105
+1.0
+0
+-1.0
+
+Bx=4, BA=4
+0
+
+10
+8
+
+0
+
+-20
+
+0
+
+6
+Bit True Sim.
+Measured
+
+20
+0
+
+Measured
+N=1152
+N=1728
+
+BA
+
+500
+
+-60
+
+Bx=8
+
+20
+
+15
+
+20
+
+40
+
+60
+
+80
+
+Bx=8, BA=8
+0
+
+Data Index
+Fig. 10: Processor measurement summary.
+
+20
+
+40
+
+60
+
+80
+
+=== page 9 ===
+Summary
+
+Neural-Network Demonstrations
+
+Tech. (nm)
+65
+FCLK (MHz)
+100 | 40
+VDD (V)
+1.2 | 0.7/0.85
+Total area (mm2)
+13.5
+Energy Breakdown @VDD = 1.2V | 0.7V (P/DMEM, Reshap. Buf) , 0.85 V (rest)
+CPU
+CIMA1
+52 | 26
+20.4 | 9.7
+(pJ/instru)
+(pJ/column)
+P/DMEM
+ADC1
+96 | 33
+3.56 | 1.79
+(pJ/32b-access)
+(pJ/column)
+1
+DMA
+ABN
+13.5 | 7.0
+9.78 | 4.92
+(pJ/32b-transfer)
+(pJ/column)
+Reshap. Buf.1
+Dig. Datapath1
+35 | 12
+14.7 | 8.3
+(pJ/32b-input)
+(pJ/output)
+1Breakdown within CIMU Acceelerator
+
+Network A
+
+Network B
+
+(4/4-b activations/weights)
+
+(1/1-b activations/weights)
+
+Accuracy of chip
+
+92.4%
+
+89.3%
+
+(vs. ideal)
+
+(vs. 92.7%)
+
+(vs. 89.8%)
+
+105.2 μJ
+
+5.31 μJ
+
+Energy/10-way
+Class.1
+Throughput1
+Neural Network
+Topology
+
+23 images/sec.
+
+176 images/sec.
+
+L1: 128 CONV3 – Batch norm
+L2: 128 CONV3 – POOL – Batch norm.
+L3: 256 CONV3 – Batch. norm
+L4: 256 CONV3 – POOL – Batch norm.
+L5: 256 CONV3 – Batch norm.
+L6: 256 CONV3 – POOL – Batch norm.
+L7-8: 1024 FC – Batch norm.
+L9: 10 FC – Batch norm.
+
+L1: 128 CONV3 – Batch Norm.
+L2: 128 CONV3 – POOL – Batch Norm.
+L3: 256 CONV3 – Batch Norm.
+L4: 256 CONV3 – POOL – Batch Norm.
+L5: 256 CONV3 – Batch Norm.
+L6: 256 CONV3 – POOL – Batch Norm.
+L7-8: 1024 FC – Batch norm.
+L9: 10 FC – Batch norm.
+
+1At V
+DD = 0.7V (P/DMEM, Reshap. Buf) , 0.85V (rest)
+
+Comparison Table
+Technology
+Area (mm2)
+VDD (V)
+On-chip mem.
+Bit precision
+Throughput (GOPS)
+Energy eff. (TOPS/W)
+Configurability
+(dimensionalities, bits)
+
+Not In-memory Computing
+[3] Chen, [4] Moons, [5] Ando, [6] Bank.,
+ISSCC’16
+ISSCC’17
+VLSI’17
+ISSCC’18
+65nm
+28nm
+65nm
+28nm
+16
+1.87
+12
+6
+0.8-1.2
+1.0
+0.55-1.0
+0.8 | 0.6
+108 kB
+128 kB
+100 kB
+328 kB
+16 b
+4-16 b
+1-1.5 b
+1b
+120
+400
+1264
+400 | 60
+0.0096
+10 @4b
+6
+535 | 772
+Dim.
+
+Dim./bits
+
+Bits
+
+--
+
+[7] Khwa,
+ISSCC’18
+65nm
+unknown
+1.0
+1 kB1
+1b
+55.8
+--
+
+In-memory Computing
+[8] Gon.,
+[9] Jiang,
+[1] Valavi,
+ISSCC’18
+VLSI’18
+VLSI’18
+65nm
+65nm
+65nm
+0.81
+0.11
+12.6
+1.2
+1.0
+0.7,1.2
+16 kB1
+2 kB1
+295 kB1
+8b
+1b
+1b
+8.2
+60
+18,876
+3.125
+140
+866
+--
+
+--
+
+Current-domain
+(limited scale, configurability,
+accuracy)
+
+Dim.
+
+This
+work
+65nm
+8.56
+1.2 | 0.85
+74 kB1
+1-8 b
+4720 | 19002
+152 | 2972
+Dim./bits
+
+Charge-domain
+(limited
+configurability)
+
+1Amount is for in-memory computing only
+2Given for 1-b compute; scales with number of bits in input-vector elements plus matrix elements
+
+Fig. 11. Measurement summary and comparison with prior work.
+
+Acknowledgements:
+This work is funded in part by Analog Devices Inc. (ADI). The authors thank E. Nestler, J. Yedida, M. Tikekar,
+P. Nadeau (ADI), for their extremely valuable insights and discussions.
+References:
+[1] H. Valavi, P. Ramadge, E. Nestler, and N. Verma, “A mixed-signal binarized convolutional-neuralnetwork accelerator integrating dense weight storage and multiplication for reduced data movement,”
+Proc. of VLSI Symp., Jun. 2018.
+[2] P. D. Schiavone, et al., “Slow and steady wins the race? A comparison of ultra-low-power RISC-V core
+for internet-of-things applications,” Proc. of PATMOS, Sept. 2017.
+[3] Y. Chen, T. Krishna, J. Emer, and V. Sze, “Eyeriss: an energy-efficient reconfigurable accelerator for
+deep convolutional neural networks,” ISSCC Dig. Tech. Paper, Feb. 2016.
+[4] B. Moons, R. Uytterhoeven, W. Dehaene and M. Verhelst, “Envision: A 0.26-to-10TOPS/W subwordparallel dynamic-voltage-accuracy-frequency-scalable Convolutional Neural Network processor in 28nm
+FDSOI,” ISSCC Dig. Tech. Paper, Feb. 2017
+[5] K. Ando, et al., “BRein memory: A 13-layer 4.2 K neuron/0.8 M synapse binary/ternary reconfigurable inmemory deep neural network accelerator in 65 nm CMOS,” Proc. of VLSI Symp., Jun. 2017.
+
+=== page 10 ===
+[6] D. Bankman, L. Yang, B. Moons, M. Verhelst, and B. Murmann, “An always-on 3.8μJ/86% CIFAR-10
+mixed-signal binary CNN processor with all memory on chip in 28nm CMOS,” ISSCC Dig. Tech. Paper,
+Feb. 2018
+[7] W. Khwa et al., “A 65nm 4Kb algorithm-dependent computing-in-memory SRAM unit-macro with 2.3ns
+and 55.8TOPS/W fully parallel product-sum operation for binary DNN edge processors,” ISSCC Dig.
+Tech. Paper, Feb. 2018
+[8] S. K. Gonugondla, M. Kang and N. Shanbhag, “A 42pJ/decision 3.12TOPS/W robust in-memory machine
+learning classifier with on-chip training,” ISSCC Dig. Tech. Paper, Feb. 2018
+[9] Z. Jiang, S. Yin, M. Seok and J. Seo, “XNOR-SRAM: in-memory computing SRAM macro for
+binary/ternary deep neural networks,” Proc. of VLSI Symp., Jun. 2018.

@@ -1,0 +1,2913 @@
+# PANTHER: A Programmable Architecture for Neural Network Training Harnessing Energy-Efficient ReRAM
+# id: W2997247951 | key: 2020_Ankit_PANTHER_TC | TC 2020 | card: ../cards/2020_Ankit_PANTHER_TC.md
+
+
+=== page 1 ===
+PANTHER: A Programmable Architecture for Neural
+Network Training Harnessing Energy-efficient ReRAM
+
+Abstract—The wide adoption of deep neural networks has been accompanied by ever-increasing energy and performance demands
+due to the expensive nature of training them. Numerous special-purpose architectures have been proposed to accelerate training: both
+digital and hybrid digital-analog using resistive RAM (ReRAM) crossbars. ReRAM-based accelerators have demonstrated the
+effectiveness of ReRAM crossbars at performing matrix-vector multiplication operations that are prevalent in training. However, they still
+suffer from inefficiency due to the use of serial reads and writes for performing the weight gradient and update step.
+A few works have demonstrated the possibility of performing outer products in crossbars, which can be used to realize the weight
+gradient and update step without the use of serial reads and writes. However, these works have been limited to low precision
+operations which are not sufficient for typical training workloads. Moreover, they have been confined to a limited set of training
+algorithms for fully-connected layers only.
+To address these limitations, we propose a bit-slicing technique for enhancing the precision of ReRAM-based outer products, which is
+substantially different from bit-slicing for matrix-vector multiplication only. We incorporate this technique into a crossbar architecture
+with three variants catered to different training algorithms. To evaluate our design on different types of layers in neural networks
+(fully-connected, convolutional, etc.) and training algorithms, we develop PANTHER, an ISA-programmable training accelerator with
+compiler support. Our design can also be integrated into other accelerators in the literature to enhance their efficiency. Our evaluation
+shows that PANTHER achieves up to 8.02×, 54.21×, and 103× energy reductions as well as 7.16×, 4.02×, and 16× execution time
+reductions compared to digital accelerators, ReRAM-based accelerators, and GPUs, respectively.
+
+F
+
+I NTRODUCTION
+
+Deep Neural Networks (DNNs) have seen wide adoption
+due to their success in many domains such as image processing, speech recognition, and natural language processing.
+However, DNN training requires substantial amount of
+computation and energy which has led to the emergence
+of numerous special-purpose accelerators [1]. These accelerators have been built using various circuit technologies,
+including digital CMOS logic [2], [3] as well as hybrid
+digital-analog logic based on ReRAM crossbars [4], [5].
+ReRAM crossbars are circuits composed of non-volatile
+elements that can perform Matrix-Vector Multiplication
+(MVM) in the analog domain with low latency and energy
+consumption. Since MVM operations dominate the performance of DNN inference and training, various inference [4],
+[5], [6] and training [7], [8] accelerators have been built using
+these crossbars. However, while inference algorithms do
+not modify matrices during execution, training algorithms
+modify them during the weight gradient and update step
+(weight gradient computation followed by the weight update). For this reason, training accelerators [7], [8] require
+frequent reads and write to crossbar cells to realize weight
+•
+•
+•
+•
+•
+
+A. Ankit, and K. Roy are with the Department of Electrical and Computer
+Engineering, Purdue University.
+I. E. Hajj is with the Department of Computer Science, American University of Beirut.
+S. R. Chalamalasetti, M. Foltin, J. P. Strachan, and D. Milojicic are with
+the Hewlett Packard Labs.
+S. Agarwal, and M. Marinella are with the Sandia National Labs.
+W. Hwu is with the Department of Electrical and Computer Engineering,
+University of Illinois at Urbana-Champaign.
+
+Correspondance email: aankit@purdue.edu
+
+10,000.0
+
+CMOS
+
+ReRam
+
+1,000.0
+100.0
+
+9.8×
+10.4×
+
+10.0
+1.0
+
+MVM
+
+Matrix Matrix
+Read
+Write
+
+100,000.0
+
+Latnecy (ns)
+
+1
+
+Energy (nJ)
+
+arXiv:1912.11516v1 [cs.DC] 24 Dec 2019
+
+Aayush Ankit, Izzat El Hajj, Sai Rahul Chalamalasetti, Sapan Agarwal, Matthew Marinella, Martin Foltin,
+John Paul Strachan, Dejan Milojicic, Wen-mei Hwu, and Kaushik Roy.
+
+CMOS
+
+10,000.0
+
+ReRam
+
+8.7×
+8.9×
+
+17.5×
+
+1,000.0
+100.0
+
+MVM Matrix Matrix
+Read Write
+
+Fig. 1. Comparing CMOS and ReRAM Primitives
+
+gradient and update operations. These reads and writes to
+ReRAM crossbars are performed one row at a time (like a
+typical memory array), and are referred to as serial reads and
+writes in this paper.
+Figure 1 compares the energy and latency of CMOS
+and ReRAM technologies for various primitive operations.
+As shown, MVM consumes ≃ 10.4× less energy and has
+≃ 8.9× lower latency with ReRAM over CMOS (at same
+area) for a 32 nm technology node. However, reading and
+writing the entire matrix consumes much higher energy and
+latency with ReRAM. Particularly, ReRAM writing energy
+and latency are an order of magnitude higher due to the
+cost of the program-verify approach which requires tens
+of pulses [9]. Therefore, the use of serial reads and writes
+during training takes away the overall benefits gained from
+using ReRAM for acceleration.
+To overcome this issue, recent demonstrations [10], [11]
+have shown that Outer Product Accumulate (OPA) operations can be performed in crossbars to realize the weight
+gradient and update operations without the use of serial
+reads and writes. The OPA operation is performed by
+
+=== page 2 ===
+2
+
+applying two input vectors at the rows and the columns
+of a crossbar simultaneously, to update each cell depending on the inputs at the corresponding row and column.
+However, these demonstrations are limited to low-precision
+inputs/outputs (2-4 bits) and weights (2-5 bits) which is
+not sufficient for the typical training workloads [12], [13].
+Moreover, they are confined to Stochastic Gradient Descent
+(SGD) with batch size of one for fully-connected layers only.
+To address these limitations, we propose a bit-slicing
+technique for achieving higher precision OPA operations by
+slicing the bits of the output matrix weights across multiple
+crossbars. While bit-slicing has previously been done for
+MVM operations [4], bit-slicing matrices to also support
+OPA operations is substantially different. For MVM, the
+rows and the crossbar cells are inputs and the columns
+are outputs, whereas for OPA, the rows and the columns
+are both inputs and the outputs are the crossbar cells
+themselves. Moreover, bit-slicing OPA presents additional
+constraints for the distribution of bits across the slices. First,
+weights are constant during MVM, but they change during
+OPA, which necessitates support for overflow within each
+slice and accounting for saturation. Second, MVM favors
+fewer bits per slice to reduce analog-to-digital Converter
+(ADC) precision requirements [4], but we show that OPA
+favors more bits per slice. Third, MVM favors homogeneous
+slicing of bits (equal number of bits per slice), but we show
+that OPA favors heterogeneous slicing.
+We incorporate our proposed technique for enhancing
+OPA precision into a crossbar architecture that performs
+both MVM and OPA operations at high precision. We
+present three variants of the crossbar architecture that are
+catered to different training algorithms: SGD, mini-batch
+SGD, and mini-batch SGD with large batches. Using this
+crossbar architecture, we build PANTHER, a Programmable
+Architecture for Neural Network Training Harnessing
+Energy-efficient ReRAM. We use PANTHER to evaluate our
+design on different layer types (fully-connected, convolutional, etc.) and training algorithms. Our design can also be
+integrated into existing training accelerators in the literature
+to enhance their efficiency. Our evaluation shows that PANTHER achieves up to 8.02×, 54.21×, and 2, 358× energy
+reductions as well as 7.16×, 4.02×, and 119× execution time
+reductions compared to digital accelerators, ReRAM-based
+accelerators, and GPUs, respectively.
+We make the following contributions:
+•
+A bit-slicing technique for implementing highprecision OPA operations using ReRAM crossbars
+(Section 3)
+•
+A crossbar-based architecture, that embodies this bitslicing technique, with three variants for different
+training algorithms (Section 4)
+•
+An ISA-programmable accelerator with compiler
+support to evaluate different types of layers in neural
+networks and training algorithms (Section 5)
+We begin with a background on the use of ReRAM crossbars
+for DNN training (Section 2).
+
+2
+
+BACKGROUND
+
+2.1
+
+Deep Neural Network Training
+
+Typical DNN training comprises of iterative updates to a
+model’s weights in order to optimize the loss based on an
+
+x2
+
+h2
+
+δx2
+
+δh2
+
+x3
+
+h3
+
+δx3
+
+δh3
+
+x4
+
+h4
+
+δx4
+
+δh4
+
+2 δX = 𝑊 𝑇 . 𝑑𝐻
+
+3 δW = δ𝐻𝑇 . 𝑋
+
+W
+
+(a) FC Layer Forward Pass
+
+X
+
+δH
+δh1
+
+δX
+δx1
+
+wij
+
+1 𝐻 = 𝑊. 𝑋
+
+(δX)
+
+δW
+
+H
+h1
+
+X
+x1
+
+wij
+
+(b) FC Layer Backward Pass
+
+(δx1) x1
+
+x1
+
+(δx2) x2 w11 w12 w13 w14
+
+x2 w11 w12 w13 w14
+
+(δx3) x3 w21 w22 w23 w24
+(δx4) x4 w31 w32 w33 w34
+
+X
+
+x3
+x4
+
+w41 w42 w43 w44
+1
+
+2
+
+h1
+h2 h3 h4
+(δh1) (δh2) (δh3) (δh4)
+
+H
+
+w21 w22 w23 w24
+
+w31 w32 w33 w34
+w41 w42 w43 w44
+
+3
+
+δh1 δh2 δh3 δh4
+
+δH
+
+(c) MVM and MTVM in Crossbars
+
+δH
+
+(d) OPA in Crossbars
+
+Fig. 2. FC Layer Matrix Operations in Crossbars
+
+objective function. Equations 1–4 show the steps involved
+in DNN training based on the Stochastic Gradient Descent
+(SGD) algorithm [14]. Equation 1 constitutes the forward
+pass which processes an input example to compute the
+activations at each layer. Equation 2 computes the output
+error and its gradient based on a loss function using the
+activations of the final layer. Equations 3 constitutes the
+backward pass which propagates the output error to compute the errors at each layer. Finally, equation 4 computes
+the weight updates to minimize the error.
+
+H (l+1) = W (l) X (l) , X (l+1) = σ(H (l+1) )
+E = Loss(X (L) , y), δH (L) = ∇E
+δH (l) = [(W l )T δH (l+1) ]
+
+σ 0 (X (L) )
+
+σ 0 (X (l) )
+
+(1)
+(2)
+(3)
+
+∂E
+∂E
+(or δW l ) = X (l) (δH (l+1) )T , W l = W l − η ∗
+(4)
+∂W l
+∂W l
+2.2
+
+Using Crossbars for Training
+
+The most computationally intensive DNN layers that are
+typical targets for acceleration are the fully-connected layers
+and the convolutional layers. We use fully-connected layers
+as an example to show how ReRAM crossbars can be used
+to accelerate DNN training workloads.
+2.2.1
+
+Overview of Fully Connected (FC) Layers
+
+Figures 2(a) and (b) illustrate the operations involved during
+training in a FC layer. The training involves three types
+of matrix operations: ¶ activation, · layer gradients, and ¸
+weight gradients. Activation corresponds to an MVM operation with the weight matrix (W ), as shown in Equation 1.
+Layer gradients correspond to an MVM operation with the
+transpose of the weight matrix (hereon denoted as MT VM),
+as shown in Equation 3. Weight gradients correspond to an
+outer product operation, the result of which is accumulated
+to the weight matrix based on the learning rate (η ), as shown
+in Equation 4. Therefore weight gradients and updates
+together can be viewed as an Outer Product Accumulate
+(OPA) operation on the weight matrix.
+
+=== page 3 ===
+3
+
+W11 W12 W13 W14
+
+01
+
+W21 W22 W23 W24
+
+10
+
+W31 W32 W33 W34
+
+11
+2-bit DAC
+(encode in time)
+2-bitDAC
+(encode in
+amplitude)
+
+W41 W42 W43 W44
+
+10010…0
+
+0
+
+10110…1
+
+1
+
+11110…1
+
+1
+
+00110…0
+
+0
+
+crossbarN crossbarN-1
+
+W11 W12 W13 W14
+W21 W22 W23 W24
+W31 W32 W33 W34
+1-bit
+DAC
+
+n-bit
+Input 1
+
+W41 W42 W43 W44
+
+01
+
+10
+
+11
+
+00
+
+(a) 2-bit OPA
+Matrix weight (crosspoint) state
+across slices (crossbars)
+
+1-bit
+DAC
+
+01
+
+10
+
+00
+0001
+
+00
+0010
+
+00
+1011
+
+n-bit
+Input 2
+
+11
+
+Time-Steps (TS)
+
+11
+
+10
+0001…1011
+
+(c) Slicing Column Input Bits
+
+00
+1010
+
+00
+1000
+
+00
+1111
+
+ROFF
+Old
+Weight
+
+Wij=0
+
+𝑻𝑺𝟎: 𝑾𝒐𝒍𝒅 + (𝒂 ≪ 𝟎) ∗ 𝒃0
+
++ΔWij
+-ΔWij
+
+ROFF No negative
+update
+possible
+Wij=0
+
+RON
+𝑻𝑺𝒏: 𝑾𝒑𝒓𝒆𝒗 + (𝒂 ≪ 𝒏) ∗ 𝒃𝒏
+
++ΔWij
+
+RON
+
+(e) Positive and Negative Gradients
+
+𝑻𝑺𝟏𝟓: 𝑾𝒑𝒓𝒆𝒗 + (𝒂 ≪ 𝟏𝟓) ∗ 𝒃𝟏𝟓
+
+𝑾𝒏𝒆𝒘 = 𝑾𝒐𝒍𝒅 + 𝚫𝑾
+(𝜟𝑾 = 𝒂 ∗ 𝒃)
+
+Wij
+slice0
+
+01
+
+00
+
+Slice-7 Slice-6 Slice-5 Slice-4 Slice-3 Slice-2 Slice-1 Slice-0
+00
+0100
+
+Wij
+slice1
+
+2-bit
+DAC
+
+(b) Streaming Row Input Bits
+00
+0001
+
+crossbar0
+
+Wij
+sliceN-1
+
+Wij
+sliceN
+
+n-bit
+Input 1
+
+2-bit
+DAC
+
+00
+
+crossbar1
+
+1
+
+10110…1
+
+00
+
+00
+1010
+
+00
+0110
+
+00
+0101
+
+00
+1100
+
+00
+1110
+
+00
+1100
+
+11
+1110
+
+(d) 16-bit OPA Execution
+
+11
+1011
+
+Column DAC Max Bits per Total Bits for
+Resolution (p) Weight Slice 32-bit Weight
+2
+5
+62
+3
+6
+47
+4
+6
+41
+New
+5
+7
+35
+Weight
+
+(f) Bit Usage for Different Resolutions
+
+Fig. 3. Bit Slicing OPA to Enhance its Precision
+
+2.2.2
+
+Activation and Layer Gradients in Crossbars
+
+Figure 2(c) shows how a ReRAM crossbar can be used
+to compute activation and layer gradients. The weights
+of the matrix (W ) are stored in the crossbar cells as the
+conductance state [15]. The MVM operation is realized by
+applying the input vector (X ) as voltages on the rows of
+crossbar. Subsequently, the output vector (H ) is obtained
+as currents from the columns. The MT VM operation is
+realized by applying the input vector (δH ) as voltages on
+the columns of the crossbar. Subsequently, the output vector
+(δX ) is obtained as currents from the rows.
+Both MVM and MT VM operations execute O(n2 )
+multiply-and-accumulate operations in one computational
+step in the analog domain (n is the crossbar size). Therefore,
+ReRAM crossbars can be leveraged to design highly efficient
+primitives for activation and layer gradient computations.
+For this reason, they have been extensively considered for
+DNN inference [4], [5], [16] and training [7], [8] accelerators.
+2.2.3
+
+Weight Gradients and Updates in Crossbars
+
+Figure 2(d) shows how a ReRAM crossbar can be used
+to compute weight gradients. The OPA operation can be
+realized by applying the inputs (X and δH ) as voltages on
+the crossbar’s rows and columns, respectively. The change
+(wij − wij ) in the value stored at a cross-point (i, j) is
+equal to the product of the voltage on row i and column j
+(details in Section 3). Therefore, the outer product operation
+in the crossbar is naturally fused with the weight matrix
+accumulate operation.
+The OPA operation executes O(n2 ) multiply-andaccumulate operations in one computational step in the
+analog domain. It avoids serial reads and writes to ReRAM
+crossbar cells, which is important because reads and writes
+have orders of magnitude higher cost (energy and latency)
+
+than in-crossbar computations (MVM, MT VM, OPA). Therefore, ReRAM crossbars can be leveraged to design highly
+efficient primitives for weight gradient computation and
+weight update.
+The aforementioned technique has been demonstrated
+with low-precision inputs/outputs (2-4 bits) and weights
+(2-5 bits) on the SGD training algorithm for FC layers
+only [10], [11]. In this paper, we enhance the technique with
+architecture support to increase its precision and cater to a
+multiple training algorithms and different layer types.
+
+3
+
+E NHANCING R E RAM- BASED OPA P RECISION
+
+DNN workloads require 16 to 32 bits of precision for
+training [12], [13]. However, input digital-to-analog converters (DACs), crossbar cells, and output ADCs cannot support such levels of precision due to technology limitations
+and/or energy considerations. For this reason, accelerators
+that use ReRAM crossbars for MVM/MT VM operations
+typically achieve the required precision with bit-slicing [4],
+where matrix bits are sliced across the cells of multiple crossbars, input bits are streamed at the crossbar rows/columns,
+and shift-and-add logic is used to combine the output bits
+at each column/row across crossbars (slices).
+Bit-slicing matrices to also support OPA operations is
+different because both the rows and columns are simultaneously applied as inputs and the outputs are the crossbar
+cells themselves. Moreover, bit-slicing for OPA operations
+presents additional constraints for the choice of bit distribution across slices. This section describes our technique for
+bit-slicing the OPA operation (Section 3.1), and discusses the
+constraints it adds to the choice of bit distribution and how
+we address them (Sections 3.2 to 3.4).
+
+=== page 4 ===
+4
+
+3.1
+
+3.2
+
+Bit Slicing the OPA Operation
+
+Figure 3(a) illustrates how the OPA operation is performed
+when 2-bit inputs are applied at the rows and the columns.
+The digital row input is encoded in the time-domain using pulse-width modulation. The digital column input is
+encoded in the amplitude-domain using pulse-amplitude
+modulation. Both pulse-width and pulse-amplitude modulations can be implemented using DACs. The weight change
+in a cell depends on the duration and the amplitude of
+the pulses applied on the corresponding row and column
+respectively, thereby realizing an analog OPA operation [10],
+[11].
+To perform an OPA operation with 16-bit inputs, naively
+increasing the DAC resolution is infeasible because DAC
+power consumption grows rapidly with resolution (N ) as:
+
+P DAC = β(2N /N + 1)V 2 f clk [17]
+
+(5)
+
+Instead, we propose an architectural scheme to realize a
+16-bit OPA operation by bit-streaming the row input bits,
+bit-slicing the column input bits, and bit-slicing the matrix
+weights across multiple crossbars.
+Figure 3(b) illustrates how we stream row input bits,
+m bits at a time over 16/m cycles. Meanwhile column
+input bits are left-shifted by m-bits every cycle. Since the
+number of cycles decrease linearly with m while the cycle
+duration increases exponentially with m due to pulse-width
+modulation of row input, we choose m = 1 to minimize
+total latency. Using m = 1 also means that the row DACs
+are just inverters, thereby having low power consumption.
+Figure 3(c) shows how we slice column input bits across
+crossbars. Only one weight W ij is shown for clarity. In each
+cycle, the left-shifted column input is divided into chunks
+of p bits (p = 2 in this example) and each chunk is applied
+to the corresponding crossbar.
+Figure 3(d) illustrates the steps for a 16-bit×16-bit OPA
+operation at one crosspoint in the crossbar, resulting in a
+32-bit output value for each matrix weight. It puts together
+the bit-streaming of the row input vector b and bit-slicing of
+the column input vector a with p = 4. Each dot represents
+a partial product (an .bn ), and the color corresponds to a
+specific weight slice (crossbar). Thus, the net accumulation
+to a slice is the result of all partial products of the specific
+color. The updated weight after a time step T n can be
+expressed as:
+n
+X
+W updated = W old +
+(a << n) ∗ bn
+(6)
+n=0
+
+Crossbars store data in unsigned form. To enable positive
+and negative weight updates (δW ), we represent inputs in
+the signed magnitude representation. To enable a symmetric
+representation of positive and negative weight updates, we
+bias each device such that, a zero weight (W ij ) is represented by the memory state (RON + ROFF )/2, as shown in
+Figure 3(e). Hence, the signed magnitude computation and
+biased data representation enable both positive and negative
+updates to weights. This is important as both polarities
+of updates are equally important in DNN training. Such
+a biased-representation can be implemented by adding an
+extra column per crossbar (128 rows, 128 columns) with
+minimal area/energy cost [18].
+
+Bits to Handle Overflow
+
+For MVM/MT VM, the matrix weights are inputs to the
+operation and they do not change. In contrast, for OPA, the
+matrix weights are accumulated with the values resulting
+from the outer product. As a result, the weight slice stored in
+a crossbar cell may overflow, either from multiple accumulations within one OPA or over multiple OPAs. We handle
+this overflow by provisioning weight slices with additional
+bits to store the carry (shaded bits shown in Figure 3(d)).
+Propagating carry bits to other slices would require
+serial reads and writes which incur high overhead. For this
+reason, we do not propagate the carry bits immediately.
+Instead, they are kept in the slice and participate in future
+MVM/MT VM and OPA operations on the crossbar.
+The carry bits cannot be kept in the weight slice indefinitely because eventually the weight slice may get
+saturated i.e. crossbar cell at maximum/minimum state
+for positive/negative update. Saturation is detrimental for
+trainability (desirable loss reduction during training) because
+it freezes training progress due to the absence of weight
+change. For this reason, we employ a periodic Carry Resolution Step (CRS) which executes infrequently to perform carry
+propagation using serial reads and writes. We evaluate the
+impact of the number of bits provisioned per slice and the
+CRS frequency on saturation and accuracy in Section 7.1.
+3.3
+
+Number of Slices vs. Bits Per Slice
+
+When slicing matrix bits across multiple crossbars, there is
+a tradeoff between the number of slices and the number
+of bits per cell in each slice. MVM operations favor using
+more slices and fewer bits per slice. The reason is that
+energy increases linearly with the number of crossbars, and
+non-linearly with the precision of a crossbar due to the
+increase in ADC precision required to support it. Therefore,
+using more slices with fewer bits each is better for energy
+consumption.
+In contrast, OPA favors having fewer slices with more
+bits per slice. The reason is that OPA introduces carry bits
+to each slice and having more slices with fewer bits each
+increases the overhead from the carry bits. For example,
+Figure 3(f) shows that with 2 bits per slice, 62 total bits are
+required to represent the 32-bit weight while capturing the
+carry bits adequately.
+To strike a balance, we choose p = 4, since p > 4
+requires a device precision that exceeds ReRAM technology
+limits [15]. A 4-bit DAC resolution is feasible because DAC
+power does not increase rapidly at low resolution (Equation 5). By choosing p = 4, our MVM/MT VM operations
+consume more energy than other ReRAM-based accelerators. However, our more energy efficient OPA operations
+compensate because they avoid the need for expensive serial
+reads and writes.
+3.4
+
+Heterogeneous Weight Slicing
+
+MVM operations favor homogeneous bit-slicing. Increasing
+the precision of one slice while decreasing the precision of
+another is always an unfavorable tradeoff because energy
+increases nonlinearly with the precision of a crossbar. In contrast, for OPA operations where crossbar values change, provisioning more bits for slices that experience more weight
+
+=== page 5 ===
+Pipelined MCU
+
+Absolute weight range
+
+Average of Normalized
+Gradeints (ΔW/W)
+
+5
+
+Training steps
+
+from Instruction Row
+Decoder
+Decode
+
+XbarIn
+Registers
+Training steps
+
+Sign LSB
+Select
+Logic
+
+Fig. 4. Weight Gradients across Training Steps
+
+updates helps reduce the frequency of saturation, thereby
+ensuring trainability while keeping the frequency of CRS
+low.
+Heterogeneous weight slicing provisions more bits for
+matrix slices that change more frequently. The frequency of
+change is impacted by two factors: OPA asymmetry and the
+small weight gradient range in DNNs. OPA asymmetry is
+illustrated in Figure 3(d) where the central slices receive
+more partial products (dots) than the edge slices, which
+motivates increasing precision for the central slices. Small
+weight gradient range is shown in Figure 4 where weight
+updates form a very small fraction (2% − 5%) of the overall
+weight range for >= 95% of training steps, which motivates increasing precision of the lower slices. We evaluate
+the impact of heterogeneous weight slicing on energy and
+accuracy in Section 7.2.
+
+4
+
+Crossbar Array
+
+Input
+Driver
+
+ADC to VFU
+
+(DAC)
+
++Vdd
+-Vdd
+Gnd
+
+MVM
+
+Input Driver
+
+(DAC)
+
+MTVM
+
+OP+Update
+
+XbarOut
+Registers
+
+Read/Write
+
+Fig. 5. Matrix Computation Unit
+TABLE 1
+Dataflow for SGD
+Time
+Step
+0
+1
+2
+3
+4
+5
+
+MCU0 (Layer1)
+
+MCU1 (Layer2)
+
+MCU2 (Layer3)
+
+MVM (a0) (a1)
+MVM (a1) (a2)
+
+OP (a0, δ h1) (∇W1)
+
+MT VM (δ h2), (δ h1)
+OP (a1, δ h2) (∇W2)
+
+MVM (a2) (a3)
+MT VM (δ h3) (δ h2)
+OP (a2 , δ h3) (∇W3)
+
+effect of this operation is that the outer product of the input
+vectors is accumulated to the matrix stored in the crossbar.
+To support positive and negative inputs, the input drivers
+in Figure 5 use the sign bit (MSB) to drive the crossbar rows
+and columns with positive or negative voltages.
+
+M ATRIX C OMPUTATION U NIT (MCU)
+
+The techniques described in Section 3 are incorporated
+into a Matrix Computation Unit (MCU) for DNN training
+accelerators. This section first describes the MCU’s organization (Section 4.1). It then describes the three variants
+of the MCU optimized for SGD (Section 4.2), mini-batch
+SGD (Section 4.3), and mini-batch SGD with large batches
+(Section 4.4).
+4.1
+
+ADC: Analog to Digital Converter
+DAC: Digital to Analog Converter
+
+MCU Organization
+
+Figure 5 illustrates the organization of the MCU. Performing
+an MVM operation with the MCU is illustrated by the red
+arrow. Digital inputs stored in the XBarIn registers are fed
+to the crossbar rows through the Input Driver. The output
+currents from the crossbar columns are then then converted
+to digital values using ADC and stored in the XBarOut
+registers.
+Performing a MT VM operation in the MCU is illustrated
+by the purple arrow in Figure 5. The key difference compared to the MVM operation is the addition of multiplexers
+to supply inputs to crossbar columns instead of rows and to
+read outputs from crossbar rows instead of columns.
+MVM and MT VM operations require 16 to 32 bits of
+precision for training [2]. We use 16-bit fixed-point representation for input/output data and 32-bit fixed-point
+representation for weight data which ensures sufficient precision [12].
+Performing an OPA operation in the MCU is illustrated
+by the blue arrow in Figure 5. Digital inputs stored in the
+XBarIn registers are fed to the crossbar rows through the
+Input Driver. Digital inputs stored in the XBarOut registers
+are fed to the crossbar columns through the Input Driver. The
+
+4.2
+
+Variant #1 for SGD Acceleration
+
+SGD-based training performs example-wise gradient descent. First, an input example performs a forward pass
+(MVM) to generate activations - H l . Next, the error computed with respect to the activation of the output layer is
+back propagated (MT VM) to compute the layer gradients δX l . Finally, the activations and layer gradients are used to
+update (OPA) the weight matrix - W l , before the next input
+example is supplied.
+Table 1 illustrates the logical execution of matrix operations in three MCUs for a three-layer DNN with an input
+example a0. Each time step shows the operations executed
+on each MCU and their inputs/outputs. For example, at
+time step 0, MCU0 performs an MVM operation on input a0
+to compute the output a1. The illustration assumes that each
+layer maps on one MCU and does not show the interleaved
+nonlinear operations for clarity. For a layer size larger than
+one MCU capacity (128×128 matrix), the layer is partitioned
+across multiple MCUs (see Section 5.3).
+Variant #1 of the MCU uses a single crossbar to perform
+all three matrix operations: MVM, MT VM, and OPA. This
+variant is suitable for SGD because, as shown in Table 1, the
+three matrix operations are data dependent and will never
+execute concurrently. However, this variant creates structural hazards for mini-batch SGD as described in Section 4.3.
+4.3
+
+Variant #2 for Mini-Batch SGD Acceleration
+
+Mini-batch SGD performs batch-wise gradient descent. Like
+SGD, each input performs MVM, MT VM, and OPA to
+compute activations, layer gradients, and weight gradients/updates, respectively. However, the weight update is
+
+=== page 6 ===
+6
+
+MCU0 (Layer1)
+
+MCU1 (Layer2)
+
+MCU2 (Layer3)
+
+0
+
+MVM (a0 0) (a0 1)
+
+1
+
+MVM (a1 0) (a1 1)
+
+MVM (a0 1) (a0 2)
+
+2
+
+MVM (a2 0) (a2 1)
+
+MVM (a1 1) (a1 2)
+
+MVM (a0 2) (a0 3)
+
+3
+
+MVM (a3 0) (a3 1)
+
+MVM (a2 1) (a2 2)
+
+4
+
+MVM (a4 0) (a4 1)
+
+MVM (a3 1) (a3 2)
+MT VM (δ h0 2), (δ h0 1)
+MVM (a4 1) (a4 2)
+MT VM (δ h1 2), (δ h1 1)
+
+6
+
+MT VM (δ h2 2), (δ h2 1)
+
+MVM (a1 2) (a1 3)
+MT VM (δ h0 3) (δ h0 2)
+MVM (a2 2) (a2 3)
+MT VM (δ h1 3) (δ h1 2)
+MVM (a3 2) (a3 3)
+MT VM (δ h2 3) (δ h2 2)
+MVM (a4 2) (a4 3)
+MT VM (δ h3 3) (δ h3 2)
+
+7
+
+MT VM (δ h3 2), (δ h3 1)
+
+MT VM (δ h4 3) (δ h4 2)
+
+5
+
+8
+
+T
+
+9-12
+
+OP (an 0, δ hn 1) (∇Wn 1)
+
+M VM (δ h4 2), (δ h4 1)
+OP (an 1, δ hn 2) (∇Wn 2)
+Iterate for n=1 to 4
+
+OP (an 2, δ hn 3) (∇Wn 3)
+
+only reflected at the end of a batch to be used by the inputs
+of the next batch.
+Table 2 illustrates the logical execution of matrix operations for a batch of five inputs, where an m refers to the mth
+activation of nth input. MVM operations can be executed for
+multiple input examples concurrently in a pipelined fashion
+(MVM (a1 0) (a1 1), MVM (a0 1) (a0 2) in Table 2). Additionally,
+the MVM and MT VM operations for different inputs in the
+batch can also execute in parallel during the same timestep,
+provided that there is no structural hazard on the MCU.
+The desire to eliminate such structural hazards motivates
+Variant #2.
+Variant #2 of the MCU eliminates structural hazards in
+mini-batch SGD by storing two copies of the matrix on
+different crossbars, enabling the MCU to perform MVM
+and MT VM in parallel. This replication improves the energydelay product for a batch. With < 2× increase in area, we
+improve the batch latency by O(L), where L is the number
+of layers. The ISA instruction for performing MVM/MT VM
+(Section 5.2) is designed to enable the compiler (Section 5.3)
+to schedule these two operations in parallel on the same
+MCU.
+The OPA operations are executed at the end of the minibatch (steps 9-12 in Table 2) to reflect the weight updates
+for the entire batch. These OPA operations require that the
+vectors involved are saved until then. Variant #2 saves these
+vectors in shared memory. However, if the batches are large,
+this approach puts too much stress on the shared memory
+which motivates Vaiant #3 (Section 4.4).
+
+F
+E
+T
+C
+H
+
+Variant #3 for Mini-Batch SGD with Large Batches
+
+For mini-batch SGD with very large batch sizes, saving the
+vectors in shared memory requires large shared memory
+size which degrades storage density. Variant #3 alleviates
+the pressure shared memory size by maintaining three
+copies of each crossbar. The first two copies enable performing MVM and MT VM in parallel, similar to Variant #2. The
+third copy is used to perform the OPA operation eagerly, as
+soon as its vector operands are available, without changing
+the matrices being used by the MVM and MT VM operations.
+Performing OPA eagerly avoids saving vectors until the
+end, reducing the pressure on the shared memory. However,
+using a third crossbar for OPA requires serial reads and
+writes to commit the weight updates to the first and the
+
+FU
+
+FU
+
+FU
+
+VFU
+
+MU
+
+Data writeback
+XbarIn
+Registers
+
+XbarIn
+Registers
+
+XbarOut
+Registers
+
+XbarOut
+Registers
+
+MCU
+
+MCU
+
+(a)
+
+Core
+1
+
+Core
+2
+
+Core
+N-1
+
+Core
+N
+
+Shared Memory
+Network-On-Chip
+Core
+1
+
+Core
+2
+
+Core
+N-1
+
+Core
+N
+
+Shared Memory
+
+(b)
+
+Fig. 6. Architecture Overview
+
+second crossbars for MVM and MT VM in the next batch.
+Section 7.6 discusses the impact of these design choices.
+
+5
+
+P ROGRAMMABLE ACCELERATOR
+
+The MCU described in Section 4 can be integrated with prior
+ReRAM-based training accelerators [7], [8] to improve their
+efficiency. We develop a programmable training accelerator
+named PANTHER to evaluate our design by extending the
+PUMA ReRAM-based inference accelerator [6]. This section describes PANTHER’s organization (Section 5.1), ISA
+considerations (Section 5.2), compiler support (Section 5.3),
+and an example of how to implement convolutional layers
+(Section 5.4).
+5.1
+
+Accelerator Organization
+
+PANTHER is a spatial architecture organized in three tiers:
+nodes, tiles, and cores. A node consists of multiple tiles
+connected via an on-chip network, and a tile consists of
+multiple cores connected to a shared memory, as illustrated
+in Figure 6(b). A core consists of multiple MCUs for executing matrix operations, a digital CMOS-based vector
+functional unit (VFU) for executing arithmetic operations
+and non-linear functions, a register file, and a load/store
+memory unit. A core also features an instruction execution
+pipeline making the accelerator ISA-programmable. To support DNNs whose model storage exceeds a node’s total
+MCU capacity, multiple nodes can be connected via an
+interconnect. This organization is similar to PUMA’s [6] and
+is not a contribution of this paper. The key distinction from
+PUMA is the MCU which supports MT VM and OPA operations, not just MVM operations, as described in Section 4.
+5.2
+
+4.4
+
+D
+E
+C
+O
+D
+E
+
+Register
+File
+
+To/From Shared Memory
+
+Time
+Step
+
+Decoded instruction
+
+EXECUTE
+
+TABLE 2
+Dataflow for Mini-Batch SGD
+
+ISA Considerations
+
+The PUMA [6] ISA includes mvm instructions executed by
+crossbars, arithmetic/logic/nonlinear instructions executed
+by the VFU, load/store instructions to access shared memory, send/receive instructions to communicate with other
+tiles, and control flow instructions. We extend the PUMA
+ISA to also include a mcu instruction for executing all three
+matrix operations (MVM, MT VM, OPA) on the MCU.
+The mcu instruction takes six 3-bit masks, where each
+mask corresponds to one of the MCUs on the core (up to
+six). The three bits in the mask correspond to the three supported matrix operations (MVM, MT VM, OPA). If multiple
+bits are set, then the instruction executes the operations
+concurrently. For example, if mask 0 is set to ’110’ and
+mask 1 is set to ’011’, then MCU 0 will execute MVM and
+
+=== page 7 ===
+7
+
+MT VM simultaneously and MCU 1 will execute MT VM and
+OPA simultaneously. Hence, the incorporation of all three
+operations into a single instruction is important for being
+able to execute them concurrently. The mcu instruction does
+not take source and destination operands since these are
+implied to by XBarIn and XBarOut.
+The semantic of the OPA operation is that it takes effect
+at the end of the execution when a special halt instruction
+is invoked. This semantic allows the same code to work for
+any of the three MCU variants, making the choice of variant
+a microarchitectural consideration and the ISA agnostic to
+it. The implementation of the OPA semantic on each of
+the variants is as follows. Consider the case when all three
+bits of an MCU’s mask are set. In Variant #1, MVM and
+MT VM will be serialized on the same crossbar, while the
+operands of OPA will be saved to shared memory then
+applied to that crossbar when halt is invoked. In Variant
+#2, MVM and MT VM will be executed in parallel on the two
+crossbar copies, while the operands of OPA will be treated
+like in Variant #1. In Variant #3, MVM and MT VM will be
+executed in parallel on the first two crossbar copies, while
+the operands of OPA will be applied to the third crossbar.
+The values of the third crossbar will then be copied to the
+first two crossbars when halt is invoked.
+
+Input
+
+Compiler Support
+
+The PUMA [6] compiler provides a high-level programming interface in C++ that allows programmers to express
+models in terms of generic matrix and vector operations.
+The compiler is implemented as a runtime library that
+builds a computational graph when the code is executed
+then compiles the graph to PUMA ISA code. The compiler
+partitions matrices into sub-matrices and maps these submatrices to different MCUs, cores, and tiles. It then maps
+the operations in the graph to different MCUs, cores, and
+tiles accordingly, inserting communication operations where
+necessary. The compiler then linearizes the graph, creating
+an instruction sequence for each core. It performs register
+allocation for each sequence, spilling registers to shared
+memory if necessary. Finally, it generates ISA code for
+each core, collectively comprising a kernel that runs on the
+accelerator.
+We make the following extensions to the PUMA compiler to support PANTHER. We extend the application programming interface (API) to allow programmers to define
+training matrices that support MVM, MT VM, and OPA
+operations. We extend the intermediate representation to
+represent these matrices and include them in the partitioning. We also add an analysis and transformation pass for
+identifying MCU operations in the graph that can be fused
+and fusing them. This pass fuses MCU operations that
+do not have data dependences between them and that use
+different MCUs on the same core or use the same MCU
+but are different types of operations (MVM, MT VM, OPA).
+The fusing process is iterative because every time operations
+are fused, new dependences are introduced to the graph.
+Finally, we extend the code generator to support the new
+mcu ISA instruction.
+Note that since the model weights are not updated until
+the halt instruction at the end, the scope of a kernel is a
+
+Output
+
+w4ij
+
+Convolution
+Operations
+
+h4ij
+
+x12
+
+x13
+
+x21
+
+x22
+
+x23
+
+w111 w112
+
+h111 h112
+
+x31
+
+x32
+
+x33
+
+w121 w122
+
+h121 h122
+
+w1ij
+
+h1ij
+
+1 𝐻 =𝑋∗𝑊
+2 δX = 𝑊 ∗ δH
+3 δ𝑊 = 𝑋 ∗ δH
+
+(a)
+(hk)ij = 𝚺𝚺 (wk)mn x(i-1+m)(j-1+n)
+m n
+
+x12
+
+x11
+
+x13
+
+x12
+
+x22
+
+x21
+
+x23
+
+x22
+
+T2
+
+T1
+
+1
+
+(δwk)ij = 𝚺𝚺
+(δhk)mn x(i-1+m)(j-1+n)
+m
+n
+
+x12 x11
+
+w111 w211 w311 w411
+w112 w212 w312 w412
+w121 w221 w321 w421
+w122 w222 w322 w422
+
+T1 h111 h211 h311 h411
+T2 h112
+
+h212 h312 h412
+
+Activation: iterative MVM
+
+x13 x12
+x22 x21
+x23 x22
+T2
+
+T1
+
+w111 w211 w311 w411
+w112 w212 w312 w412
+w121 w221 w321 w421
+w122 w222 w322 w422
+
+3 T1 δh111 δh211 δh311 δh411
+T2 δh112 δh212 δh312 δh412
+
+Weight gradients+update = iterative OPA
+
+(b)
+
+(c)
+
+Fig. 7. Convolutional Layer Matrix Operations in Crossbars
+
+single batch. Multiple batches are executed by invoking the
+kernel multiple times on different input data.
+5.4
+
+5.3
+
+Weight
+
+x11
+
+Implementing Convolutional Layers
+
+ReRAM-based OPA has one-to-one correspondence to the
+weight gradient/update operation for FC layers (discussed
+in Section 2.2.3). By integrating this technique into a programmable accelerator with compiler support, we enable
+the mapping of more complex layers on top of it such as
+convolutional layers. This section describes how convolutional layers can be implemented in our accelerator.
+Figure 7(a) shows a typical convolution layer and the
+associated operations during training. Like with FC layers,
+convolutional layers performs three types of matrix operations: ¶ activation, · layer gradients, and ¸ weight gradients.
+Unlike FC layers, these operations are all convolutions (∗).
+5.4.1 Activation and Layer Gradients
+Figure 7(b) shows how the convolution operation for activation is implemented in the crossbar on top of the MVM
+primitive. This approach is similar to that used in existing
+accelerators [8]. The crossbar stores the convolution kernel
+in the form of linearized filters (wk ), where each column
+corresponds to the weights associated with a specific output
+channel (hk ). The convolution operation to compute activations is implemented as an iterative MVM operation. An
+iteration is represented as a time step (T1/T2) in Figure 7(b),
+and corresponds to a specific (i,j) pair. A block of input
+features (X ) is applied to the crossbar’s rows as convolution
+data in each iteration. In a similar manner, the convolution
+operation for layer gradients (not shown in the figure)
+is realized using iterative MT VM. The next layer’s errors
+(δH ) are used as the convolution data and flipped filters
+(vertically and horizontally) are used as the convolution
+kernel.
+5.4.2 Weight Gradients
+Figure 7(c), shows our proposed technique for implementing the weight gradients convolution operation and weight
+
+=== page 8 ===
+8
+
+TABLE 3
+Summary of platforms
+Parameter
+SIMD lanes
+Technology
+Frequency
+Area
+TDP
+On-Chip Memory
+
+PANTHER (1 node)
+108 M
+CMOS-ReRam (32 nm)
+1 GHz
+117 mm2
+105 W
+72.4 MB
+
+Basedigital (1 node)
+108 M
+CMOS (32 nm)
+1 GHz
+578 mm2
+839 W
+72.4 MB
+
+2080-Ti (1 card)
+4352
+CMOS (12 nm)
+1.5 GHz
+750 mm2
+250 W
+29.5 MB
+
+TABLE 4
+Details of workloads
+
+(a)
+
+(b)
+
+Fig. 8. Computational graph obtained using TensorBoard for (a) example
+model (b) example model with PANTHER OPA
+
+update in the crossbar on top of the OPA primitive. The
+weight gradient computation uses input features (X ) as
+the convolution data and output feature’s errors (δH ) as
+the convolution kernel. Each iteration is represented as a
+time step (T1, T2) in Figure 7(c), and corresponds to a
+specific (i,j) pair. On every iteration, the output feature’s
+errors are applied on the columns, in a depth major order.
+Simultaneously, by applying the portion of input features
+that generate the corresponding activations (H ) on the rows,
+a partial convolution is obtained between X and δH . Striding
+across the output feature’s errors and input features for
+n2 time steps, where n is size of one output feature map,
+realizes the full convolution operation. Convolutions for
+different output feature maps are performed in parallel
+across the crossbar’s columns, using the same weight data
+layout as used in MVM and MT VM operations. To the best of
+our knowledge, our work is the first to formulate the weight
+gradients convolution operation in terms of outer products.
+5.4.3 Comparison with Other Accelerators
+Existing ReRAM-based training accelerators such as
+PipeLayer [8] do not compute the weight gradient convolutions using outer products, but rather, they compute
+them using MVM operations. This requires writing the
+convolution kernel (δH ) on the crossbar because the convolution operation here uses non-stationary data (δH ) as the
+convolution kernel. The drawback of this approach is that
+the latency and energy consumption of the serial reads and
+writes is very high, taking away from the overall efficiency
+provided by ReRAM-based MVMs.
+
+6
+
+M ETHODOLOGY
+
+6.1
+
+Architecture Simulator
+
+We extend the PUMA [6] simulator to model the MCU
+unit and its associated instructions. The PUMA simulator
+is a detailed cycle-level architecture simulator that runs
+applications compiled by the compiler, in order to evaluate
+the execution of benchmarks. The simulator models all the
+necessary events that occur in an execution cycle, including
+compute, memory and NoC transactions. To estimate power
+and timing of the CMOS digital logic components, their RTL
+implementations are synthesized to the IBM 32nm SOI technology library, and evaluated using the Synopsys Design
+
+Layer
+
+C
+
+M
+
+H/W
+
+Conv1
+Conv2
+Conv3
+Conv4
+Conv5
+Conv6
+Conv7
+Conv8
+Conv9
+Conv10
+Conv11
+Conv12
+Conv13
+Dense14
+Dense15
+Dense16
+
+3
+32
+64
+128
+128
+256
+256
+256
+512
+512
+512
+512
+512
+512
+4096
+4096
+
+64
+64
+128
+128
+256
+256
+256
+512
+512
+512
+512
+512
+512
+4096
+4096
+100
+
+32
+32
+16
+16
+8
+8
+8
+4
+4
+4
+2
+2
+2
+-
+
+Dense1
+Dense2
+Dense3
+Dense4
+
+1024
+256
+512
+512
+
+256
+512
+512
+10
+
+-
+
+R/S E/F
+CNN-Vgg16
+3
+32
+3
+16
+3
+16
+3
+8
+3
+8
+3
+8
+3
+4
+3
+4
+3
+4
+3
+2
+3
+2
+3
+2
+3
+1
+MLP-L4
+-
+
+Wt (MB)
+
+In (MB)
+
+Ops/B
+
+0.003
+0.035
+0.141
+0.281
+0.563
+1.125
+1.125
+2.250
+4.500
+4.500
+4.500
+4.500
+4.500
+4.000
+32.000
+0.781
+
+0.006
+0.063
+0.031
+0.063
+0.016
+0.031
+0.031
+0.008
+0.016
+0.016
+0.004
+0.004
+0.004
+0.001
+0.008
+0.008
+
+368.640
+92.160
+209.455
+52.364
+62.270
+62.270
+15.568
+15.945
+15.945
+3.986
+3.997
+3.997
+0.999
+1.000
+1.000
+0.990
+
+0.500
+0.250
+0.500
+0.010
+
+0.002
+0.000
+0.001
+0.001
+
+0.996
+0.998
+0.998
+0.909
+
+Compiler. For the on-chip SRAM memories, the power and
+timing estimates are obtained from Cacti 6.0. Subsequently,
+the power and timing of each component are incorporated
+in the cycle-level simulator in order to estimate the energy
+consumption.
+MCU Modelling. Since the MCU is built with analog
+components and cannot be synthesized with publicly available libraries, we adopted the models from past works [4],
+[10] and ADC survey [19]. We use the ReRam crossbar array
+and sample-and-hold circuit models in ISAAC [4]. We used
+capacitive DACs and Successive Approximation Register
+(SAR) ADCs. The DAC area and power are estimated using
+the equations described in Saberi et al. [20]. The ADCs for
+different precisions namely 8-12 bits operating at a sampling
+frequency of 1GHz are obtained from the ADC survey [19].
+The ADC optimization technique in Newton [21] is incorporated to avoid unnecessary ADC conversions.
+6.2
+
+Functional Simulator
+
+We implement a functional simulator using TensorFlow
+that models PANTHER’s bit-sliced OPA technique. This
+simulator enables performing design space exploration (for
+accuracy) on large-scale DNNs to explore the bounds on
+heterogeneous weight slicing and CRS frequency for trainability. Here, a layer’s weights are represented as a multidimensional tensor of shape S × M × N , where S corresponds to a weight slice (discussed in Figure 3 (d)), and
+M and N correspond to the weight matrix’s dimensions respectively. Each weight slice can have a unique bit-precision,
+to model heterogeneous configurations (Section 3.4). The
+weight values beyond the range permissible by the bitprecision are clipped to model a slice’s saturation. Subsequently, the weight update operation in native TensorFlow
+is modified to quantize and bit-slice the computed weight
+gradients and then update the previous copy of weights (already quantized and bit-sliced). Figures 8 (a) and (b) show
+
+=== page 9 ===
+Accuracy
+
+% Saturated Bits % Saturated Bits
+in Slice 7
+Slice 0
+
+9
+25%
+20%
+15%
+10%
+5%
+0%
+0
+25%
+20%
+15%
+10%
+5%
+0%
+0
+100%
+80%
+60%
+40%
+20%
+0%
+0
+
+25%
+20%
+15%
+10%
+5%
+0%
+20,000 40,000 60,000 80,000
+0
+25%
+20%
+3 bits
+4 bits
+15%
+5 bits
+10%
+6 bits
+5%
+0%
+20,000 40,000 60,000 80,000
+0
+100%
+80%
+60%
+40%
+20%
+0%
+20,000 40,000 60,000 80,000
+0
+Training Steps
+(CRS every 64 examples)
+
+25%
+20%
+15%
+10%
+5%
+0%
+20,000 40,000 60,000 80,000
+0
+25%
+20%
+15%
+10%
+5%
+0%
+20,000 40,000 60,000 80,000
+0
+100%
+80%
+60%
+40%
+20%
+0%
+20,000 40,000 60,000 80,000
+0
+Training Steps
+(CRS every 1024 examples)
+
+25%
+20%
+15%
+10%
+5%
+0%
+20,000 40,000 60,000 80,000
+0
+25%
+20%
+15%
+10%
+5%
+0%
+20,000 40,000 60,000 80,000
+0
+100%
+80%
+60%
+40%
+20%
+0%
+20,000 40,000 60,000 80,000
+0
+Training Steps
+(CRS every 4096 examples)
+
+20,000
+
+40,000
+
+60,000
+
+80,000
+
+20,000
+
+40,000
+
+60,000
+
+80,000
+
+20,000 40,000 60,000 80,000
+Training Steps
+(CRS every 50048 examples)
+
+Fig. 9. Impact of Slice Bits and CRS Frequency on Accuracy
+
+the computational graphs for an example neural network
+model, and the example model augmented with PANTHER
+OPA operation (shown in red) respectively.
+6.3
+
+and PANTHER, the hierarchical organization uses 138 tiles
+per node, with 8 cores per tile and 2 MCUs per core. Table 3 summarizes the platforms. Note that both Basemvm and
+Baseopa/mvm have same platform parameters as PANTHER.
+
+Baselines
+
+We evaluate PANTHER against three weight-stationary
+ASIC baselines: Basedigital , Basemvm , and Baseopa/mvm , as well as
+one NVIDIA GPU platform - Turing RTX 2080-Ti (2080-Ti).
+Basedigital uses a digital version of the MCU where
+weights are stored in an SRAM array within the core
+and matrix operations are performed with a digital VFU.
+Basedigital is an adaptation of the digital baseline used in
+PUMA [6]. As shown in the PUMA work, this digital
+baseline is an optimistic estimate of the Google TPU [3]. It is
+optimistic because it uses weight-stationary MVM computations similar to TPU, but assumes that the entire model is
+mapped using on-chip SRAM, thereby avoiding the off-chip
+memory access costs in TPU. Therefore, our comparisons
+with Basedigital also serve as a lower-bound on PANTHER’s
+improvements compared to TPU. The objective of comparing with Basedigital is to demonstrate the benefit of ReRAMbased computing over pure digital approaches.
+Basemvm uses ReRAM for MVM and MT VM, and a digital VFU for OPA with serial reads/writes to the crossbar.
+Baseopa/mvm is a replication of PipeLayer’s [8] approach described in Section 5.4.3 and only applies to convolutional
+layers. It uses ReRAM for MVM and MT VM, and realizes
+OPA with ReRAM MVMs and serial reads/writes. The
+objective of comparing with Basemvm and Baseopa/mvm is to
+demonstrate the benefit of ReRAM-based OPA operations.
+Configurations. Basemvm and Baseopa/mvm use 32-bit
+weights sliced across 16 slices with 2 bits each, which is
+optimal since crossbars only do MVM/MT VM. PANTHER
+uses heterogeneous weight slicing with 32-bit weights represented using 39 bits sliced across 8 slices distributed from
+MSB to LSB like so: 44466555 (unless otherwise specified).
+For this reason, PANTHER consumes 17.5% higher energy
+for MVM/MT VM than Basemvm and Baseopa/mvm due to higher
+ADC precision. We also use a CRS frequency of 1024 steps
+(unless otherwise specified) which achieves similar accuracy
+as the software implementation. For all three ASIC baselines
+
+6.4
+
+Workloads
+
+We use a 4-layered MLP model and Vgg-16 CNN model on
+SVHN and CIFAR-100 datasets, respectively. Table 4 details
+the layer details of the two models and their computational
+intensity (operations to byte ratio). The individual layers
+of the chosen MLP and CNN models span a wide range
+of computational intensity observed across the spectrum of
+neural network workloads. Thus, our workloads are well
+representative of the large variety of layer types found
+in neural network models such as fully-connected, 2 Dconvolution, point-wise convolution, etc.
+Similar to other ReRAM training accelerators [7], [8],
+we use fixed-point arithmetic which has been shown to be
+successful for training large DNNs [13]. We use the CIFAR100 dataset for CNN which is comparable to the ImageNet
+dataset in terms of training difficulty [22], [23]. However,
+ImageNet’s large image sizes make it difficult to run the
+training flow without actual hardware (CIFAR-100 requires
+2 days and ImageNet requires 1 month on the simulator).
+
+7
+
+E VALUATION
+
+7.1 Impact of Slice Bits and CRS Frequency on Accuracy
+Figure 9 shows the impact of the number of bits used per
+slice (uniform weight slicing) and CRS frequency for the
+CNN benchmark. We analyze the percentage of saturated
+cells per slice for a lower order and higher order slice, and
+their implications on CNN’s Top-5 training accuracy.
+Using 3 bits per slice shows significantly higher percentage of saturated cells for the lower order slice (Slice
+0) than other configurations. Further, increasing the CRS
+frequency does not reduce the saturation fraction of Slice
+0 at 3-bits. Consequently, the training accuracy with 3-bits
+slices remains very low throughout the training steps.
+
+=== page 10 ===
+Validation Accuracy
+
+10
+
+1.00
+
+0.80
+0.60
+0.40
+
+0.20
+0.00
+20.0
+
+Homogeneous:
+Heterogeneous:
+
+25.0
+
+30.0
+
+33333333 (24)
+44445555 (36)
+44466555 (39)
+44466655 (41)
+
+35.0
+
+40.0
+
+45.0
+
+50.0
+
+55.0
+
+Energy (nJ)
+44444444 (32) 55555555 (40)
+33336666 (36) 33446655 (36)
+44555566 (40) 44556655 (40)
+55556655 (42) 55556666 (44)
+
+60.0
+
+66666666 (48)
+44446655 (38)
+44446666 (40)
+55666655 (44)
+
+with digital logic. While the large convolutional layers can
+amortize these reads and writes, the FC layers and small
+convolutional layers do not have enough work to do so
+which is why they suffer relatively. In contrast, PANTHER
+avoids these reads and writes by performing OPA in the
+crossbar (11.37 nJ).
+Baseopa/mvm . Baseopa/mvm behaves similarly to Basemvm . Recall that both baselines perform serial reads and writes to
+crossbars for OPA, but Basemvm uses CMOS VFUs while
+Baseopa/mvm uses ReRAM MVMs. Since ReRAM MVMs and
+CMOS OPAs have comparable energy consumption (35.10
+nJ and 37.28 nJ respectively), the overall energy of the two
+baselines is similar.
+
+Fig. 10. Heterogeneous Weight-Slicing
+
+Using 4 bits per slice performs well at high CRS frequency (CRS every 64 steps), but does not scale well at lower
+CRS frequencies. A high CRS frequency is undesirable due
+to the high cost of serial reads and writes incurred during
+carry propagation between discrete slices.
+Slices with 5-bits and 6-bits are robust to repeated weight
+updates as they exhibit lower saturation for both lower
+order and higher order slices even at low CRS frequencies
+(every 1024 or 4096 steps). Note that the cost of a CRS
+operation at low frequency (every 1024 steps) has negligible
+impact on overall energy and performance (≤ 4.8%).
+Figure 9 also motivates heterogeneous weight slicing
+because it shows that the higher order slice has significantly
+lower saturation in general than the lower order slice.
+7.2
+
+Impact of Heterogeneous Weight Slicing
+
+Figure 10 shows the accuracy and energy of sixteen slicing configurations. Generally speaking, increasing the total
+number of bits improves accuracy by reducing saturation,
+but it also increases energy because it requires higher precision ADCs for MVM and MT VM. The graph shows that
+heterogeneous weight slicing enables favourable accuracyenergy tradeoffs, enabling lower energy at comparable accuracy or better accuracy at comparable energy. Provisioning
+≥ 4 bits for the four higher order slices (4 − 7) and ≥ 5
+bits for the four lower order slices (0 − 3) ensures desirable
+accuracy. Any configuration using 3 bit slices (irrespective
+of total bits) leads to significant accuracy degradation. Note
+that the configuration used in the rest of the evaluation
+(44466555) is not a Pareto-optimal one, so our energy numbers in the rest of the evaluation are underestimated.
+7.3
+
+Variant #1 SGD Energy Comparison
+
+Figure 11 compares the layer-wise energy consumption of
+PANTHER’s Variant #1 to that of all three baselines for SGD.
+Basedigital . Compared to Basedigital , we achieve 7.01×–
+8.02× reduction in energy. This advantage is due to the
+energy efficiency of computing MVM, MT VM, and OPA in
+ReRAM.
+Basemvm . Compared to Basemvm , we achieve 31.03×–
+54.21× reductions in energy for FC layers (Layers 1-4 in
+MLP and 14-16 in CNN) and 1.47×–31.56× for convolution
+layers (Layers 1-13), with the later (smaller) convolution
+layers showing larger reductions. Recall that Basemvm uses
+serial reads and writes to perform the OPA operation
+
+7.4
+
+Variant #2 Mini-Batch SGD Energy
+
+Figure 12 compares the layer-wise energy consumption of
+Variant #2 of PANTHER to that of all three baselines for
+Mini-Batch SGD with batch size 64. Compared to SGD
+results (Figure 11), the key difference is that having multiple
+batches before weight updates amortizes the cost of serial
+reads and writes in Basemvm and Baseopa/mvm (smaller blue
+bar). Our energy improvements therefore come mainly from
+reducing OPA energy. Energy is reduced by 1.61×–2.16×
+for fully connected layers for Basemvm and Baseopa/mvm . It is reduced by 1.18×–1.63× and 1.22×–2.45× for convolutional
+layers for Basemvm and Baseopa/mvm , respectively.
+For very large batch sizes such as 1,024 (not shown in
+the figure), ReRAM writes can be completely amortized by
+Basemvm and Baseopa/mvm . In this case, PANTHER reduces energy by ≃ 1.18× compared to Basemvm and Baseopa/mvm due to
+reducing OPA energy. However, batch sizes preferred by ML
+practitioners for DNN training (32, 64) are typically smaller
+than what is required to amortize the ReRAM memory
+access costs because large batch sizes have adverse effects
+on DNN generalization [24].
+7.5
+
+Variant #2 Execution Time
+
+Figure 13 compares the layer-wise execution time of Variant
+#2 to all three baselines for different batch sizes.
+Basedigital . Compared to Basedigital , we have consistently
+lower execution time due to faster MVM, MT VM, and OPA
+operations in ReRAM.
+Basemvm . For MLPs with small batch sizes, Basemvm significantly suffers because the ReRAM write latency is not
+amortized. However, for larger batch sizes and for CNNs,
+the ReRAM write latency is amortized. Nevertheless, we
+still outperform Basemvm across all batch sizes because of
+lower latency ReRAM OPA. In fact, our advantage grows
+with batch size because OPA consumes a larger percentage
+of the total time for larger batches since the forward and
+backward passes benefit from pipeline parallelism whereas
+OPA operations are serialized at the end.
+Baseopa/mvm . Baseopa/mvm behaves similarly to Basemvm for
+convolutional layers.
+7.6
+
+Comparing Variants #2 and #3
+
+Increasing the batch size for mini-batch SGD increases
+Variant #2’s shared memory requirements for storing all
+activations and layer gradients in the batch, degrading its
+
+=== page 11 ===
+9.00
+8.00
+7.00
+6.00
+5.00
+4.00
+3.00
+2.00
+1.00
+0.00
+
+ReRAM
+Read/Write
+MVM
+MTVM
+OPA
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+
+Normalized Energy
+(lower is better)
+
+11
+
+Layer 1 Layer 2 Layer 3 Layer 4
+
+Layer 1
+
+Layer 2
+
+Layer 3
+
+Layer 4
+
+Layer 5
+
+Layer 6
+
+Layer 7
+
+Layer 8
+
+MLP
+
+Layer 9
+
+Layer 10
+
+Layer 11
+
+Layer 12
+
+Layer 13
+
+Layer 14
+
+Layer 15
+
+Other
+
+Layer 16
+
+Vgg16
+
+4.50
+4.00
+3.50
+3.00
+2.50
+2.00
+1.50
+1.00
+0.50
+0.00
+
+ReRAM
+Read/Write
+MVM
+MTVM
+OPA
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+
+Normalized Energy
+(lower is better)
+
+Fig. 11. SGD Energy (high bars are clipped)
+
+Layer 1 Layer 2 Layer 3 Layer 4
+
+Layer 1
+
+Layer 2
+
+Layer 3
+
+Layer 4
+
+Layer 5
+
+Layer 6
+
+Layer 7
+
+Layer 8
+
+MLP
+
+Layer 9
+
+Layer 10
+
+Layer 11
+
+MLP
+
+CNN
+
+Layer 12
+
+Layer 13
+
+Layer 14
+
+Layer 15
+
+Other
+
+Layer 16
+
+Vgg16
+
+27.51
+
+9.86
+
+Weight Update (ReRAM Read/Write)
+
+Weight Gradient
+
+FW & BW Passes
+
+256.00
+64.00
+
+1
+
+4
+
+16
+
+64
+
+256
+
+1024
+
+1
+
+4
+
+MLP (numbers indicate batch sizes)
+
+16
+
+64
+
+256
+
+1024
+
+CNN (numbers indicate batch sizes)
+
+Fig. 13. Execution Time
+2
+Variant #2 is denser
+
+Ratio
+
+Ratio
+
+1.5
+1
+0.5
+
+Variant #3 is denser
+0
+
+(a) Storage Density Ratio
+
+64
+32
+16
+8
+4
+2
+1
+
+Variant #2 much more efficient
+
+Variants #2 and #3 comparable
+
+(b) Energy Efficiency Ratio
+
+Fig. 14. Variant #2 vs. Variant #3
+
+storage density. Variant #3 uses a third crossbar for eagerly
+computing and storing weight gradients, thereby keeping
+shared memory requirements low at the expense of higher
+energy to commit the updates to the other crossbars at the
+end. Figure 14 shows that Variant #2 has better storage
+density and energy efficiency for small batch sizes, while
+Variant #3 has better storage density for very large batch
+sizes at comparable energy efficiency.
+7.7
+
+16.00
+
+Comparison with GPUs
+
+Figure 15 compares the energy consumption and execution
+time of Variant #2 with a 2080-Ti GPU for SGD (batch size 1)
+and Mini-Batch SGD (batch sizes 64 and 1k). Our design
+significantly reduces energy consumption and execution
+time due to the use of energy-efficient and highly parallel
+ReRAM-based matrix operations.
+
+4.00
+1.00
+
+MLP
+
+202.39
+41.69
+16.12
+7.83
+
+3.572.64
+
+Batch Size = Batch Size = Batch Size =
+1
+64
+1K
+
+Energy Efficiency
+
+49.82
+
+Speedup
+
+8.00
+7.00
+6.00
+5.00
+4.00
+3.00
+2.00
+1.00
+0.00
+
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+Base (digital)
+Base (mvm)
+Base (opa/mvm)
+Our Design
+
+Normalized Execution Time
+(lower is better)
+
+Fig. 12. Mini-batch SGD Energy (high bars are clipped)
+
+4096.00
+1024.00
+256.00
+64.00
+16.00
+4.00
+1.00
+
+CNN
+
+4582.50
+2645.10
+102.73
+56.35
+
+25.69
+
+20.79
+
+Batch Size = Batch Size = Batch Size =
+1
+64
+1K
+
+Fig. 15. PANTHER’s speedup and energy-efficiency compared to GPU
+
+GPUs rely on data reuse to hide memory access latency.
+For this reason, their relative performance is worse for
+MLP compared compared to CNN, and for smaller batch
+sizes compared to larger ones. Our design enables efficient
+training for a wide spectrum of batch sizes (small to large).
+Training based on small batch sizes is common in emerging
+applications such as lifelong learning [25] and online reinforcement learning [26], where training does not rely on any
+earlier collected dataset.
+7.8
+
+Sensistivity to ReRAM endurance
+
+ReRAM devices have finite switching (1 to 0, 0 to 1) endurance of 109 conservative writes [27], [28], which limits
+their applicability towards on-chip memories for typical
+workloads. However, the small magnitude of typical weight
+updates make ReRAM feasible for DNN training. Considering a 5% average conductance change per batch, the lifetime
+of a chip will be ≃ 6 years (assuming 50% reduction from
+failed training flows), for 1,000 trainings per year where
+each training is comprised of 100 epochs, 64 batch-size and
+1M training examples (typical parameters in state-of-the-art
+image recognition benchmarks [29]). While weight slicing
+makes lower order slices more prone to degradation arising
+from limited endurance, adding redundancy at lower order
+slices and higher endurance from technology improvements
+(currently shown in spintronics [30]) can make the chip
+more robust.
+
+=== page 12 ===
+12
+
+8
+
+R ELATED W ORK
+
+Various ReRAM-based training accelerators [7], [8] have
+been proposed, but they rely on expensive serial reads
+and writes to accomplish weight updates. We avoid these
+reads and writes by leveraging the in-crossbar OPA operations [10], [11], and extending their precision for practical
+trainability. Our crossbar architecture can be used to enhance existing accelerators.
+ReRAM-based accelerators have also been proposed for
+DNN inference [6], [5], [16], [4], graph processing [31],
+scientific computing [32], and general purpose data parallel
+applications [33]. Our work focuses on DNN training.
+Analog [34], [35] and DRAM-based [36], [37], [38] accelerators have been proposed as alternatives to digital-CMOS
+accelerators. Our work uses ReRAM as an alternative.
+Many accelerators use digital CMOS technology for accelerating DNNs, including those that mainly target inference [1] or also target training [39]. Our work uses hybrid
+digital-analog computation based on ReRAM crossbars, not
+just CMOS.
+Recent works have explored training DNNs with reduced precisions in floating-point arithmetic domain such
+as bfloat16 [40], float8 [41] as well as fixed-point arithmetic domain [13], [42]. While floating-point arithmetic is
+not amenable to ReRam-based hardware (without modifications), the reductions in fixed-point precision can be exploited in PANTHER by reducing the MCU width (number
+of slices) to improve training energy and time.
+ReRAM technology suffers from imprecise writes due to
+non-idealities (noise and non-linearity) and manufacturability issues (stuck-at-faults and process variations). However,
+the iterative nature of DNN training and careful re-training
+helps recover the accuracy loss from non-idealities [43],
+faults [44], and variations [45]. Re-training is a fine-tuning
+process (typically 1 epoch) with insignificant cost compared
+to training.
+
+9
+
+C ONCLUSION
+
+We propose a bit-slicing technique for enhancing the precision of ReRAM-based OPA operations to achieve sufficient
+precision for DNN training. We incorporate our technique
+into a crossbar architecture that performs high-precision
+MVM and OPA operations, and present three variants
+catered to different training algorithms: SGD, mini-batch
+SGD, and mini-batch SGD with large batches. Finally, to
+evaluate our design on different layer types and training
+algorithms, we develop PANTHER, an ISA-programmable
+training accelerator with compiler support. Our evaluation
+shows that PANTHER achieves up to 8.02×, 54.21×, and
+103× energy reductions as well as 7.16×, 4.02×, and 16×
+execution time reductions compared to digital accelerators,
+ReRAM-based accelerators, and GPUs, respectively. The
+proposed accelerator explores the feasibility of ReRAM technology for DNN training by mitigating their serial read and
+write limitations, and can pave the way for efficient design
+of future machine learning systems.
+
+ACKNOWLEDGEMENT
+This work was supported by Hewlett Packard Labs, and
+the Center for Brain-inspired Computing (C-BRIC), one
+
+of six centers in JUMP, a DARPA sponsored Semiconductor Research Corporation (SRC) program. Sandia National
+Laboratories is a multimission laboratory managed and
+operated by National Technology & Engineering Solutions
+of Sandia, LLC, a wholly owned subsidiary of Honeywell
+International Inc., for the U.S. Department of Energy’s National Nuclear Security Administration under contract DENA0003525. This paper describes objective technical results
+and analysis. Any subjective views or opinions that might
+be expressed in the paper do not necessarily represent the
+views of the U.S. Department of Energy or the United States
+Government.
+
+R EFERENCES
+[1]
+[2]
+
+[3]
+
+[4]
+
+[5]
+
+[6]
+
+[7]
+
+[8]
+
+[9]
+
+Vivienne Sze, Yu-Hsin Chen, Tien-Ju Yang, and Joel Emer. Efficient
+processing of deep neural networks: A tutorial and survey. arXiv
+preprint arXiv:1703.09039, 2017.
+Yunji Chen, Tao Luo, Shaoli Liu, Shijin Zhang, Liqiang He, Jia
+Wang, Ling Li, Tianshi Chen, Zhiwei Xu, Ninghui Sun, et al.
+DaDianNao: A machine-learning supercomputer. In Proceedings
+of the 47th Annual IEEE/ACM International Symposium on Microarchitecture, pages 609–622. IEEE Computer Society, 2014.
+Norman P. Jouppi, Cliff Young, Nishant Patil, David Patterson,
+Gaurav Agrawal, Raminder Bajwa, Sarah Bates, Suresh Bhatia,
+Nan Boden, Al Borchers, Rick Boyle, Pierre-luc Cantin, Clifford Chao, Chris Clark, Jeremy Coriell, Mike Daley, Matt Dau,
+Jeffrey Dean, Ben Gelb, Tara Vazir Ghaemmaghami, Rajendra
+Gottipati, William Gulland, Robert Hagmann, C. Richard Ho,
+Doug Hogberg, John Hu, Robert Hundt, Dan Hurt, Julian Ibarz,
+Aaron Jaffey, Alek Jaworski, Alexander Kaplan, Harshit Khaitan,
+Daniel Killebrew, Andy Koch, Naveen Kumar, Steve Lacy, James
+Laudon, James Law, Diemthu Le, Chris Leary, Zhuyuan Liu, Kyle
+Lucke, Alan Lundin, Gordon MacKean, Adriana Maggiore, Maire
+Mahony, Kieran Miller, Rahul Nagarajan, Ravi Narayanaswami,
+Ray Ni, Kathy Nix, Thomas Norrie, Mark Omernick, Narayana
+Penukonda, Andy Phelps, Jonathan Ross, Matt Ross, Amir Salek,
+Emad Samadiani, Chris Severn, Gregory Sizikov, Matthew Snelham, Jed Souter, Dan Steinberg, Andy Swing, Mercedes Tan, Gregory Thorson, Bo Tian, Horia Toma, Erick Tuttle, Vijay Vasudevan,
+Richard Walter, Walter Wang, Eric Wilcox, and Doe Hyun Yoon.
+In-datacenter performance analysis of a tensor processing unit. In
+Proceedings of the 44th Annual International Symposium on Computer
+Architecture, ISCA’17, pages 1–12, New York, NY, USA, 2017. ACM.
+Ali Shafiee, Anirban Nag, Naveen Muralimanohar, Rajeev Balasubramonian, John Paul Strachan, Miao Hu, R Stanley Williams,
+and Vivek Srikumar. ISAAC: A convolutional neural network
+accelerator with in-situ analog arithmetic in crossbars. In Proceedings of the 43rd International Symposium on Computer Architecture,
+ISCA’16, pages 14–26. IEEE Press, 2016.
+Ping Chi, Shuangchen Li, Cong Xu, Tao Zhang, Jishen Zhao, Yongpan Liu, Yu Wang, and Yuan Xie. PRIME: A novel processing-inmemory architecture for neural network computation in ReRAMbased main memory. In Proceedings of the 43rd International Symposium on Computer Architecture, ISCA’16, pages 27–39, Piscataway,
+NJ, USA, 2016. IEEE Press.
+Aayush Ankit, Izzat El Hajj, Sai Rahul Chalamalasetti, Geoffrey
+Ndu, Martin Foltin, R Stanley Williams, Paolo Faraboschi, Wenmei W Hwu, John Paul Strachan, Kaushik Roy, and Milojicic
+Dejan. Puma: A programmable ultra-efficient memristor-based
+accelerator for machine learning inference. In Proceedings of
+the Twenty-Fourth International Conference on Architectural Support
+for Programming Languages and Operating Systems, pages 715–731.
+ACM, 2019.
+Ming Cheng, Lixue Xia, Zhenhua Zhu, Yi Cai, Yuan Xie, Yu Wang,
+and Huazhong Yang. Time: A training-in-memory architecture for
+memristor-based deep neural networks. In Proceedings of the 54th
+Annual Design Automation Conference 2017, page 26. ACM, 2017.
+Linghao Song, Xuehai Qian, Hai Li, and Yiran Chen. Pipelayer:
+A pipelined ReRAM-based accelerator for deep learning. In High
+Performance Computer Architecture (HPCA), 2017 IEEE International
+Symposium on, pages 541–552. IEEE, 2017.
+Emmanuelle J Merced-Grafals, Noraica Dávila, Ning Ge, R Stanley
+Williams, and John Paul Strachan. Repeatable, accurate, and
+high speed multi-level programming of memristor 1t1r arrays for
+
+=== page 13 ===
+13
+
+power efficient analog computing applications. Nanotechnology,
+27(36):365202, 2016.
+[10] Matthew J Marinella, Sapan Agarwal, Alexander Hsia, Isaac
+Richter, Robin Jacobs-Gedrim, John Niroula, Steven J Plimpton,
+Engin Ipek, and Conrad D James. Multiscale co-design analysis
+of energy, latency, area, and accuracy of a ReRAM analog neural
+training accelerator. IEEE Journal on Emerging and Selected Topics in
+Circuits and Systems, 8(1):86–101, 2018.
+[11] Pritish Narayanan, Alessandro Fumarola, Lucas L Sanches, Kohji
+Hosokawa, SC Lewis, Robert M Shelby, and Geoffrey W Burr.
+Toward on-chip acceleration of the backpropagation algorithm using nonvolatile memory. IBM Journal of Research and Development,
+61(4/5):11–1, 2017.
+[12] Paulius Micikevicius, Sharan Narang, Jonah Alben, Gregory Diamos, Erich Elsen, David Garcia, Boris Ginsburg, Michael Houston, Oleksii Kuchaev, Ganesh Venkatesh, et al. Mixed precision
+training. arXiv preprint arXiv:1710.03740, 2017.
+[13] Shuang Wu, Guoqi Li, Feng Chen, and Luping Shi. Training and
+inference with integers in deep neural networks. arXiv preprint
+arXiv:1802.04680, 2018.
+[14] David E Rumelhart, Geoffrey E Hinton, and Ronald J Williams.
+Learning internal representations by error propagation. Technical
+report, California Univ San Diego La Jolla Inst for Cognitive
+Science, 1985.
+[15] Miao Hu, Catherine Graves, Can Li, Yunning Li, Ning Ge, Eric
+Montgomery, Noraica Davila, Hao Jiang, R. Stanley Williams,
+J. Joshua Yang, Qiangfei Xia, and John Paul Strachan. Memristorbased analog computation and neural network classification with
+a dot product engine. Advanced Materials, 2018.
+[16] Xiaoxiao Liu, Mengjie Mao, Beiye Liu, Hai Li, Yiran Chen, Boxun
+Li, Yu Wang, Hao Jiang, Mark Barnell, Qing Wu, et al. RENO:
+A high-efficient reconfigurable neuromorphic computing accelerator design. In Design Automation Conference (DAC), 2015 52nd
+ACM/EDAC/IEEE, pages 1–6. IEEE, 2015.
+[17] Yulhwa Kim, Hyungjun Kim, Daehyun Ahn, and Jae-Joon Kim.
+Input-splitting of large neural networks for power-efficient accelerator with resistive crossbar memory array. In Proceedings of
+the International Symposium on Low Power Electronics and Design,
+page 41. ACM, 2018.
+[18] Son Ngoc Truong and Kyeong-Sik Min. New memristor-based
+crossbar array architecture with 50-% area reduction and 48-%
+power saving for matrix-vector multiplication of analog neuromorphic computing. Journal of semiconductor technology and science,
+14(3):356–363, 2014.
+[19] Boris Murmann. ADC performance survey 1997-2011. http://www.
+stanford. edu/˜ murmann/adcsurvey. html, 2011.
+[20] Mehdi Saberi, Reza Lotfi, Khalil Mafinezhad, and Wouter A
+Serdijn. Analysis of power consumption and linearity in capacitive digital-to-analog converters used in successive approximation
+ADCs. IEEE Transactions on Circuits and Systems I: Regular Papers,
+58(8):1736–1748, 2011.
+[21] Anirban Nag, Rajeev Balasubramonian, Vivek Srikumar, Ross
+Walker, Ali Shafiee, John Paul Strachan, and Naveen Muralimanohar. Newton: Gravitating towards the physical limits of
+crossbar acceleration. IEEE Micro, 38(5):41–49, 2018.
+[22] Yonatan Geifman. cifar-vgg. https://github.com/geifmany/cifarvgg/blob/master/README.md, 2018.
+[23] BVLC. caffe. https://github.com/BVLC/caffe/wiki/Modelsaccuracy-on-ImageNet-2012-val, 2017.
+[24] Dominic Masters and Carlo Luschi. Revisiting small batch training
+for deep neural networks. arXiv preprint arXiv:1804.07612, 2018.
+[25] Zhiyuan Chen and Bing Liu. Lifelong machine learning. Synthesis
+Lectures on Artificial Intelligence and Machine Learning, 10(3):1–145,
+2016.
+[26] Bradly C Stadie, Sergey Levine, and Pieter Abbeel. Incentivizing
+exploration in reinforcement learning with deep predictive models. arXiv preprint arXiv:1507.00814, 2015.
+[27] Zhiqiang Wei, Y Kanzawa, K Arita, Y Katoh, K Kawai, S Muraoka,
+S Mitani, S Fujii, K Katayama, M Iijima, et al. Highly reliable taox
+reram and direct evidence of redox reaction mechanism. In 2008
+IEEE International Electron Devices Meeting, pages 1–4. IEEE, 2008.
+[28] J Joshua Yang, M-X Zhang, John Paul Strachan, Feng Miao,
+Matthew D Pickett, Ronald D Kelley, G Medeiros-Ribeiro, and
+R Stanley Williams. High switching endurance in tao x memristive
+devices. Applied Physics Letters, 97(23):232102, 2010.
+[29] Wei
+Yang.
+pytorch-classification.
+https://github.com/bearpaw/pytorchclassification/blob/master/TRAINING.md, 2017.
+
+[30] Xuanyao Fong, Yusung Kim, Rangharajan Venkatesan, Sri Harsha
+Choday, Anand Raghunathan, and Kaushik Roy. Spin-transfer
+torque memories: Devices, circuits, and systems. Proceedings of
+the IEEE, 104(7):1449–1488, 2016.
+[31] Linghao Song, Youwei Zhuo, Xuehai Qian, Hai Li, and Yiran Chen.
+GraphR: Accelerating graph processing using ReRAM. In High
+Performance Computer Architecture (HPCA), 2018 IEEE International
+Symposium on, pages 531–543. IEEE, 2018.
+[32] Ben Feinberg, Uday Kumar Reddy Vengalam, Nathan Whitehair,
+Shibo Wang, and Engin Ipek. Enabling scientific computing on
+memristive accelerators. In 2018 ACM/IEEE 45th Annual International Symposium on Computer Architecture, ISCA’18, pages 367–382.
+IEEE, 2018.
+[33] Daichi Fujiki, Scott Mahlke, and Reetuparna Das. In-memory data
+parallel processor. In Proceedings of the Twenty-Third International
+Conference on Architectural Support for Programming Languages and
+Operating Systems, pages 1–14. ACM, 2018.
+[34] Robert LiKamWa, Yunhui Hou, Julian Gao, Mia Polansky, and Lin
+Zhong. RedEye: analog ConvNet image sensor architecture for
+continuous mobile vision. In Proceedings of the 43rd International
+Symposium on Computer Architecture, ISCA’16, pages 255–266. IEEE
+Press, 2016.
+[35] Prakalp Srivastava, Mingu Kang, Sujan K Gonugondla, Sungmin
+Lim, Jungwook Choi, Vikram Adve, Nam Sung Kim, and Naresh
+Shanbhag. PROMISE: an end-to-end design of a programmable
+mixed-signal accelerator for machine-learning algorithms. In
+Proceedings of the 45th Annual International Symposium on Computer
+Architecture, ISCA’18, pages 43–56. IEEE Press, 2018.
+[36] Mingyu Gao, Jing Pu, Xuan Yang, Mark Horowitz, and Christos
+Kozyrakis. Tetris: Scalable and efficient neural network acceleration with 3d memory. In Proceedings of the Twenty-Second
+International Conference on Architectural Support for Programming
+Languages and Operating Systems, pages 751–764. ACM, 2017.
+[37] Duckhwan Kim, Jaeha Kung, Sek Chai, Sudhakar Yalamanchili,
+and Saibal Mukhopadhyay. Neurocube: A programmable digital
+neuromorphic architecture with high-density 3d memory. In
+Proceedings of the ACM/IEEE 43rd Annual International Symposium
+on Computer Architecture, ISCA’16, pages 380–392. IEEE, 2016.
+[38] Shuangchen Li, Dimin Niu, Krishna T Malladi, Hongzhong
+Zheng, Bob Brennan, and Yuan Xie. Drisa: A DRAM-based
+reconfigurable in-situ accelerator. In Proceedings of the 50th Annual
+IEEE/ACM International Symposium on Microarchitecture, pages 288–
+301. ACM, 2017.
+[39] Swagath Venkataramani, Ashish Ranjan, Subarno Banerjee, Dipankar Das, Sasikanth Avancha, Ashok Jagannathan, Ajaya Durg,
+Dheemanth Nagaraj, Bharat Kaul, Pradeep Dubey, and Anand
+Raghunathan. ScaleDeep: a scalable compute architecture for
+learning and evaluating deep networks. In Proceedings of the 44th
+Annual International Symposium on Computer Architecture, ISCA’17,
+pages 13–26, New York, NY, USA, 2017. ACM.
+[40] Dhiraj Kalamkar, Dheevatsa Mudigere, Naveen Mellempudi, Dipankar Das, Kunal Banerjee, Sasikanth Avancha, Dharma Teja
+Vooturi, Nataraj Jammalamadaka, Jianyu Huang, Hector Yuen,
+et al. A study of bfloat16 for deep learning training. arXiv preprint
+arXiv:1905.12322, 2019.
+[41] Naigang Wang, Jungwook Choi, Daniel Brand, Chia-Yu Chen, and
+Kailash Gopalakrishnan. Training deep neural networks with 8-bit
+floating point numbers. In Advances in neural information processing
+systems, pages 7675–7684, 2018.
+[42] Yukuan Yang, Shuang Wu, Lei Deng, Tianyi Yan, Yuan Xie, and
+Guoqi Li. Training high-performance and large-scale deep neural
+networks with full 8-bit integers. arXiv preprint arXiv:1909.02384,
+2019.
+[43] Sapan Agarwal, Steven J Plimpton, David R Hughart, Alexander H Hsia, Isaac Richter, Jonathan A Cox, Conrad D James, and
+Matthew J Marinella. Resistive memory device requirements for a
+neural algorithm accelerator. In 2016 International Joint Conference
+on Neural Networks (IJCNN), pages 929–938. IEEE, 2016.
+[44] Chenchen Liu, Miao Hu, John Paul Strachan, and Hai Helen Li.
+Rescuing memristor-based neuromorphic design with high defects. In Proceedings of the 54th Annual Design Automation Conference
+2017, page 87. ACM, 2017.
+[45] Lerong Chen, Jiawen Li, Yiran Chen, Qiuping Deng, Jiyuan Shen,
+Xiaoyao Liang, and Li Jiang. Accelerator-friendly neural-network
+training: Learning variations and defects in RRAM crossbar. In
+Design, Automation & Test in Europe Conference & Exhibition (DATE),
+2017. IEEE, mar 2017.

@@ -1,0 +1,2212 @@
+# AESHA: Accelerating Eigen-decomposition-based Sparse Transformer with Hybrid RRAM-SRAM Architecture
+# id: W4409285593 | key: 2024_Yu_AESHA_ICCAD | ICCAD 2024 | card: ../cards/2024_Yu_AESHA_ICCAD.md
+
+
+=== page 1 ===
+AESHA: Accelerating Eigen-decomposition-based Sparse
+Transformer with Hybrid RRAM-SRAM Architecture
+Xuliang Yu1 , Tianwei Ni1 , Xinsong Sheng1 , Yun Pan1 , Lei He2 , and Liang Zhao1,∗
+1 College of Information Science and Electronic Engineering, Zhejiang University
+
+2 University of California, Los Angeles; ∗ Corresponding author email: lzhao2020@zju.edu.cn
+
+Abstract
+Compute-in-memory (CIM) architectures based on emerging nonvolatile memories (eNVM) are recognized as promising candidates
+for the efficient computation of self-attention-based Transformer
+models, which are bounded by memory-intensive dynamic computations involving large matrices. However, existing CIM-based
+approaches mostly focused on the acceleration of vector-matrix multiplications (VMM) to obtain 𝑄, 𝐾 and 𝑉 matrices for direct or sparse
+calculations of the vanilla Transformer. By storing large amounts of
+intermediate results in eNVM, the endurance limit is ignored which
+contradicts the reality of these technologies. In this work, a hybrid
+RRAM-SRAM CIM architecture to accelerate Transformers, namely
+AESHA, is proposed based on the eigen-decomposition of 𝑊𝑄 𝑊𝐾𝑇
+and the systolic in-memory attention reconstruction. By utilizing
+the features of symmetric/skew-symmetric real matrices, AESHA
+translates dynamic attention computation to RRAM-based sparse
+feature transformation and SRAM-based systolic attention reconstruction to fully exploit the advantages of both on the architectural
+level. Experiments on a broad spectrum of benchmarks demonstrate
+that AESHA delivers superior performance in terms of pipeline
+optimization and energy efficiency. Specifically, AESHA achieves
+2.59×, 2.69×, 2.62×, 2.58×, 3.08× and 7.84× maximum static RRAM
+memory footprint reduction in BERT-Base, BERT-Large, BigBird,
+Sanger, ViT-Base and ViT-Large over vanilla computation stack,
+respectively. It eliminates all runtime write access to the RRAM
+arrays to circumvent the endurance limit. Additionally, AESHA
+demonstrates 3170.0×, 95.6×, 4.1×, 19.0×, and 19.2× speedup, and
+336.0𝐾×, 12.6𝐾×, 7.3×, 23.1×, and 25.8× energy reduction over
+CPU, GPU, ReBERT, ReTransformer, and CPSAA, respectively.
+
+Keywords
+Eigen Decomposition, Self-attention Acceleration, RRAM-SRAM
+Hybrid Architecture, Compute-in-memory
+
+1
+
+Introduction
+
+The rapid advancement of artificial intelligence (AI) is fundamentally transforming the electronics industry, with technologies like
+AI-powered content creation, autonomous vehicles and smart home
+increasingly reshaping our daily lifes. As a pioneer in self-attention
+Permission to make digital or hard copies of all or part of this work for personal or
+classroom use is granted without fee provided that copies are not made or distributed
+for profit or commercial advantage and that copies bear this notice and the full citation
+on the first page. Copyrights for components of this work owned by others than the
+author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or
+republish, to post on servers or to redistribute to lists, requires prior specific permission
+and/or a fee. Request permissions from permissions@acm.org.
+ICCAD ’24, Oct 27–31, 2024, NEW JERSEY, USA
+© 2024 Copyright held by the owner/author(s). Publication rights licensed to ACM.
+ACM ISBN 979-8-4007-1077-3/24/10
+https://doi.org/10.1145/3676536.3676660
+
+neural networks, Transformer has demonstrated sweeping success
+across natural language processing [1, 2], computer vision [3] and
+multi-modal cognitive tasks [4]. Notably, Transformers adeptly capture long-range correlations of tokenized inputs (e.g., sentences
+or images) through the self-attention mechanism, thereby resulting in a global receptive field and enhanced learning capability.
+However, self-attention’s computational complexity and memory
+requirements grow quadratically with input dimension, making it
+less efficient on conventional computational hardware.
+In order to improve the energy efficiency and inference speed
+of Transformers on resource-constrained devices, extensive endeavors in dedicated accelerators based on FPGA or ASIC have
+been reported which covered a wide range of design options and
+optimization techniques. One endeavor prioritizes reducing computational overhead and memory footprint through layer-level, headwise, or token-grained entry pruning based on softmax importance
+or entropy criteria [5–8]. At the same time, another strategy employs low-rank linear approximations or low-precision network
+predictions for weak relationship detection at runtime, thereby
+omitting unnecessary computations [9–12]. A further strategy involves reordering the sparse attention matrix through packing,
+splitting, grouping, or blocking to regularize the attention matrix
+and enable its subsequent efficient computations [13, 14]. Despite
+their exceptional performances, these works still fall into the category of von-Neumann architectures featuring separated processing
+and memory units (typically DRAM). These architectures necessitate continuous retrieval of embeddings and weights from off-chip
+DRAM, creating a bottleneck for on-chip query-key computations.
+Recently, CIM architectures have emerged as a new research
+direction to accelerate Transformer computations with higher energy efficiency. These architectures merge the computation and
+model storage into the same CIM array, effectively reducing off-chip
+memory access and associated energy consumption. A substantial
+body of accelerators employ conventional memory implementations (such as SRAM and Flash) as well as eNVMs like RRAM,
+MRAM, PCM and FeRAM to accelerate VMM. Some studies [15–
+18] explore eNVM-friendly data access through techniques like
+matrix decomposition or fine-grained dataflow designs to accelerate the VMM primitive in attention computation. Other studies
+[15, 19] focus on optimizing the maximum value search in softmax
+by investigating logic-in-memory or content-addressable matching.
+In addition to these approaches, some research [20–23] employs
+heterogeneous RRAM-SRAM CIM designs to balance low-precision
+prediction and exact computation workloads towards providing
+low-power and efficient solutions.
+Despite the potential of CIM-based designs for Transformers, it
+is often difficult to strike a fair balance between accelerating the attention computation and minimizing the memory footprint. Heavy
+
+=== page 2 ===
+ICCAD ’24, Oct 27–31, 2024, NEW JERSEY, USA
+
+2
+2.1
+
+Background and Motivations
+Background
+
+Self-Attention in Transformers. Fig. 1(a) illustrates the transformer architecture consisting of multi-head self-attention (MHSA)
+and feed-forward network (FFN) modules. The flow of vanilla selfattention is further elucidated in Fig. 1(b)-(i). First, three feature
+matrices from the same token sequence are calculated via linear
+transformation, namely query (𝑄), key (𝐾), and value (𝑉 ). Each feature is a dense matrix with size R𝑁 ×𝑑 , where 𝑁 is the token number
+and 𝑑 is the head-wise feature size. Next, the attention score matrix
+𝑆 ∈ R𝑁 ×𝑁 is computed by taking the dot-product of query and key,
+the element of which indicates the similarity between a specific
+pair of tokens. Subsequently, the row-wise Softmax normalizes the
+attention scores and enhances the largest elements. In accelerator
+
+SA Head-0
+
+SA Head-1
+
+...
+
+SA Head-N
+
+MHSA
+
+Token Embedding & Positional Encoding
+
+Concatenation & Linear Transformation
+Residual Addition & Layer Normalization
+
+Linear Layer-0
+Linear Layer-1
+Residual Addition & Layer Normalization
+Downstream Task
+
+FFN
+
+stationary memory footprint and frequent intermediate memory
+write pressure persist in most prior arts. Some approaches [24, 25]
+reduce on-chip memory occupancy of partial feature vectors by
+confining attention windows or blocks. However, this comes at
+the sacrifice of the model’s accuracy. Alternative methods such as
+SPRINT [20] and HARDSEA [21] leverage dynamic sparse attention
+features to reduce ineffective computations. Nevertheless, these
+methods still necessitate preserving entire feature vectors for attention recomputation. In this context, exploring a structured prunable
+computation pipeline and acceleration architecture remains crucial.
+Instead of solely optimizing the pipeline based on the matrix
+transposition property and associative law of matrix multiplication,
+we leverage the quadratic coupling of input concerning attention
+weights in self-attention to design a novel pipeline named AESHA.
+AESHA aims to reduce static weight and intermediate activations
+occupancy through structured pruning. Furthermore, we propose
+a heterogeneous CIM-based architecture to accelerate attention
+reconstruction by combining the merits of RRAM and SRAM. The
+major contributions of this work are summarized as follows:
+• We propose a novel eigen-decomposition-based attention
+computation pipeline, which equivalently transforms attention computation into the orthogonal feature transformation
+plus the outer-product-based attention reconstruction to
+optimize the dataflow’s compatibility with CIM.
+• We propose an adaptive energy-distribution threshold-based
+pruning strategy, which achieves feature space compression
+with principal feature vector retention in head granularity,
+thus effectively reducing the memory occupation of static
+weights and intermediate activations.
+• We introduce a heterogeneous CIM implementation featuring a hybrid dataflow for versatile computation tasks in the
+eigen-decomposition-based attention paradigm. Specifically,
+we utilize analog weight-stationary (WS) based RRAM-CIM
+for feature transformations, and digital output-stationary
+(OS) based SRAM-CIM for attention reconstruction.
+• Extensive experiments and ablation studies on various transformer models consistently validate the advantages of our
+proposed AESHA framework, with throughput and energy
+efficiency advantages over both general computing platforms
+CPUs, GPUs, and prior RRAM-based Transformer accelerators ReBERT [24], ReTransformer [15] and CPSAA [16].
+
+X. Yu and T. Ni, et al.
+
+(i) ReBERT
+WQ Q=XWQ
+WK K=XWK
+KT
+S=QKT
+V
+WV V=XWV
+Z=SV
+(ii) ReTransformer
+WQ Q=XWQ
+R=QWTK
+WTK
+WV
+P=SX Z=PWV
+S=RXT
+XT
+(iii) CPSAA
+WS M=XWS
+Writing
+WV V=XWV
+V
+Z=SV VMM
+XT
+S=MXT
+Softmax
+
+(a)
+
+(b)
+
+Figure 1: (a) Transformer structure. (b) Attention computation pipeline, i-iii denote vanilla self-attention (SA), ReTransformer [15], and CPSAA [16] respectively.
+designs, masked Softmax (see Equation 1) are often used to skip
+weak-related tokens for more efficient attention aggregation.
+
+exp(𝑆𝑖 𝑗 ) ⊙ 𝑀𝑖 𝑗
+1 𝑖 𝑓 𝑆𝑖 𝑗 ≥ 𝜃
+, 𝑀𝑖 𝑗 =
+(1)
+𝑆ˆ𝑖 𝑗 = Í𝑁
+0
+𝑖 𝑓 𝑆𝑖 𝑗 < 𝜃
+𝑗=1 exp(𝑆𝑖 𝑗 ) ⊙ 𝑀𝑖 𝑗
+where 𝜃 denotes the threshold values and the mask 𝑀𝑖 𝑗 redistributes
+the importance of each token: a token contributes to context aggregation when 𝑀𝑖 𝑗 = 1; otherwise, its influence is disregarded.
+Furthermore, the output matrix 𝑍 ∈ R𝑁 ×𝑑 of each head is obtained by the weighted sum of the value set proportional to measured correlations. Finally, the ensembled features of ℎ heads are
+fused by a projection matrix 𝑊𝑂 , as shown in Equation 2.
+𝑂 = Concat (𝑍 1, 𝑍 2, ..., 𝑍ℎ )𝑊𝑂 + 𝑏𝑂
+
+(2)
+
+The output from the MHSA module will go through the FFN,
+comprising successive linear layers followed by non-linear activation, which can be succinctly formulated as:
+FFN (𝑂) = 𝜎 (𝑂𝑊FFN1 + 𝑏 FFN1 )𝑊FFN2 + 𝑏 FFN2
+
+(3)
+
+where 𝑊FFN1,𝑊FFN2, 𝑏 FFN1 and 𝑏 FFN2 denote the linear weights and
+biases, while 𝜎 (·) is the nonlinear activation such as ReLU/GeLU.
+
+2.2
+
+Motivation
+
+Fig. 1(b) outlines some notable pipeline optimization efforts in
+existing RRAM-based attention accelerators (ReTransformer and
+CPSAA). These efforts primarily focus on mitigating data computewrite-compute (CWC) dependencies or shortening the computation
+sequence. Nevertheless, they still contain the dimension coupling
+between feature weight matrices (e.g., 𝑊𝑄 and 𝑊𝐾 ), making it difficult to apply canonical pruning strategies of deep neural networks
+to compress attention weights. Even if compression scenarios are
+achieved by matching the dimensions of query and key weights, it
+is still challenging to establish optimization objectives for adaptive
+attention recovery because the associated low-rank approximation
+in attention maps may significantly lower the accuracy.
+Furthermore, existing RRAM-based attention computation stacks
+overlook the limitation of its endurance. In these studies, the dynamic input embeddings or intermediate activation results are frequently written into the RRAM arrays, which are used as buffer
+memory. However, the endurance of commercial RRAM technologies is capped at approximately 106 cycles according to multiple
+sources [26, 27], which contradicts with the high writing demands
+of buffer memory. Minimizing the writing of intermediate results
+
+=== page 3 ===
+AESHA: Accelerating Eigen-decomposition-based Sparse Transformer with Hybrid RRAM-SRAM Architecture
+
+ICCAD ’24, Oct 27–31, 2024, NEW JERSEY, USA
+
+blocks symmetrically along the main diagonal, as outlined below:
+
+(a)
+
+𝑆 = 𝑆𝑅 + 𝑆𝐴 = 𝑋𝑊𝑆 𝑋 𝑇 = 𝑋 (𝑊𝑅 + 𝑊𝐴 )𝑋 𝑇
+::
+
+𝑇
+𝑇
+)𝑋 𝑇
+= 𝑋 (𝑊𝑃𝑅 Σ𝑅𝑊𝑃𝑅
+)𝑋 𝑇 + 𝑋 (𝑊𝑃𝐴 Σ𝐴𝑊𝑃𝐴
+::::::::
+
+Transpose(·)
+
+Real
+Proj
+Softmax
+
+Transpose(·)
+
+(b)
+
+𝑇
+𝑇
+= (𝑋𝑊𝑃𝑅 ) Σ𝑅 (𝑊𝑃𝑅
+𝑋 𝑇 ) + (𝑋𝑊𝑃𝐴 ) Σ𝐴 (𝑊𝑃𝐴
+𝑋𝑇 )
+| {z }
+| {z }
+𝑃𝑅
+
+Feature Transformation
+
+𝑃𝐴
+
+
+Σ𝑅 = diag 𝜎𝑅,1 , 𝜎𝑅,2 , · · · , 𝜎𝑅,𝐷𝑅 ; 𝐷𝑅 = 2 × 𝐷𝐴
+n 0 𝜎   0 𝜎 
+ 0
+Σ𝐴 = diag −𝜎𝐴,1 𝐴,1
+, −𝜎𝐴,2 𝐴,2
+, · · · , −𝜎𝐴,𝐷
+0
+0
+
+Imag
+Proj
+
+Attention Reconstruction
+
+Figure 2: (a) The attention weight matrix decomposition principle and (b) AESHA pipeline.
+into RRAM (or other eNVM) is imperative for improving the longterm viability of eNVM-based CIM for edge inference applications.
+Thus, the primary motivation of this work is to explore a computation pipeline optimization scheme that combines enhancing
+computation efficiency with minimizing memory footprint. As described in the following sections, an algorithm-architecture cooptimization strategy is adopted to overcome the discrepancy between pipeline efficiency, model accuracy and endurance limitation.
+
+Algorithm Optimization
+
+3.1
+
+Optimized Pipeline
+
+= (𝑋 · 𝑊𝑄 ) · (𝑊𝐾𝑇 · 𝑋 𝑇 ) = 𝑋 · (𝑊𝑄 · 𝑊𝐾𝑇 ) ·𝑋 𝑇
+| {z }
+
+(4)
+
+𝑊𝑆
+
+Rank (𝑊𝑆 ) ≤ min{Rank (𝑊𝑄 ), Rank (𝑊𝐾 )} ≤ 𝑑
+
+(5)
+
+Drawing inspiration from factorization theory [28], arbitrary
+square matrix 𝑊𝑆 ∈ R𝐷 ×𝐷 can be uniquely decomposed into symmetric and skew-symmetric components, as expressed below:
+
+𝑊𝑅 :real-symmetric matrix
+
++
+
+(8)
+
+𝑆=
+
+𝐷𝑅
+∑︁
+
+𝜎𝑅,𝑖 𝑃𝑅 [:, 𝑖 ] · 𝑃𝑅 [:, 𝑖 ]𝑇 +
+
+𝐷𝐴
+∑︁
+
+𝜎𝐴,2𝑖 {𝑃𝐴 [:, 2𝑖 − 1] · 𝑃𝐴 [:, 2𝑖 ]𝑇
+
+𝑖=1
+
+(9)
+
+The above formulations effectively diagonalize the 𝑊𝑆 matrices
+and lay the foundation for subsequent new architectural designs.
+
+3.2
+
+Energy-distribution-based Pruning Strategy
+
+Given the low-rank structures within the attention weight matrix 𝑊𝑅 and 𝑊𝐴 , we propose an energy-aware pruning strategy to
+reduce memory footprint through head-level threshold searching.
+Since the eigenvectors can be arranged to match the diagonal
+eigenvalues within Σ, we sort the eigenvalues by absolute magnitude in descending order, yielding the sorted eigen-matrices (i.e.,
+′ and 𝑊 ′ ) along with the diagonal matrices(i.e., Σ′ and Σ′ ).
+𝑊𝑃𝑅
+𝑃𝐴
+𝑅
+𝐴
+The element in Σ′ meets the following criteria:
+′
+′
+′
+′
+′
+′
+|; |𝜎𝐴,1
+| (10)
+|𝜎𝑅,1
+| ≥ |𝜎𝑅,2
+| ≥ · · · ≥ |𝜎𝑅,𝐷
+| ≥ |𝜎𝐴,2
+| ≥ · · · ≥ |𝜎𝐴,𝐷
+𝑅
+𝐴
+
+𝑆 = 𝑄 · 𝐾 𝑇 = (𝑋 · 𝑊𝑄 ) · (𝑋 · 𝑊𝐾 )𝑇
+
+(𝑊𝑆 + 𝑊𝑆𝑇 )/2
+|
+{z
+}
+
+𝜎𝐴,𝐷𝐴 o
+0
+
+− 𝑃𝐴 [:, 2𝑖 ] · 𝑃𝐴 [:, 2𝑖 − 1]𝑇 }
+
+Unlike previous pipeline optimizations, this work considers the
+quadratic relationship between input and attention weight matrix,
+introducing an eigen-decomposition-based stack to reduce computation path latency and static memory occupancy (see Fig. 2).
+It is observed that the attention weight matrix 𝑊𝑆 ∈ R𝐷 ×𝐷 ,
+formed by the product of the query and key weight matrices, exhibits strong low-rank characteristics (𝑑 << 𝐷), as expressed in
+Equations 4-5. The low-rank feature of 𝑊𝑆 suggests that the attention weight matrix contains redundant information, allowing
+reconstruction of the eigenspace with only 𝑑 eigenvectors.
+
+𝑊𝑆 =
+
+𝐴
+
+where 𝑃𝑅 and 𝑃𝐴 denote the mappings of the input embeddings
+in the real and imaginary feature spaces, respectively. Here, 𝐷𝐴
+signifies the number of eigenvalue pairs of the skew-symmetric
+matrix, which is half of the embedding dimension 𝐷𝑅 . 𝑆𝑅 and 𝑆𝐴
+refer to the symmetric and skew-symmetric components of the
+attention score matrix (For more details, see Fig. 2(b)).
+Capitalizing on the property that a symmetric matrix can be
+effectively reconstructed from the sum of the outer products of its
+eigenvectors, we can further translate Equation 7 into the following
+formulation:
+
+𝑖=1
+
+3
+
+(7)
+
+(𝑊𝑆 − 𝑊𝑆𝑇 )/2
+|
+{z
+}
+
+(6)
+
+𝑊𝐴 :skew-symmetric matrix
+
+Expanding upon spectral-decomposition principles [29, 30], we
+can further decompose the two symmetric matrices using 𝑈 Σ𝑈 𝑇 to
+ascertain the eigenbases of the attention weight matrix in both the
+real and imaginary spaces. In this context, 𝑈 represents the orthogonal matrix that satisfies the property 𝑈𝑈 𝑇 = 𝐼 . The eigenvalues 𝜎𝑅,𝑖
+in the real space are distributed along the major diagonal, whereas
+the eigenvalues 𝜎𝐴,𝑖 in the imaginary space are paired in 2 × 2
+
+To standardize the variability in eigenvalues, we develop an
+energy-separability-based criterion, namely 𝜌𝑘 , as defined in Equation 11, which entails dividing the square of each eigenvalue by the
+sum of squares of all elements within the entire vector.
+𝜌𝑘 =
+
+𝜎𝑘′2
+∥𝜎 ′ ∥ 22
+
+𝜎 ′2
+= Í𝑁 𝑘
+′ 2
+𝑖=1 (𝜎𝑖 )
+
+′
+′
+(𝜎𝑘′ = 𝜎𝑅,𝑘
+or 𝜎𝐴,𝑘
+)
+
+(11)
+
+Upon this basis, we can transform the low-rank matrix estimation
+into the search for energy-distribution-based threshold, denoted by
+𝜏 ∈ [0, 1]. By retaining the Top-k eigenvalues and their corresponding eigenvectors that meet the energy threshold, the symmetric
+matrix can be approximated as follows:
+#
+#
+#𝑇
+#
+#
+𝑊𝑅 ≈ 𝑊𝑃𝑅
+Σ𝑅
+𝑊𝑃𝑅
+,𝑊𝑃𝑅
+∈ R𝐷 ×𝑘 , diag(Σ𝑅
+) ∈ R𝑘
+#
+#
+#𝑇
+#
+#
+𝑊𝐴 ≈ 𝑊𝑃𝐴
+Σ𝐴
+𝑊𝑃𝐴
+,𝑊𝑃𝐴
+∈ R𝐷 ×𝑘 , diag(Σ𝐴
+) ∈ R𝑘
+
+𝑘 = min{min{𝑘 1 |
+
+𝑘1
+∑︁
+𝑖=1
+
+𝜌𝑅,𝑘 ≥ 𝜏 }, min{𝑘 2 |
+
+𝑘2
+∑︁
+𝑖=1
+
+𝜌𝐴,𝑘 ≥ 𝜏 } }
+
+(12)
+(13)
+
+=== page 4 ===
+ICCAD ’24, Oct 27–31, 2024, NEW JERSEY, USA
+
+X. Yu and T. Ni, et al.
+
+6T
+
+6T
+
+6T
+
+Adder
+
+6T
+
+6T
+
+6T
+
+6T
+
+6T
+
+6T
+
+Adder&Subtractor
+
+SRAM
+(Value Storage)
+
+SRAM-CIM
+for S*V
+
+×16 for 16 heads
+
+6T
+
+6T
+
+Probability
+
+6T
+
+6T
+
+Decoder
+
+6T
+
+Multiplier
+6T
+
+Mask-guided Recomputation
+
+Head Concatnation
+MLP and FFN Engine
+
+SRAM-CIM for Dynamic Attention Computation
+
+Figure 3: AESHA accelerator architecture.
+VOFF
+
+BL/SL Decoder
+
+WL
+Vread
+SL
+
+SL
+
+VON I11
+
+Vread
+
+G11
+
+G21
+I21
+
+WL
+
+BL I22
+
+I1=I11+I12
+
+BL
+I2=I21+I22
+
+Mux
+Decoder
+
+SL
+
+...
+
+BL
+
+n cells as one synapse
+
+...
+
+...
+
+I12
+
+G22
+
+WL
+RRAM
+
+...
+
+G12
+
+WL Switch Matrix
+
+where 𝜆𝑂 and 𝜆𝐻 represent the balance parameters for the orthogonality loss and sparsity-inducing regularization loss respectively.
+By this point, we can implement the lightweight model deployment. Initially, we parallelize input feature transformation onto
+three distinct feature spaces, namely 𝑊𝑃𝑅 , 𝑊𝑃𝐴 , and 𝑊𝑉 . Subsequently, the outer product accumulation of input-related features is
+achieved. Finally, attention vectors are fetched for context aggregation. Through the co-optimization of algorithms and architecture,
+
+6T
+
+Fused-Softmax Engine
+
+(17)
+
+6T
+
+Mask
+Generation
+
+L𝑡𝑜𝑡𝑎𝑙 = L𝑇 + 𝜆𝑂 L𝑂 + 𝜆𝐻 L𝐻
+
+(16)
+
+SA
+
+Multiplier
+6T
+
+Buffer-1
+Buffer-2
+
+RRAM
+(WV Storage)
+
+Non-linear
+Operator
+
+# # #𝑇
+′
+′
+′𝑇 2
++ ∥𝑊𝑃𝐴
+Σ𝐴𝑊𝑃𝐴 − 𝑊𝑃𝐴
+Σ𝐴
+𝑊𝑃𝐴
+∥𝐹
+
+Buffer-1
+Buffer-2
+
+RRAM
+(WPA Storage)
+
+Decoder
+
+#
+#
+#
+# # #𝑇
+′ ′
+′𝑇 2
+L𝑇 (𝑊𝑃𝑅
+, Σ𝑅# ,𝑊𝑃𝐴
+, Σ𝐴
+) = ∥𝑊𝑃𝑅
+Σ𝑅𝑊𝑃𝑅 − 𝑊𝑃𝑅
+Σ𝑅𝑊𝑃𝑅
+∥𝐹
+
+SR
+
+CIM for V
+
+CIM for PA
+
+Buffer-1
+Buffer-2
+
+Decoder
+
+In addition to the above training objectives, it’s crucial to maintain the proximity between the raw symmetric matrices and the reconstructed counterparts, derived from the truncated eigen-matrices
+and diagonal eigenvalue vectors. Therefore, we incorporate the
+mean square error (MSE) loss, denoted as L𝑇 , into the overall objective function L𝑡𝑜𝑡𝑎𝑙 for fine-tuning, as follows:
+
+CIM for PR
+
+RRAM
+(WPR Storage)
+
+Addr CTRL
+
+1
+#
+#
+#
+#𝑇
+#
+#𝑇
+𝑊𝑃𝑅
+− 𝐼 ∥ 2𝐹 + ∥𝑊𝑃𝐴
+L𝑂 (𝑊𝑃𝑅
+,𝑊𝑃𝐴
+) = 2 (∥𝑊𝑃𝑅
+𝑊𝑃𝐴
+− 𝐼 ∥ 2𝐹 ) (14)
+𝑘
+where ∥ · ∥ 𝐹 and 𝐼 denote the Frobenius norm and Identity matrix.
+For the choice of sparsity-inducing regularizer, we employ the
+Hoyer regularization constraint [31] on eigenvectors diag(Σ𝑅′ )and
+′ ), as depicted in Equation 15. Due to its scale-invariance,
+diag(Σ𝐴
+this regularizer will promote the sparsity while retaining most of
+the energy in the eigenspace.
+Í ′
+∥𝜎 ′ ∥ 1
+𝑖 |𝜎𝑖 |
+L𝐻 (𝜎) = ′ = √︃
+(15)
+Í ′2
+∥𝜎 ∥ 2
+𝑖 𝜎𝑖
+
+Global Memory for Token Embedding/Eigen-values Storage
+
+Global Controller&Interface
+
+where 𝑘 denotes the minimum rank satisfying the threshold constraint for each pair of symmetric and skew-symmetric matrices,
+and # is used to indicate the pruned matrix.
+Furthermore, we employ a two-stage threshold search strategy
+to determine the eigenspace pruning thresholds in each encoder
+block precisely. Initially, we set a global threshold 𝑔𝜏 to one for all
+eigen-matrices and gradually decrement it by a unit step 𝜏𝑢𝑛𝑖𝑡 until
+the accuracy loss exceeds the tolerance range 𝜖. Next, we initialize
+the thresholds for all eigen-matrices to the optimal global threshold
+and adopt a greedy search to determine the lower bounds of the
+thresholds for each attention head within each encoder block by
+iteratively decreasing them by 𝜏𝑢𝑛𝑖𝑡 , aiming to maximize the pruning ratio with minimum model performance degradation. Finally,
+after truncating the last 𝑁 −𝑘 eigenbasis from the eigenspace using
+the fine-grained thresholds {𝝉 }, we can update the attention model
+through fine-tuning instead of training from scratch. This enables
+the model to automatically maximize sparsity in each attention
+head’s eigenspace during fine-tuning.
+′ and 𝑊 ′ in each attention
+During the fine-tuning process, 𝑊𝑃𝑅
+𝑃𝐴
+head are treated as free trainable parameters, hence the orthogonality of the eigenvectors will be impeded. To ensure the validity
+of eigen-decomposition and facilitate effective rank reduction via
+eigenvalue pruning, we introduce an orthogonality regularizer for
+# and 𝑊 # , as illustrated below:
+𝑊𝑃𝑅
+𝑃𝐴
+
+1T1R Crossbar Array
+
+Mux
+... ADC
+ADC
+Shift & Adder
+Buffer-1
+
+Buffer-2
+
+Ping-Pong Buffer
+
+(a)
+
+(b)
+
+Figure 4: (a) The principles of multiply-and-accumulate
+(MAC) being performed along a bit line and (b) high-level
+schematic diagram of the synaptic array.
+this new computing paradigm effectively shortens the attention
+computation path and reduces the memory writing burden.
+
+4
+
+Hardware Accelerator
+
+4.1
+
+Overall Architecture
+
+The overall architecture of AESHA (see Fig. 3) is designed with
+sixteen cores that enable concurrent processing of self-attention
+heads for feature transformation and attention reconstruction. For
+the feature transformation phase, the compressed feature weight
+# , 𝑊 # and 𝑊 ) are characterized by constant
+matrices (e.g., 𝑊𝑃𝑅
+𝑉
+𝑃𝐴
+and tiny memory footprint, making it advantageous for efficient
+mapping and VMM acceleration using RRAM-CIM. On the contrary,
+the feature embeddings in attention computation demand frequent
+memory write accesses, which can degrade RRAM-CIM durability
+and computational efficiency. Therefore, we employ the WS-based
+RRAM-CIM to implement feature transformations and OS-based
+SRAM-CIM to accelerate dynamic attention reconstruction.
+Following the completion of attention reconstruction, the results
+are retrieved row-by-row to facilitate the attention probability transformation in the fused-softmax engine. These mapped attention
+probabilities then act as attention weights for context aggregation
+within the WS-based SRAM-CIM macro.
+
+4.2
+
+RRAM-based Feature Transformation
+
+The RRAM-CIM employs a WS workflow to minimize off-chip
+weight accesses and enable in-situ computation by programming
+# and 𝑊 # ) and
+the compressed attention weight matrices (e.g., 𝑊𝑃𝑅
+𝑃𝐴
+the value matrix 𝑊𝑉 into the synaptic arrays as conductance using
+linear interpolation (as depicted in Equation 18).
+𝑔 = 𝑔min +
+
+(𝑤 − 𝑤 min )(𝑔max − 𝑔min )
+𝑤 max − 𝑤 min
+
+(18)
+
+=== page 5 ===
+AESHA: Accelerating Eigen-decomposition-based Sparse Transformer with Hybrid RRAM-SRAM Architecture
+
+Table 1: SA-based computation primitive
+
+(a)
+
+MODE
+0
+1
+2
+3
+
+(d)
+(e)
+XOR
+
+0
+1
+
+MUX
+
+MO
+
+Borrow
+
+(c)
+
+Carry
+
+(b)
+
+MUX
+
+SUM/DIF
+0
+1
+
+0
+1
+
+MUX
+
+AND
+NOR
+
+Latch Ci
+
+SEL
+
+Figure 5: Attention reconstruction engine. (a) SRAM-based
+in-situ accumulation circuit (b) Basic processing element (c)
+Multiplier output cell (d) SA-based LPU (e) Co-optimized full
+adder-subtractor.
+where 𝑔 represents the mapped value of weight 𝑤 in the conductance domain, 𝑔min and 𝑔max respectively denote the minimum and
+maximum conductance values, while 𝑤 min and 𝑤 max represent the
+minimum and maximum values of the weight.
+Subsequently, the token embeddings are converted into a binaryseries analog voltage (i.e., 𝑉𝑂𝑁 or 𝑉𝑂𝐹 𝐹 ) and fed to the WLs, while
+a read voltage (𝑉𝑟𝑒𝑎𝑑 ) is applied to the BLs. When the input value is
+set to one, the MOS transistor is turned on, causing a voltage drop
+across the RRAM and current flow from drain to source. Otherwise,
+the transistor is turned off with no current flow. The currents from
+multiple synaptic cells accumulate on the same shared SL, representing the dot product of the input and weight vectors (see Fig.
+4(a)). Analog results generated on the BLs are converted using a
+5-bit ADC. To save power and area footprint, every eight SLs share
+the same 5-bit ADC through time-division multiplexing, as shown
+in Fig. 4(b). It is worth mentioning that this binary input scenario
+and RRAM-CIM architecture simplify the input circuit design and
+eliminate sneak-path currents, while AESHA is also compatible
+with other RRAM-CIM architectures with multi-bit inputs.
+The resulting real and imaginary attention components (𝑃𝑅 and
+𝑃𝐴 ) will be transferred to the in-SRAM outer-product-based attention reconstruction module via ping-pong buffers. At the same time,
+the value set 𝑉 is written to conventional SRAM synaptic arrays
+for subsequent context aggregation in a parallel manner.
+
+4.3
+
+ICCAD ’24, Oct 27–31, 2024, NEW JERSEY, USA
+
+SRAM-based Attention Reconstruction
+
+To support outer-product-accumulation primitive in AESHA, we
+design an SRAM-based attention reconstruction engine (see Fig.
+5(a)) specifically tailored to the attention score dataflow, which
+effectively circumvents pipeline stalls and eliminates power consumption associated with writing 𝐾𝑇 or 𝑋 𝑇 to RRAM. This engine
+employs two separate cores to reconstruct the symmetric and skewsymmetric components of the attention score matrix in parallel.
+Here we use the computation of the symmetric attention matrix to
+elucidate how dynamic attention reconstruction works.
+Fundamental Working Principles. The basic processing element (PE) comprises a two-level digital multiplier and an in-SRAM
+accumulator. Initially, the feature vectors of each token enter the
+digital multiplier within PE in a skewed fashion under clock control
+to perform the element-wise dot-product computation of 𝑝𝑚,𝑖 · 𝑝𝑛,𝑖
+
+IN
+–
+BL
+BL
+Vref
+
+INB
+–
+𝐵𝐿
+Vref
+𝐵𝐿
+
+OUTB
+–
+𝑂𝑈𝑇
+𝐴𝐵
+𝐴+𝐵
+
+OUT
+–
+OUT
+𝐴𝐵
+A+B
+
+and 𝜎𝑖 · (𝑝𝑚,𝑖 · 𝑝𝑛,𝑖 ), as illustrated in Fig. 5 (b). Next, specific wordlines of SRAM and multiplication output (MO) cells are gated for
+bit-wise value comparison between these activation units. Subsequently, the sensing amplifier (SA) based logic processing unit (LPU)
+detects voltage transitions on bit-lines (BLs) to perform in-situ addition or subtraction. Finally, the accumulation results are restored
+in SRAM cells to update the attention scores. The reconstruction
+of the real and imaginary attention components finishes when all
+feature embeddings pass through the engine.
+Since skew-symmetric attention component reconstruction involves subtraction, we implement in-situ addition and subtraction
+primitive by introducing control logic on an SA-based full adder
+[32]. The process mainly consists of MO&SA-based logic comparison and full addition and subtraction arithmetic.
+❶ MO&SA-based logic comparison (see Fig. 5(c-d)). Bit-wise
+comparison of digital dot-product results with SRAM cell scores is
+done by activating WL and WL𝑀𝑂 . BL’s voltage drop is constant
+when both cells are zero-value, and vice versa. The BL voltage
+ranges from 0 to Vdd when the two ends of MOS transistor have opposing values, causing discharge. After completing the comparison
+stage, SA-based LPUs detect voltage changes on BLs and perform
+bitwise AND/OR operations by enabling EN (see Fig. 5(d)). The
+SA-based circuitry supports ordinary read mode and two logical
+primitives (see Tab. 1).
+❷ Full addition and subtraction arithmetic (see Fig. 5(e)).
+We implement the logic primitives for a 1-bit complete adder
+and subtractor according to Equation 19:
+SUM = 𝐴 ⊕ 𝐵 ⊕ 𝐶, Carry = 𝐴𝐵 + (𝐴 ⊕ 𝐵)𝐶;
+DIF = 𝐴 ⊕ 𝐵 ⊕ 𝐶, Borrow = 𝐴𝐵 + 𝐴 ⊕ 𝐵𝐶
+
+(19)
+
+However, integrating the logic AND operation for inputs A and B
+into the SRAM read circuitry remains difficult. As stated in Equation
+20, we simplify the carry and borrow output logical expression by
+employing 𝐴 ⊕ 𝐵 as a judgement condition to mitigate this risk.
+Carry = 𝐶 if 𝐴 ⊕ 𝐵 = 1 else 𝐴𝐵;
+Borrow = 𝐵 if 𝐴 ⊕ 𝐵 = 1 else 𝐶
+
+(20)
+
+where 𝐴 and 𝐵 represent a pair of 1-bit operands, 𝐶 denotes the
+carry-in and borrow-in bit. SUM and DIF denote the results of addition and subtraction. As shown in Fig. 5(e), the carry-out and
+borrow-out functions of the 1-bit full adder-subtractor is transformed into an XOR-based binary multiplexer. When the SEL is set
+to one, the subtractor is enabled. The latch is employed to retain
+carry-in and borrow-in with initialized values of zero.
+Fine-grained Array for Attention Reconstruction. We use
+the designed PE to construct the attention score stationary-based
+systolic array of size 𝑁 × 𝑁 for outer-product accumulation primitive in the AESHA pipeline (see Fig. 6(a)). However, there are
+insufficient on-chip systolic cells to implement the entire attention
+reconstruction in the systolic array for more challenging datasets
+
+=== page 6 ===
+ICCAD ’24, Oct 27–31, 2024, NEW JERSEY, USA
+
+(a)
+
+0 p12 p11
+
+0
+
+0
+
+0
+
+0 p22 p21 0
+
+0 p32 p31 0
+
+0
+
+p42 p41 0 0 0
+Data Skew
+Input data
+
+0
+
+p12 p11
+
+p22 p21 0
+
+s11 s12 s13 s14
+G1,1
+G1,2
+s21 s22 s23 s24
+s31 s32 s33 s34
+G2,1
+G2,2
+s41 s42 s43 s44
+Output data
+
+s11 s12
+G1,1
+s21 s22
+
+s13 s14
+G1,2
+s23 s24
+
+s33 s34
+G2,2
+s34 s44
+
+s31 s32
+G2,1
+s41 s42
+
+(b)
+0 p32 p31
+p42 p41 0
+
+Stage-I
+
+Stage-II
+
+X. Yu and T. Ni, et al.
+
+prevent the current token from participating in accumulator calculations by setting its FIFO queue value to zero. After the mask-valid
+Í𝑁
+tokens accumulate 𝑖=1
+exp(𝑥𝑖 − 𝑥 max ), the normalized results are
+recalculated using Equation 1. Finally, the 32-bit recomputed Softmax results are quantized again to yield the 8-bit probability.
+
+s11 s11
+s12 s12
+s13 s13
+s22 s22
+s14 s14
+s23 s23
+s24 s24
+s33 s33
+s34 s34
+s44 s44
+s11 s11
+s12 s12
+G1,1
+s22 s22
+s33 s33
+s34 s34
+G2,2
+s44 s44
+s13 s13
+s23 s23
+G1,2
+s14 s14
+s24 s24
+
+5
+5.1
+
+Figure 6: (a) Coarse-grained systolic array and (b) two-stage
+fine-grained systolic array.
+with dynamic lengthy input sequences. Using the tiling concept
+[25], we construct a finer-grained dataflow allocation and systolic
+array scheduling scheme to reduce data skew (see blue dashed lines
+in Fig. 6(a)). The full attention reconstruction is performed by alternating between feature embedding loads and two-level dot-product
+for 𝑀 × 𝑀 tiles 𝐺𝑖,𝑗 (𝑖 = 1, 2, · · · , 𝑀; 𝑗 = 1, 2, · · · , 𝑀). As depicted in
+Fig. 6(b), the specific two-stage process can be described as follows:
+❶ The forward-shifted feature embeddings are preferentially
+entered into the tiles 𝐺𝑖,𝑖 distributed along the main diagonal.
+❷ The output data from the bottom or right side of previous tiles
+is piped directly into the non-primary diagonal tiles 𝐺𝑖,𝑗 (𝑖 ≠ 𝑗) for
+the remaining outer-product accumulation computations.
+For a 4 × 4 systolic array, the fine-grained scheme saves two
+cycles compared to the coarse-grained scheme. Furthermore, we
+can derive the latency consumed by the coarse-grained and finegrained schemes for 𝑁 × 𝑁 attention reconstruction as 𝑇𝑐 and 𝑇𝑓 ,
+when the feature embedding length is 𝐾.
+𝑇𝑐 = 2𝑁 + 𝐾 − 2
+ 𝑁
+
+𝑁
+𝑇𝑓 ∈ 2⌊ ⌋ + 𝐾 − 2, 2⌈ ⌉ + 𝐾 − 2
+𝑀
+𝑀
+
+Evaluation
+
+(21)
+
+Evaluation Methodology
+
+We evaluate AESHA with benchmarks of two modalities using
+encoder-based transformer models. For BERT [1] and its sparse
+variants (BigBird [33], Sanger [14]), we test 8 language understanding tasks (MNLI, QNLI, QQP, SST2, STSB, RTE, COLA and MRPC)
+from the GLUE [34] datasets with the default sequence length of 128.
+For Vision Transformers (ViTs), we measure image recognition performance on 3 datasets (CIFAR10/100 and ImageNet1K [35]) where
+a CNN with the kernel and step sizes of 16 is used as a backbone to
+extract the features of 196 patches from 224 × 224 images.
+We fine-tune pre-trained models from the Huggingface transformer library [36] when applying the pruning strategy to compress
+attention feature spaces with 𝜏𝑢𝑛𝑖𝑡 = 0.1. All tasks are executed
+using PyTorch v2.0 and CuDNN v11.8 on two Nvidia RTX 4090
+GPUs. We adopt the fine-tuning parameters outlined in Sanger [14]
+for BERT and its variants. For ViTs, we employ the Adam optimizer
+with a learning rate of 3e-2 and a batch size of 128. The fine-tuning
+epochs range from 5 to 15 depending on the downstream task.
+We simulate the RRAM-CIM and SRAM-CIM macros using the
+peripheral setups under 32nm node technology in NeuroSim [37].
+The read and write pulse times of the RRAM cells are taken from
+[38], whereas the on/off resistances of RRAM cells with the 4-bit
+cell precision [39] are extracted from [26]. We verify the SA-based
+LPU via Cadence Virtuoso and estimate the power of the OS-based
+attention reconstruction engine and other digital modules using
+Synopsys Design Compiler at 28nm technology. Additionally, we
+measure Nvidia GPU and Intel CPU’s power by Nvidia-smi and
+PyRAPL, and latency using CUDA Event and Python timer.
+
+where ⌊·⌋ and ⌈·⌉ denote the floor and ceil functions, respectively.
+
+5.2
+
+4.4
+
+1) Impact of Pruning Threshold. We first analyze how pruning
+thresholds affect model performance. As depicted in Fig. 7(a), the
+model performance diminishes as the pruning threshold decreases.
+Reducing the pruning threshold causes eigenspace compression.
+Thus, the reconstructed attention matrix can not fully reflect the
+true token relevance distribution. BERT-Base and its sparse variants
+consistently exhibit performance deterioration across diverse tasks.
+Conversely, BERT-Large and ViTs demonstrate greater resilience
+to changes in the pruning threshold. Specifically, when the pruning
+threshold is set to 0.6, BERT-Base experiences performance declines
+ranging from 0.8% to 30.2% across different tasks. In contrast, BERTLarge’s performance decreases ranging from 0.53% to 7.25%, and
+ViTs show a range of 1.14% to 9.55%.
+Next, we analyze the impact of different pruning thresholds on
+the average compression ratio (ACR) of the weight parameters
+across three attention computation pipelines.
+
+Fused Softmax Engine
+
+To streamline the computation of weak-correlated attention, the
+fused softmax engine is engineered to enable efficient attention
+probability conversion for context aggregation. A non-linear operator, a mask generation module, and a mask-guided recomputation
+module work together in several steps to enable this conversion.
+❶ Non-linear Operator. The 8-bit attention score, retrieved
+row-by-row from the OS-based SRAM-CIM, can be used to generate the exponential reduction vector exp(𝑥 − 𝑥 max ). This process
+involves maximum search and reduction, followed by dequantization and exponential activation, where the exponential function is
+approximated by its fourth-order Taylor series.
+❷ Mask Generation. The mask generation module conducts
+element-wise threshold comparison on the MSB of attention score
+vectors to generate binary mask vectors.
+❸ Mask-guided Recomputation. The masks determine if the
+exponential reduction value exp(𝑥𝑖 −𝑥 max ) for the 𝑖-th token should
+be fed into the accumulator and FIFO queue. Zero-mask values
+
+Algorithm Performance
+
+𝐴𝐶𝑅VANILLA =
+
+𝐷
+𝐷
+𝐷
+; 𝐴𝐶𝑅CPSAA =
+; 𝐴𝐶𝑅AESHA =
+𝐾𝐻
+2𝐾
+𝐾
+
+(22)
+
+=== page 7 ===
+0.7
+
+17.1
+
+0.8
+
+0.9
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+0.6
+
+0.7
+
+Pruning Threshold
+(i) BERT-B
+
+0.0%
+
+1.0
+
+0.8
+
+9.5
+
+0.1
+
+0.2
+
+Task Metric
+
+0.2
+
+0.3
+
+0.4
+
+43.1
+
+0.3
+
+1.0
+
+100
+
+0.0%
+
+0.5
+
+0.6
+
+0.7
+
+0.8
+
+0.9
+
+0.4
+
+0.5
+
+31.7
+
+0.6
+
+23.9
+
+0.3
+
+0.4
+
+0.5
+
+0.6
+
+0.7
+
+0.7
+
+0.0%
+
+0.8
+
+13.3
+
+0.9
+
+0
+
+0.8
+
+0.9
+
+36.9
+
+0.1
+
+0.2
+
+0.3
+
+QNLI
+
+QQP
+
+SST2
+
+0.4
+
+0.5
+
+0.6
+
+0.7
+
+15.6
+
+0.8
+
+11.5
+
+0.9
+
+80.0%
+60.0%
+
+40.0%
+
+20.0%
+0.0%
+
+200
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+0.6
+
+0.7
+
+0.8
+
+0.9
+
+0.3
+
+0.4
+
+0.5
+
+22.8
+
+0.6
+
+17.1
+
+0.7
+
+12.8
+
+0.8
+
+RTE
+
+COLA
+
+0.1 0.2
+
+0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0
+
+125.4 Pruning Threshold
+
+1.0
+
+100
+9.5
+
+0.9
+
+0
+
+Pruning Threshold
+(iv) SANGER
+STSB
+
+20.7
+
+88.8
+63.3
+
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+0.6
+
+0.7
+
+45.4
+
+31.1
+
+0.8
+
+0.9
+
+Pruning Threshold
+(vi) VIT-L
+MRPC
+
+20.0%
+0.0%
+
+MNLI
+MRPC
+QNLI
+
+0
+
+5% 10% 15% 20% 25% 30%
+
+(i) BERT/ViT-B
+
+CIFAR100
+
+CIFAR10
+
+QQP
+
+SST2
+
+100.0%
+
+300
+
+31.0
+
+0.2
+
+27.4
+
+Pruning Threshold
+(v) VIT-B
+
+Pruning Threshold
+0.1
+
+0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0
+
+Pruning Threshold
+
+20.0%
+
+1.0
+
+0.2
+
+0
+
+400
+
+50
+
+18.0
+
+0.1
+
+50
+9.5
+
+40.0%
+
+Pruning Threshold
+(ii) BERT-L
+MNLI
+
+0.9
+
+12.8
+
+80.0%
+
+100
+0.1
+
+Pruning Threshold
+0.2
+
+0.8
+
+60.0%
+
+50
+
+0.1
+
+0.7
+
+17.1
+
+500
+
+150
+
+20.0%
+
+0.0%
+
+0.6
+
+22.8
+
+100.0%
+
+200
+
+40.0%
+
+100
+
+0.5
+
+Pruning Threshold
+(iii) BIGBIRD
+
+60.0%
+
+150
+
+0.4
+
+31.4
+
+250
+80.0%
+
+0.3
+
+Pruning Threshold
+
+100.0%
+
+200
+
+0.2
+
+0
+
+0.9
+
+300
+
+250
+
+0.1
+
+50
+
+12.8
+
+Task Metric
+
+0.6
+
+22.8
+
+100.0%
+80.0%
+60.0%
+40.0%
+
+100.0%
+80.0%
+60.0%
+40.0%
+
+Task Metric
+
+0.5
+
+AESHA
+
+0.4
+
+31.1
+
+20.0%
+
+CPSAA
+
+0.3
+
+Pruning Threshold
+
+40.0%
+
+150
+
+20.0%
+
+VANILLA
+
+0.2
+
+60.0%
+
+Task Metric
+
+0.1
+
+0
+
+0.1
+
+40.0%
+
+100
+
+50
+
+Task Metric
+
+Task Metric
+
+Task Metric
+
+150
+
+20.0%
+0.0%
+
+80.0%
+
+200
+
+60.0%
+
+40.0%
+
+100.0%
+
+80.0%
+
+60.0%
+
+100
+
+Compression Ratio
+
+200
+
+80.0%
+
+150
+
+250
+
+100.0%
+
+100.0%
+
+200
+
+0
+
+ICCAD ’24, Oct 27–31, 2024, NEW JERSEY, USA
+
+250
+
+250
+
+Task Metric
+
+Compression Ratio
+
+AESHA: Accelerating Eigen-decomposition-based Sparse Transformer with Hybrid RRAM-SRAM Architecture
+
+20.0%
+0.0%
+
+STSB
+CIFAR10
+CIFAR100
+
+0
+
+5% 10% 15% 20% 25% 30%
+
+(ii) BERT/ViT-L
+
+ImageNet1K
+
+(a)
+
+(b)
+
+Figure 7: (a) Sensitivity of model performance and attention weight memory occupancy regarding pruning thresholds (without
+fine-tuning). (b) Sensitivity of model performance to RRAM variation.
+Table 2: Performance comparison of attention reconstruction
+engine on arrays of different granularity
+Layer Number
+
+Model / Metrics
+ViT
+BERT
+Head Number
+
+Head Number
+
+(a) BERT-L
+
+(b) ViT-L
+
+Figure 8: Visualization of Pruning Results (𝜏 = 0.9).
+where 𝐷, 𝐾, and 𝐻 represent the feature embedding dimension, the
+compressed dimension, and the number of heads respectively.
+The ACR trends remain largely consistent for the same model
+across various tasks, while the compression potential of the eigenspace
+varies across different models. In conjunction with Fig. 7(a), By
+adopting the AESHA pipeline with the pruning threshold of 0.5,
+BERT-Base, BERT-Large, BigBird, Sanger, ViT-Base, and ViT-Large
+achieve compression ratios of 31.1×, 43.1×, 31.4×, 31.0×, 36.9×, and
+125.4×, respectively. These ratios are in comparison to the 2.59×,
+2.69×, 2.62×, 2.58×, 3.08×, and 7.84× compression achieved in the
+vanilla computation stack. Such compression results effectively reduce the memory footprint of static weights and the write demand
+of intermediate results. Subsequently, after fine-tuning the pruned
+models with the global optimization objective in Equation 17, the
+model’s performance only degrades by 0.63% to 3.21% compared to
+the baseline models even at this aggressive pruning threshold.
+2) Sensitivity Analysis. We visualize the distribution of multihead attention eigenspace across different layers in the BERT-Large
+and ViT-Large at a pruning threshold of 0.9. As depicted in Fig. 8, the
+multi-head eigenspace of each layer in BERT-Large requires more
+eigenbases overall to satisfy the threshold constraint. In contrast,
+ViT-Large exhibits a sparser eigenspace distribution. Specifically,
+the multi-head eigenspace of shallow layers shows significant lowrank properties, while the deep layers require more eigenbasis
+to express the energy distribution of the attention weights. We
+attribute the low-rank phenomena to the intrinsic information
+representation differences between the two modalities. Images often
+
+Base
+Large
+Base
+Large
+
+32 × 32
+EE
+TP
+1.195 9.183
+0.598 3.367
+3.054 8.922
+2.966 8.664
+
+64 × 64
+EE
+TP
+0.687 4.830
+0.321 1.901
+1.792 5.140
+1.730 4.968
+
+128 × 128
+EE
+TP
+0.370 2.479
+0.166 1.016
+0.977 2.782
+0.941 2.680
+
+Energy Efficiency (EE): TOPS/W, Throughput (TP): TOPS
+
+have background noise, which contributes less to the overall energy
+distribution of the eigenspace, thus inducing low-rank features in
+shallow layers. In contrast, natural language encodes more dense
+information, resulting in a different low-rank behavior.
+3) Impact of RRAM Variance. We evaluate the BERT and VIT
+model performance with varying degrees of Gaussian-distributed
+noise by introducing noise to fixed weights within the RRAMCIM feature transformation engine. Fig. 7(b) shows that the model
+performance remains stable at 5% device variation. However, higher
+variations lead to more drastic performance degradation, especially
+noticeable in BERT/ViT-Large where the error caused by device
+non-ideality can be propagated and accumulated layer by layer.
+
+5.3
+
+Hardware Performance
+
+1) Impact of Array Granularity. We measure the energy efficiency and throughput of the attention reconstruction engine across
+three different granularity levels of a systolic array. As depicted in
+Tab. 2, we observe that the attention reconstruction achieves higher
+energy efficiency: ViT can achieve 3.49× energy efficiency enhancement and 3.70× throughput improvement on the 32 × 32-grained
+systolic array, respectively, while BERT can achieve 3.15× energy
+efficiency enhancement and 3.23× throughput improvement. Two
+reasons account for this performance improvement. First, the power
+consumption induced by the dataflow scheduling control in the
+fine-grained scheme contributes much less to the total energy than
+the delay impact induced by data skew in the coarse-grained array.
+Second, the delay caused by data skew can be effectively mitigated
+in the fine-grained scheme by forwarding cached back-level data
+and enabling multiple tiles to work in parallel.
+
+=== page 8 ===
+ICCAD ’24, Oct 27–31, 2024, NEW JERSEY, USA
+GPU
+
+X. Yu and T. Ni, et al.
+
+ReBERT
+
+ReTransformer
+
+Speedup
+
+800
+
+AESHA-WS
+
+AESHA-PW
+
+AESHA-OS
+
+AESHA-PO
+4000
+
+1200
+
+600
+
+2000
+
+800
+
+400
+
+0
+
+1000
+
+400
+
+200
+
+Energy Reduction (×103)
+
+CPSAA
+
+COLA MRPC MNLI QNLI QQP
+
+RTE STSB SST2
+
+0
+
+COLA MRPC MNLI QNLI QQP
+
+RTE STSB SST2
+
+0
+
+B-T1 B-T2 L-T1 L-T2
+
+300
+
+160
+
+1600
+
+120
+
+200
+
+1200
+
+80
+
+800
+100
+
+40
+0
+
+400
+
+COLA MRPC MNLI QNLI QQP
+
+RTE STSB SST2
+
+0
+
+COLA MRPC MNLI QNLI QQP
+
+(a) BERT-Base
+
+RTE STSB SST2
+
+(b) BERT-Large
+
+0
+
+B-T1 B-T2 L-T1 L-T2
+
+(c) ViT
+
+Figure 9: Speedup and energy reduction of self-attention layer across different pipeline-optimized work concerning CPU baseline.
+AESHA-WS employs conventional WS-based SRAM-CIM for attention computation, involving the same CWC operations as
+ReTransformer. AESHA-OS adopts OS-based SRAM-CIM for attention reconstruction. Additionally, AESHA-PW and AESHA-PO
+implement pruning strategies. 𝐵/𝐿 denote Vit-Base/Large models, while 𝑇 1/𝑇 2 represent CIFAR-10/100 dataset.
+Table 3: Comparison of throughput and energy efficiency
+against state-of-the-arts
+Models&Pipelines
+
+ReBERT [24]
+
+ViT-B
+ViT-L
+BERT-B
+BERT-L
+
+134.19
+128.57
+134.93
+128.95
+
+ViT-B
+ViT-L
+BERT-B
+BERT-L
+
+0.96
+0.96
+0.90
+0.93
+
+ReTransformer [15] CPSAA [16]
+Throughput (GOPS)
+107.77
+121.86
+79.42
+44.28
+108.16
+121.92
+78.90
+44.64
+Energy Efficiency (TOPS/W)
+0.24
+0.22
+0.19
+0.18
+0.23
+0.22
+0.17
+0.18
+
+AESHA-PW
+
+AESHA-PO
+
+97.63
+136.82
+97.69
+70.58
+
+176.12
+149.07
+176.47
+149.22
+
+2.65
+2.59
+1.44
+1.50
+
+3.57
+4.09
+2.28
+2.96
+
+2) Impact of Pipeline Designs. We evaluate the speedup and
+energy efficiency of four AESHA-based pipeline-optimized architectures (i.e., AESHA-WS, AESHA-OS, AESHA-PW and AESHA-PO)
+and prior arts over the CPU baseline for self-attention processing of
+BERTs and ViTs. The detailed definition of these AESHA variants
+is given in the caption of Fig. 9. For optimized pipelines without
+adopting the pruning strategy, AESHA-WS and AESHA-OS can
+achieve higher speedups than ReBERT on BERT/ViT-Base models.
+In contrast, speedups are comparable in BERT/ViT-Large counterparts. Compared to the general purpose computing platforms CPU,
+GPU and CIM-based ReBERT, ReTransformer and CPSAA, AESHAPO achieves maximum inference speedups of 3170.0×, 95.6×, 4.1×,
+19.0×, 19.2× on a single attention layer. In the BERT/ViT-Large models, AESHA-PO exhibits stronger speedup gains than AESHA-PW.
+Two main reasons contribute to this phenomenon. First, adopting
+the energy-distribution-based pruning strategy on deeper models
+can achieve higher compression ratios and parameter reduction.
+Second, AESHA-PO consumes fewer data movements and computation cycles than the compute-write-compute manner in AESHA-PW,
+particularly in cases of low feature embeddings.
+AESHA-PW and AESHA-PO both save more energy across models and benchmark datasets due to the pruned operations. Compared
+to CPU, GPU, ReBERT, ReTransformer and CPSAA, AESHA-PO reduces energy consumption on the attention layers by 336.0𝐾×,
+12.6𝐾×, 7.3×, 23.1×, 25.8×. AESHA-PO achieves energy reductions of 8.74% ∼ 9.36% more than AESHA-PW on BERT-Base and
+22.18% ∼ 23.45% more reduction on BERT-Large. However, AESHAPO exhibits less energy-saving performance on ViTs compared to
+AESHA-PW, since the OS-based dynamic attention reconstruction
+
+engine consumes quadratically more energy with token numbers.
+Notably, ViTs require longer input sequences than BERTs.
+3) End-to-end Comparison. For a fair comparison, we evaluate
+the throughput and energy efficiency of Transformers across different pipeline optimization approaches with the same hardware
+configurations. As shown in Tab. 3, AESHA-PO yields the best overall throughput and energy efficiency. Compared to state-of-the-art
+methods, AESHA-PO achieves 176 GOPS and 149 GOPS throughput on ViT/BERT-Base and ViT/BERT-Large models, indicating a
+throughput improvement of 16.33% ∼ 31.24% from ReBERT. Additionally, AESHA-PO demonstrates 3.72×, 21.53×, 22.72× and 1.97×
+energy efficiency improvements compared to ReBERT, ReTransformer, CPSAA and AESHA-PW. The energy efficiency values can
+be further enhanced if multi-bit input is allowed for RRAM-CIM.
+
+6
+
+Conclusion
+
+In this work, we present AESHA, an RRAM and SRAM-based algorithm and architecture co-design framework to accelerate the selfattention-based Transformer models efficiently. On the algorithm
+level, we propose an eigen-decomposition-based attention computation pipeline and an energy-distribution-based structured pruning
+strategy in order to enhance attention computation efficiency while
+minimizing the memory footprint and RRAM write counts. On
+the architecture level, we introduce a heterogeneous CIM implementation featuring hybrid dataflow to balance the workload of
+static feature transformation and dynamic attention reconstruction.
+Furthermore, we design a fine-grained systolic array to improve the
+throughput and energy efficiency. Our AESHA achieves a compression ratio of attention weight parameters of 2.5× ∼ 2.69× on BERTs
+and 3.07× ∼ 7.84× on ViTs with minimal performance degradation.
+In addition, our AESHA achieves superior latency and power efficiency compared to prior arts, as evidenced by achieving 31.24%
+higher throughput and 3.72× better energy efficiency than ReBERT.
+AESHA presents a promising solution for lightweight, low-power,
+high-throughput edge transformer inference applications.
+
+Acknowledgments
+This work was supported by the Key Research and Development
+Program of Zhejiang Province (2021C01039).
+
+=== page 9 ===
+AESHA: Accelerating Eigen-decomposition-based Sparse Transformer with Hybrid RRAM-SRAM Architecture
+
+References
+[1] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pretraining of deep bidirectional transformers for language understanding. arXiv
+preprint arXiv:1810.04805, 2018.
+[2] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones,
+Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need.
+In the 31st International Conference on Neural Information Processing Systems
+(NeurIPS), 2017.
+[3] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg
+Heigold, Sylvain Gelly, et al. An image is worth 16x16 words: Transformers for
+image recognition at scale. In International Conference on Learning Representations
+(ICLR), 2021.
+[4] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh,
+Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark,
+et al. Learning transferable visual models from natural language supervision. In
+International Conference on Machine Learning (ICML), 2021.
+[5] Tae Jun Ham, Sung Jun Jung, Seonghak Kim, Young H Oh, Yeonhong Park,
+Yoonho Song, Jung-Hun Park, Sanghee Lee, Kyoung Park, Jae W Lee, et al. A3 :
+Accelerating attention mechanisms in neural networks with approximation.
+In IEEE International Symposium on High-Performance Computer Architecture
+(HPCA), 2020.
+[6] Hanrui Wang, Zhekai Zhang, and Song Han. Spatten: Efficient sparse attention architecture with cascade token and head pruning. In IEEE International
+Symposium on High-Performance Computer Architecture (HPCA), 2021.
+[7] Thierry Tambe, Coleman Hooper, Lillian Pentecost, Tianyu Jia, En-Yu Yang,
+Marco Donato, Victor Sanh, Paul Whatmough, Alexander M Rush, David Brooks,
+et al. Edgebert: Sentence-level energy optimizations for latency-aware multi-task
+nlp inference. In the 54th International Symposium on Microarchitecture (MICRO),
+2021.
+[8] Peiyan Dong, Mengshu Sun, Alec Lu, Yanyue Xie, Kenneth Liu, Zhenglun Kong,
+Xin Meng, Zhengang Li, Xue Lin, Zhenman Fang, and Yanzhi Wang. HeatViT:
+Hardware-efficient adaptive token pruning for vision transformers. In IEEE
+International Symposium on High-Performance Computer Architecture (HPCA),
+2023.
+[9] Zheng Qu, Liu Liu, Fengbin Tu, Zhaodong Chen, Yufei Ding, and Yuan Xie. DOTA:
+detect and omit weak attentions for scalable transformer acceleration. In the
+27th ACM International Conference on Architectural Support for Programming
+Languages and Operating Systems (ASPLOS), 2022.
+[10] Jyotikrishna Dass, Shang Wu, Huihong Shi, Chaojian Li, Zhifan Ye, Zhongfeng
+Wang, and Yingyan Lin. Vitality: Unifying low-rank and sparse approximation for vision transformer acceleration with a linear taylor attention. In IEEE
+International Symposium on High-Performance Computer Architecture (HPCA),
+2023.
+[11] Tae Jun Ham, Yejin Lee, Seong Hoon Seo, Soosung Kim, Hyunji Choi, Sung Jun
+Jung, and Jae W Lee. Elsa: Hardware-software co-design for efficient, lightweight
+self-attention mechanism in neural networks. In the 48th Annual International
+Symposium on Computer Architecture (ISCA), 2021.
+[12] Yubin Qin, Yang Wang, Dazheng Deng, Zhiren Zhao, Xiaolong Yang, Leibo Liu,
+Shaojun Wei, Yang Hu, and Shouyi Yin. FACT: FFN-Attention co-optimized
+transformer architecture with eager correlation prediction. In the 50th Annual
+International Symposium on Computer Architecture (ISCA), 2023.
+[13] Hongwu Peng, Shaoyi Huang, Tong Geng, Ang Li, Weiwen Jiang, Hang Liu,
+Shusen Wang, and Caiwen Ding. Accelerating transformer-based deep learning
+models on FPGAs using column balanced block pruning. In the 22nd International
+Symposium on Quality Electronic Design (ISQED), 2021.
+[14] Liqiang Lu, Yicheng Jin, Hangrui Bi, Zizhang Luo, Peng Li, Tao Wang, and Yun
+Liang. Sanger: A co-design framework for enabling sparse attention using reconfigurable architecture. In the 54th Annual IEEE/ACM International Symposium on
+Microarchitecture (MICRO), 2021.
+[15] Xiaoxuan Yang, Bonan Yan, Hai Li, and Yiran Chen. Retransformer: Reram-based
+processing-in-memory architecture for transformer acceleration. In International
+Conference on Computer Aided Design (ICCAD), 2020.
+[16] Huize Li, Hai Jin, Long Zheng, Xiaofei Liao, Yu Huang, Cong Liu, Jiahong Xu,
+Zhuohui Duan, Dan Chen, and Chuangyi Gui. CPSAA: Accelerating sparse attention using crossbar-based processing-in-memory architecture. IEEE Transactions
+on Computer-Aided Design of Integrated Circuits and Systems (TCAD), 2023.
+[17] Minxuan Zhou, Weihong Xu, Jaeyoung Kang, and Tajana Rosing. TransPIM: A
+memory-based acceleration via software-hardware co-design for transformer.
+In International Symposium on High-Performance Computer Architecture (HPCA),
+2022.
+[18] Haoqiang Guo, Lu Peng, Jian Zhang, Qing Chen, and Travis D LeCompte. Att: A
+fault-tolerant reram accelerator for attention-based neural networks. In the 38th
+International Conference on Computer Design (ICCD), 2020.
+[19] Yifeng Zhai, Bing Li, Bonan Yan, and Jing Wang. STAR: An efficient softmax
+engine for attention model with rram crossbar. In Design, Automation Test in
+Europe Conference Exhibition (DATE), 2023.
+
+ICCAD ’24, Oct 27–31, 2024, NEW JERSEY, USA
+
+[20] Amir Yazdanbakhsh, Ashkan Moradifirouzabadi, Zheng Li, and Mingu Kang.
+Sparse attention acceleration with synergistic in-memory pruning and on-chip
+recomputation. In the 55th IEEE/ACM International Symposium on Microarchitecture (MICRO), 2022.
+[21] Shiwei Liu, Chen Mu, Hao Jiang, Yunzhengmao Wang, Jinshan Zhang, Feng Lin,
+Keji Zhou, Qi Liu, and Chixiao Chen. HARDSEA: Hybrid analog-ReRAM clustering and digital-SRAM in-memory computing accelerator for dynamic sparse
+self-attention in transformer. IEEE Transactions on Very Large Scale Integration
+(VLSI) Systems, 32(02):269–282, 2024.
+[22] Wantong Li, Madison Manley, James Read, Ankit Kaul, Muhannad S. Bakir, and
+Shimeng Yu. H3DAtten: Heterogeneous 3-D integrated hybrid analog and digital
+compute-in-memory accelerator for vision transformer self-attention. IEEE
+Transactions on Very Large Scale Integration (VLSI) Systems, 31(10):1592–1602,
+2023.
+[23] Yan Ding, Chubo Liu, Mingxing Duan, Wanli Chang, Keqin Li, and Kenli Li.
+HAIMA: A hybrid SRAM and DRAM accelerator-in-memory architecture for
+transformer. In the 60th ACM/IEEE Design Automation Conference (DAC), 2023.
+[24] Myeonggu Kang, Hyein Shin, and Lee-Sup Kim. A framework for accelerating
+transformer-based language model on ReRAM-based architecture. IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems (TCAD),
+41(9):3026–3039, 2022.
+[25] H.T. Kung, Bradley McDanel, and Sai Qian Zhang. Packing sparse convolutional
+neural networks for efficient systolic array implementations: Column combining
+under joint optimization. In the 24th International Conference on Architectural
+Support for Programming Languages and Operating Systems (ASPLOS), 2019.
+[26] Diego Alfaro Robayo, Gilbert Sassine, Quentin Rafhay, Gerard Ghibaudo, Gabriel
+Molas, and Etienne Nowak. Endurance statistical behavior of resistive memories
+based on experimental and theoretical investigation. IEEE Transactions on Electron
+Devices (TED), 66(8):3318–3325, 2019.
+[27] Chang-Feng Yang, Chun-Yu Wu, Meng-Chun Shih, Ming-Ta Yang, Ming-Han
+Yang, Yu-Tien Wu, Ta-Chun Chien, Chih-Wei Lai, Shih-Chi Tsai, Wen-Ting Chu,
+and Arthur Hung. Demonstration of high endurance capability on mega-bit
+rram macro and model of ppm level failures. In 2022 IEEE Symposium on VLSI
+Technology and Circuits (VLSI Technology and Circuits), 2022.
+[28] Mike Gartrell, Victor-Emmanuel Brunel, Elvis Dohmatob, and Syrine Krichene.
+Learning nonsymmetric determinantal point processes. In the 32nd International
+Conference on Neural Information Processing Systems (NeurIPS), 2019.
+[29] A. G. Constantine and J. C. Gower. Graphical representation of asymmetric
+matrices. Journal of the Royal Statistical Society. Series C (Applied Statistics), 1978.
+[30] Hongguo Xu. An SVD-like matrix decomposition and its applications. Linear
+algebra and its applications, 2003.
+[31] Dilip Krishnan, Terence Tay, and Rob Fergus. Blind deconvolution using a
+normalized sparsity measure. In IEEE Conference on Computer Vision and Pattern
+Recognition (CVPR), 2011.
+[32] Wanqian Li, Yinhe Han, and Xiaoming Chen. Energy-efficient in-SRAM accumulation for CMOS-based CNN accelerators. In Great Lakes Symposium on VLSI
+(GLSVLSI), 2022.
+[33] Manzil Zaheer, Guru Guruganesh, Kumar Avinava Dubey, Joshua Ainslie, Chris
+Alberti, Santiago Ontanon, Philip Pham, Anirudh Ravula, Qifan Wang, Li Yang,
+et al. Bigbird: Transformers for longer sequences. In the 33rd International
+Conference on Neural Information Processing Systems (NeurIPS), 2020.
+[34] Alex Wang, Amanpreet Singh, Julian Michael, Felix Hill, Omer Levy, and Samuel
+Bowman. GLUE: A multi-task benchmark and analysis platform for natural
+language understanding. In EMNLP Workshop BlackboxNLP: Analyzing and
+Interpreting Neural Networks for NLP, 2018.
+[35] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. ImageNet: A
+large-scale hierarchical image database. In IEEE Conference on Computer Vision
+and Pattern Recognition (CVPR), 2009.
+[36] Thomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Clement Delangue, Anthony Moi, Pierric Cistac, Tim Rault, Remi Louf, Morgan Funtowicz,
+Joe Davison, Sam Shleifer, Patrick von Platen, Clara Ma, Yacine Jernite, Julien Plu,
+Canwen Xu, Teven Le Scao, Sylvain Gugger, Mariama Drame, Quentin Lhoest,
+and Alexander Rush. Transformers: State-of-the-art natural language processing. In Conference on Empirical Methods in Natural Language Processing: System
+Demonstrations, 2020.
+[37] Xiaochen Peng, Shanshi Huang, Yandong Luo, Xiaoyu Sun, and Shimeng Yu.
+DNN+NeuroSim: An end-to-end benchmarking framework for compute-inmemory accelerators with versatile device technologies. In IEEE International
+Electron Devices Meeting (IEDM), 2019.
+[38] Jalil Boukhobza, Stéphane Rubini, Renhai Chen, and Zili Shao. Emerging NVM:
+A survey on architectural integration and research challenges. ACM Transactions
+on Design Automation of Electronic Systems (TODAES), 23(2):1–32, 2017.
+[39] Ping Chi, Shuangchen Li, Cong Xu, Tao Zhang, Jishen Zhao, Yongpan Liu,
+Yu Wang, and Yuan Xie. PRIME: A novel processing-in-memory architecture for
+neural network computation in ReRAM-based main memory. In the 43rd Annual
+International Symposium on Computer Architecture (ISCA), 2016.

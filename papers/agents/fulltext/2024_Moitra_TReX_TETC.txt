@@ -1,0 +1,2038 @@
+# TReX- Reusing Vision Transformer’s Attention for Efficient Xbar-Based Computing
+# id: W4403600569 | key: 2024_Moitra_TReX_TETC | TETC 2024 | card: ../cards/2024_Moitra_TReX_TETC.md
+
+
+=== page 1 ===
+1
+
+TReX- Reusing Vision Transformer’s Attention for
+Efficient Xbar-based Computing
+
+MLP
+
+PROJECTION
+
+LAYER NORMALIZATION
+
+V
+
+CONCATENATION
+
+K
+
+Matmul 𝒮(QKT)V
+
+Q
+
+Softmax 𝒮(QKT)
+
+(a)
+Matmul QKT
+
+Abstract—Due to the high computation overhead of Vision Transformers (ViTs), In-memory Computing architectures
+are being researched towards energy-efficient deployment in
+edge-computing scenarios. Prior works have proposed efficient
+algorithm-hardware co-design and IMC-architectural improvements to improve the energy-efficiency of IMC-implemented
+ViTs. However, all prior works have neglected the overhead and
+co-depencence of attention blocks on the accuracy-energy-delayarea of IMC-implemented ViTs. To this end, we propose TReXan attention-reuse-driven ViT optimization framework that effectively performs attention reuse in ViT models to achieve optimal
+accuracy-energy-delay-area tradeoffs. TReX optimally chooses
+the transformer encoders for attention reuse to achieve neariso-accuracy performance while meeting the user-specified delay
+requirement. Based on our analysis on the Imagenet-1k dataset,
+we find that TReX achieves 2.3× (2.19×) EDAP reduction and
+1.86× (1.79×) TOPS/mm2 improvement with ∼1% accuracy
+drop in case of DeiT-S (LV-ViT-S) ViT models. Additionally,
+TReX achieves high accuracy at high EDAP reduction compared
+to state-of-the-art token pruning and weight sharing approaches.
+On NLP tasks such as CoLA, TReX leads to 2% higher non-ideal
+accuracy compared to baseline at 1.6× lower EDAP.
+
+LAYER NORMALIZATION
+
+arXiv:2408.12742v1 [cs.AI] 22 Aug 2024
+
+Abhishek Moitra, Abhiroop Bhattacharjee, Youngeun Kim, and Priyadarshini Panda
+Department of Electrical Engineering, Yale University, New Haven, CT 06511
+
+Attention
+(b)
+
+DeiT-S
+
+LvViT-S
+
+Index Terms—Vision Transformers, Attention sharing, Inmemory Computing
+
+I. I NTRODUCTION
+The high accuracy and robustness of vision transformers
+(ViT) [1]–[3] on large-scale image recognition tasks have
+made them suitable candidates for edge intelligence [4], [5].
+However, as seen in Fig. 1a, the huge computation overhead
+of ViTs due to feed-forward operations (layers Q, K, V , Projection, MLP), softmax operation (S(QK T )) and matrix multiplications (M atmul QK T and M atmul S(QK T )V , where
+S denotes softmax) pose a major roadblock towards resourceconstrained edge-deployment. To this end, In-Memory Computing (IMC) architectures have been proposed as an energyefficient alternative to traditional von-Neumann computing
+architectures for edge-computing. Compared to von-Neumann
+architectures, IMC effectively mitigates weight-specific data
+movement between memories, thereby alleviating the memorywall bottleneck [6], [7]. Additionally, IMC architectures enable
+highly parallel multiply-accumulate computations per cycle in
+an energy and area-efficient manner, leveraging the analog
+nature of computing [6], [7].
+However, as seen in Fig. 1b, the attention module in
+IMC-implemented ViTs consume high energy, delay and area
+overhead due to fully connected, M atmul and softmax layers
+[10], [11]. The energy consumption of the attention block is
+attributed to the crossbar read operations over a large number
+of tokens and the softmax (S(QK T )) operations (See Section
+
+Fig. 1: (a) Encoder architecture of a vision-transformer [1], [8]. (b)
+Pie diagrams of energy, delay and area for DeiT-S [1] and LV-ViT-S
+[8] transformer encoders. The energy, delay and area correspond to
+64×64 FeFET crossbar implementations.
+
+(a)
+
+DeiT-S
+
+(b)
+
+TReX-D-9
+
+LV-ViT-S
+
+TReX-L-12
+TReX-L-10
+TReX-L-9
+
+TReX-D-7
+TReX-D-6
+
+TReX-D-4
+
+TReX-L-8
+
+TReX-L-6
+
+Fig. 2: Figure showing the EDAP and non-ideal accuracy of (a)
+Baseline DeiT-S [9] and TReX-D-N ViTs. (b) Baseline LV-ViT-S
+[9] and TReX-L-N ViTs. Here, TReX-D-N and TReX-L-N denote
+TReX-optimized DeiT-S and LV-ViT-S ViTs, respectively optimized
+at different target delay values N . Non-ideal accuracy denotes the
+hardware accuracy measured on FeFET-based IMC implementation
+with ADC/device variation noise. Accuracy measured for ImageNet1K dataset.
+
+VI for more details). Similarly, the area is attributed to the
+large number of crossbars required by the Q, K, V , and
+the M atmul layers (See Section VI). Interestingly, IMCbased implementation of QK T and S(QK T )V layers, require
+
+=== page 2 ===
+2
+
+crossbar write operations [10], [11]. The write operations
+inside the attention block makes it a significant contributor
+(∼80%) to the overall delay. Thus, there is a need for IMCaware ViT co-design to achieve low power, high throughput
+and area-efficient edge deployment.
+Over the recent years, there have been several algorithmic
+[9], [12]–[16] and IMC-centric [10], [11], [17] approaches
+to ameliorate the computation overhead of ViTs. Algorithmic
+approaches like token pruning [9], [12] is an optimization
+strategy where redundant input tokens are pruned out in
+order to achieve energy-efficiency at iso-accuracy with that
+of an unpruned model. Other works have proposed head
+pruning [13] wherein, the attention heads of the multi-head
+self-attention (MHSA) blocks are pruned out in order to
+minimize the number of operations and maintain iso-accuracy.
+Weight sharing [14], [15] has also emerged as a standard
+transformer optimization strategy wherein multiple encoders in
+a transformer share the same weight parameters. Recent IMCcentric transformer co-optimization works [10], [11], [18]
+have proposed IMC architecture implementations to efficiently
+compute the M atmul layers. Additionally, works like XFormer [17] have proposed sequence blocking dataflow to
+increase the parallelism of transformer layers. Furthermore,
+the authors in a recent work [19], have proposed variationaware training of transformers to achieve higher robustness
+against IMC quantization and device variation noise.
+However, prior algorithmic and IMC-centric co-design approaches have several drawbacks. Algorithmic co-optimization
+works tend to achieve high accuracy only at low pruning
+and weight sharing ratios (with small hardware efficiency).
+Similarly, IMC-centric works such as [10], [11] neglect the
+crossbar write energy and delay during M atmul operations
+thereby achieving sub-optimal results. Finally, all prior works
+have neglected the co-dependence of attention blocks on the
+accuracy-energy-delay-area of IMC-implemented ViTs.
+To this end, we propose TReX- a framework to perform
+effective attention reuse in ViTs to achieve good accuracyenergy-delay-area tradeoff. In the attention reuse technique,
+the attention block’s output of one encoder (i.e., output of
+the concatenation operation) is reused in the attention block
+of the subsequent encoder (Fig. 4). For attention reuse, we
+use a small transformation block (TB) that introduces data
+variability (thus, maintaining good accuracy) while adding
+minimal hardware overhead. TReX optimally chooses the
+transformer encoders for attention reuse to achieve near-isoaccuracy performance while meeting the user-specified delay
+requirement. As shown in Fig. 2, TReX achieves near-isoaccuracy while significantly reducing the energy-delay-area
+product (EDAP) for DeiT-S and LV-ViT-S transformer models.
+The key contributions of our work are:
+1) We propose TReX- an optimization framework that
+effectively performs attention reuse in ViT models to
+achieve optimal accuracy-energy-delay-area tradeoffs.
+2) We propose TReXSim- an IMC-realistic benchmarking
+platform that can be used to evaluate different ViT models implemented with different IMC devices (such as
+FeFET, SRAMs). The TReX framework uses TReXSim
+
+to optimally choose the number of encoders for attention
+reuse based on a user-defined delay requirement.
+3) We perform our analysis on state-of-the-art compact
+ViT models such as DeiT-S [9] and LV-ViT-S [10].
+Based on our analysis on the Imagenet-1k dataset, we
+find that TReX achieves 2.3× (2.19×) EDAP reduction
+and 1.86× (1.79×) TOPS/mm2 improvement with ∼1%
+accuracy drop in case of DeiT-S (LV-ViT-S) ViT models.
+Additionally, we find that TReX can effectively achieve
+high accuracy at high EDAP reduction compared to
+state-of-the-art token pruning [9] and weight sharing
+[14] approaches.
+II. R ELATED W ORK
+ViT Optimization Works: Works such as [9], [12], [20],
+[21] have proposed token pruning wherein redundant tokens
+have been pruned out to improve the efficiency. Some recent
+works have adopted token merging techniques wherein redundant tokens are systemically merged into a single token to
+achieve accuracy-efficiency tradeoff [12]. Both token pruning
+approaches use additional predictor networks to distinguish the
+important and non-informative tokens to achieve low latency
+while maintaining good accuracy. Recent works [13], [22]
+have performed static pruning of weights and attention head
+combined with token pruning to achieve higher efficiency.
+Additionally, weight sharing approaches [14], [15] have been
+proposed to reduce the number of parameters required by ViTs.
+Here, the weights of one encoder are shared between multiple
+encoders. While weight sharing compresses the ViT model, it
+does not reduce the computation overhead. There have been
+several works [23], [24] that have proposed sparsifying the
+attention blocks by pruning the heads and the tokens. However,
+these works only partially overcome the attention overhead and
+require sparse computation hardware to efficiently implement
+the sparse attention operation.
+TReX is a ViT optimization strategy that differs from prior
+optimization works in several aspects. While prior works focus
+on the token and parameter overhead of ViTs, TReX targets the
+compute and area expensive attention blocks. While ViT token
+pruning methods require several predictor models to select
+important and eliminate non-informative tokens, TReX uses
+attention reuse in ViTs that does not require any extra computation overhead. Unlike prior weight sharing techniques that
+only reduce the parameter overhead of ViTs and do not reduce
+the computation overhead, TReX effectively ameliorates both
+computation and parameter overhead of ViTs.
+IMC-implementations of Transformers: Recently, many
+works have proposed efficient IMC implementations for transformers [10], [11]. The authors in [10] propose fully analog implementations for transformers by using memristive
+circuits for dot-product operations and analog circuits for
+implementing non-linear functions such as GeLU, ReLU and
+softmax. Another work ReTransformer [11] proposes matrix
+decomposition techniques to eliminate the bottlenecks introduced during transformer operation. However, prior IMCimplementations of transformers have neglected the energy
+and delay overheads of NVM device write operations during
+
+=== page 3 ===
+3
+
+(2)
+
+Next, the attention outputs are concatenated resulting in a
+t×d output attention matrix. Following this, the projection and
+MLP layers project the information into a higher dimension
+feature space. Each encoder outputs a t × d vector that is
+forwarded to the subsequent encoder. For convinience, in the
+rest of the paper, we will use QK T to represent Qi KiT ,
+S(QK T ) to represent S(Qi KiT ) and S(QK T )V to represent
+the Attention(Qi , Ki , Vi ) in Equation 1.
+IV. I N -M EMORY C OMPUTING A RCHITECTURES
+Analog crossbars [6], [7], [26] consist of 2D arrays of
+In-Memory-Computing (IMC) devices and several peripheral circuits such as row-decoders, multiplexers (for resource
+sharing), Analog-to-Digital Converters (ADCs), shift-and-add
+circuits along with write circuits responsible for programming
+the IMC devices. The neural network’s activations are bitserialized and represented as analog voltages Vi and are fed
+into each source line Si of the crossbar, while the IMC
+devices are programmed to specific conductance values (Gij )
+to represent the network weights, as shown in Fig. 3. During
+inference in an ideal crossbar, the voltages interact with the
+device conductances, resulting in a current governed by Ohm’s
+
+Row Decoder
+
+GX1
+
+GX2
+
+BLX
+
+…..
+
+GXX
+
+C
+IM
+
+exi −xmax
+Sof tmax(xi ) = P xi −xmax .
+ie
+
+BL1
+
+G1X
+
+C
+IM
+
+(1)
+
+SX
+
+…..
+
+BL0
+
+WLX
+
+VX
+
+G12
+
+C
+IM
+
+Qi K T
+Attention(Qi , Ki , Vi ) = Sof tmax( √ i )Vi ,
+d
+
+S0
+
+C
+IM
+
+A Vision Transformer (ViT) model proposed in [1], [8]
+segments an image into multiple patches, commonly referred
+to as tokens. Depending on the patch size, the number of
+tokens t is determined. Each token is embedded into a dsized feature space. Thus, the input to an encoder X is a
+t × d dimension vector. A ViT consists of multiple encoders
+determined by the NEncoders parameter.
+Fig. 1a shows the architecture of a ViT encoder. In each
+encoder, the inputs X of dimensions t × d are multiplied with
+the weights WQ , WK and WV to generate the Query (Q), Key
+(K) and Value (V) matrices. ViTs use multi-head self-attention
+(MHSA)-based encoder, that capture closer relationships between the Query and Key values [1], [8], [9], [14]. For this, the
+Q, K and V outputs are partitioned into smaller singular-heads
+(Qi , Ki , Vi ), where i denotes a head of MHSA.
+The attention shown in Equation 1 is computed using
+matrix multiplications between Qi , KiT followed by Softmax
+operation and finally matrix multiplication with Vi . In TReX,
+to compute the softmax of each element xi in a matrix
+x, we subtract xmax (the maximum value in x) from xi
+as shown in Equation 2. This is numerically more stable
+compared to the standard softmax function as it eliminates
+any overflow/underflow issues during digital computation [11],
+[25].
+
+G11
+
+V1
+
+C
+IM
+
+III. BACKGROUND ON V ISION T RANSFORMERS
+
+WL1
+
+C
+IM
+
+the M atmul operations. Considering the write overhead of
+NVM devices, prior IMC-centric transformer approaches [10],
+[11] are incapable of achieving optimal performance.
+
+Multiplexer Multiplexer
+ADC
+ADC
+Shift-and-Add
+
+Shift-and-Add
+
+Fig. 3: Figure showing a standard IMC crossbar array.
+
+Law. These currents are generated along the bit-lines BLi .
+As per Kirchoff’s current law, the net output current sensed
+at each column j is the summation of currents through each
+device, expressed as Ij(ideal) = ΣX
+i=1 Gij ∗ Vi . Here, Gij is
+the matrix containing the ideal conductance values of the IMC
+devices and X is the crossbar size. The analog currents are
+converted to digital values using the ADC and accumulated
+using the shift-and-add circuits.
+In practice, due to the analog nature of computation, various
+hardware noise and non-idealities arise, such as interconnect
+parasitic resistances, synaptic device-level variations during
+read and write operations [27]–[29] among others. As a
+result, the non-ideal current Ij(non−ideal) is represented as
+′
+Ij(non−ideal) = ΣX
+i=1 Gij ∗ Vi . The Ij(non−ideal) deviates
+from its ideal value owing to the non-ideal conductance matrix
+G′ij . This leads to significant accuracy losses for neural networks mapped onto crossbars, especially for larger crossbars
+with more non-idealities [27], [29], [30].
+V. TR E X O PTIMIZATION F RAMEWORK
+A. Attention Reuse Technique
+Fig. 4 shows an example of attention reuse in a BaseViT
+with 4 encoders (i.e., NEncoders = 4). Here, encoders 2 and
+4 reuse the attention (concatenation output) of encoders 1
+and 3, respectively. For attention reuse, transformation blocks
+TB1 and TB2 are introduced. Transformation blocks contain
+a layer-normalization layer, a d × d fully-connected layer and
+a GeLU layer. TB1 and TB2 transform the t × d attention
+outputs of encoders 1 and 3 to a t×d vector which is fed to the
+projection blocks of encoders 2 and 4, respectively. Here, t and
+d denote the number of tokens and the embedding dimension,
+respectively. Note, the dimensions of fully connected layer
+inside TB is chosen such that it introduces sufficient data
+variability. Data variability ensures that the TReX-optimized
+ViT achieves iso-accuracy with the BaseViT model. Apart from
+this, no other architectural modification is performed on the
+BaseViT.
+B. Attention Reuse-based Optimization
+The goal of the attention reuse-based optimization is to
+choose optimal number of encoders (Optimal Nreuse ) and their
+
+=== page 4 ===
+4
+
+GeLU
+
+txd
+
+MLP
+
+PROJECTION
+
+LAYER NORM
+
+Encoder 4
+
+MLP
+
+PROJECTION
+
+ATTENTION
+
+LAYER NORM
+
+Encoder 3
+
+MLP
+
+LAYER NORM
+
+PROJECTION
+
+Encoder 2
+
+MLP
+
+LAYER NORM
+
+ATTENTION
+
+LAYER NORM
+
+PROJECTION
+
+Encoder 1
+
+Baseline ViT
+
+txd
+
+txd
+
+LAYER
+NORM
+
+GeLU
+
+LAYER
+NORM
+
+txd
+
+d x d Linear Layer
+
+TB2
+
+d x d Linear Layer
+
+LAYER NORM
+
+TB1
+
+Fig. 4: Figure showing the attention reuse technique wherein encoders 2 and 4 reuse attention of encoders 1 and 3, respectively. Transformation
+blocks TB1 and TB2 are used for introducing data variability. For encoders 2 and 4, the Attention blocks are removed and the TB outputs
+are connected to the Projection input.
+
+TB
+
+SL = 2
+
+Encoder 9
+
+Encoder 8
+
+Encoder 7
+
+Encoder 6
+
+Ncont = 2
+
+TB
+
+(c)
+
+SL = 2
+Encoder 5
+
+Encoder 4
+
+Encoder 1
+
+TB
+
+TB
+
+Encoder 3
+
+TB
+
+Encoder 9
+
+Encoder 8
+
+Encoder 7
+
+Encoder 6
+
+Encoder 5
+
+Encoder 4
+
+(b)
+
+Encoder 2
+
+TB
+
+Encoder 2
+
+Encoder 1
+
+TB
+
+Encoder 3
+
+(a)
+Encoder 9
+
+Encoder 8
+
+TB
+
+Encoder 7
+
+Encoder 6
+
+TB
+
+Encoder 5
+
+Encoder 4
+
+TB
+
+Encoder 3
+
+Encoder 2
+
+Encoder 1
+
+TB
+
+TB
+
+Fig. 5: (a) Strided pattern with SL = 2, Nreuse = 4 (b) Continuous pattern Nreuse = 4 (c) Pyramid pattern with SL = 2, Nreuse = 4 and
+Ncont = 2.
+(b)
+(a)
+
+Pyramid SL = 1, Ncont = 2 Continuous
+Strided SL = 1
+0 1 2 3 4 5 6 7 8 0 1 2 3 4 5 6 7 8
+0 1 2 3 4 5 6 7 8
+0 1 2 3 4 5 6 7 8 0 1 2 3 4 5 6 7 8
+Start Position = 1
+0 1 2 3 4 5 6 7 8 0 1 2 3 4 5 6 7 8
+0 1 2 3 4 5 6 7 8
+Start Positions = 1-3 0 1 2 3 4 5 6 7 8
+Start Position = 2
+Pyramid SL = 2, Ncont=2 0 1 2 3 4 5 6 7 8
+Generate Reuse
+0 1 2 3 4 5 6 7 8
+Patterns for N
+Start Positions = 1-5
+reuse
+
+Partial Training for all Reuse Patterns
+0 1 2 3 4 5 6 7 8
+Reuse Pattern
+
+(c)
+
+Record Loss
+
+TB
+
+TB
+
+TB
+
+TB
+
+Apply TBs and Remove Attention
+Blocks from Encoders 1, 3, 5, 7
+
+Train TB-BaseViT Model
+on 20% Dataset with Loss
+Objective (𝐿)
+
+TReX-optimized
+ViT Model
+
+0 1 2 3 4 5 6 7 8
+
+TB-BaseViT
+
+0 1 2 3 4 5 6 7 8
+
+Full Training with Optimal Pattern
+
+Optimal Pattern =
+Pattern with least loss
+
+TB-BaseViT
+
+0 1 2 3 4 5 6 7 8
+TB
+
+TB
+
+TB
+
+TB
+
+Apply TBs and Remove Attention
+Blocks from Encoders 2, 4, 6, 8
+
+Train TB-BaseViT Model on
+Full Dataset using 𝐿 and IMC
+device/quantization noise
+
+Fig. 6: (a) Figure showing an example of different reuse patterns for NEncoders = 9 and Optimal Nreuse = 4 generated in Step 2. (b)
+Illustration of Step 3. Here, partial training is performed for all reuse patterns generated in Step 2 (c) Illustration of Step 4. Here, IMC
+variation-aware training is performed with the optimal pattern.
+
+Algorithm 1 Finding Optimal Nreuse to meet Target Delay
+1: Initialize ViT and IMC Parameters (P) in Table I
+2: Nreuse ← 0
+▷ Set Nreuse to 0
+3: r ← 0
+4: delay ← TReXSim(Nreuse = r, P)
+5: while delay > target delay do
+6:
+delay ← TReXSim(Nreuse = r, P)
+7:
+r ←r+1
+8: end while
+9: Optimal Nreuse ← r
+
+locations in the BaseViT model such that high accuracy is
+achieved while meeting the target delay. This optimization is
+performed in 4 steps:
+Step 1: In this step, we choose the Optimal Nreuse value
+
+that meets the given target delay criterion (Algorithm 1).
+Before beginning the iteration, first the user-defined ViT and
+IMC parameters P shown in Table I are initialized. Then, the
+variable r is iteratively incremented. At each iteration, delay
+value is computed by the TReX-Sim platform based on the
+Nreuse and P values. Note, only the Nreuse value changes
+with each iteration while the P remain constant. P includes
+NEncoders , d, t values among others to compute the delay,
+DV iT , using Equation in row 9 of Table II. The minimum
+value of r that meets the target delay criteria is chosen and set
+as the Optimal Nreuse value. Note, as the attention block has
+the major contribution towards the overall delay (Fig. 1b), we
+choose to optimize the BaseViT for a given delay constraint.
+Step 2: While Optimal Nreuse affects the energy-efficiency,
+the reuse pattern (i.e., the location of encoders reusing attention) determines the accuracy of the TReX-optimized ViT as
+
+=== page 5 ===
+5
+
+L = LCE + λ1 Ldistill + λ2 LKL .
+
+(3)
+
+L = LCE + λ3 Ldense .
+
+(4)
+
+Step 4: In the final step as shown in Fig. 6c, the reuse
+pattern with minimum loss value is selected as the optimal
+pattern. This optimal pattern is applied to the BaseViT model
+and the TB-BaseViT model is trained on the full dataset using
+
+the loss objectives shown in Equation 3 and 4 for DeiT-S and
+LV-ViT-S BaseViT, respectively.
+The training is performed in an IMC-variation aware manner. For a FeFET-based IMC implementation, ADC quantization, read and write noise is introduced in Q, K, V ,
+M atmul (QK T ), M atmul S(QK T )V , Projection and MLP
+layers during the forward propagation [31], [32]. In contrast,
+for SRAM-based IMC implementations, only ADC quantization noise is added during the forward propagation as SRAMs
+are relatively immune to device non-idealities [7], [33]. The
+backward propagation, is performed with 16-bit floating point
+precision. At the end of Step 4, the TReX-optimized ViT
+model is obtained.
+Accuracy (%)
+
+not all encoders are favorable for attention reuse. Since in this
+work, we use isotropic ViTs such as DeiT-S [9] and LV-ViT-S
+[10], wherein all the encoders have the same architecture, the
+reuse pattern does not affect the energy, delay or area of the
+IMC-implemented ViT.
+Exploring all possible reuse patterns for a given Optimal
+Nreuse value leads to a large design space exploration. For
+example, for a BaseViT= DeiT-S with NEncoders = 12, if
+Optimal Nreuse = 5, then we need to explore 11
+= 462
+5
+possible reuse patterns. Hence, to reduce the design space, we
+use well-defined uniform reuse patterns shown in Fig. 5.
+1) Strided Pattern: Shown in Fig. 5a, the strided pattern
+involves attention reuse in encoders separated by a
+uniform distance called the stride length (SL). Here,
+the attention output from the previous encoder is reused
+in the green encoders with the help of TBs.
+2) Continuous Pattern: Here, consecutive encoders share
+the attention from a prior encoder as shown in Fig. 5b.
+3) Pyramid Pattern: The pyramid pattern shown in
+Fig. 5c entails a strided-continuous-strided pattern with
+Ncont number of continuous encoders and strided encoders with stride length SL.
+For all the above patterns, the starting position determines
+the location of the first encoder reusing attention. The strided
+patterns are generated by varying SL and starting positions.
+Similarly, different pyramid patterns can be generated by
+varying NCont , SL and the starting positions. Finally, different
+continuous patterns can be generated by varying only the
+starting positions. As an example, Fig. 6a shows all possible
+patterns generated for a BaseViT with Nencoders = 9 and
+Optimal Nreuse = 4.
+Step 3: Next, partial training for each reuse pattern
+generated in Step 2 is performed as shown in Fig. 6b. First,
+a random reuse pattern is selected and applied to the BaseViT
+creating the TB-BaseViT model. This is done by adding TBs
+between suitable encoders and removing the attention blocks
+in the encoders reusing attention. Then, the TB-BaseViT model
+with attention reuse is trained on 20% of the Imagenet-1k
+dataset with loss objective L. For BaseViT= DeiT-S, we use
+the loss objective function shown in Equation 3. Here, LCE
+is the cross-entropy loss computed between the predicted and
+ground-truth labels. Ldistill is the cross-entropy loss between
+the predicted labels and the soft-labels from a pre-trained
+teacher ViT model. LKL is the KL-Divergence loss between
+the predicted class tokens and class tokens of the pre-trained
+teacher ViT [1]. Similarly, for BaseViT= LV-ViT-S [8], we use
+the loss objective functions shown in Equation 4. Here, Ldense
+is the dense score map-based cross-entropy loss [8]. λ1 , λ2 and
+λ3 are hyperparameters. For each reuse pattern, the final loss
+value upon partial training on 20% dataset is recorded.
+
+DeiT-S Training from Scratch
+20x lower
+23.1x 100x
+lower lower
+
+Step 3 Uniform
+
+Step 3 Random
+
+Step 4
+Step 3
+(Finetuning) (Random)
+
+(a)
+
+Step 3
+(Uniform)
+
+(b)
+
+Fig. 7: Figure showing (a) Post-finetuning accuracy of DeiT-S ViT
+with different random and uniform reuse patterns for Nreuse = 5. The
+accuracy is measured for ImageNet-1K dataset. (b) Normalized GPU
+hours (normalized with respect to the cost of training a DeiT-S model
+from scratch) required by Step 3 ( with random search and uniform
+pattern search) and Step 4 (finetuning ViT with the optimal reuse
+pattern.)
+
+As shown in Fig. 7a, the uniform reuse patterns achieve
+higher accuracy compared to different randomly searched
+patterns for Nreuse = 5 for the DeiT-S ViT. This is because
+the uniform patterns ensure sufficient distance between two
+encoders reusing the previous encoder’s attention. However,
+this is not always guaranteed in the random reuse patterns.
+Additionally, since the search space is significantly reduced
+when uniform reuse pattern is employed, the GPU hours
+required in the Step 3 of TReX optimization greatly reduces
+by 23.1× compared to the random pattern searching. Note,
+that Step 3 entails training ViT with different possible reuse
+patterns over 20% of the Imagenet-1k dataset. In comparison
+to training a DeiT-S ViT from scratch, uniform reuse pattern
+requires 100× lower GPU hours. With random reuse pattern,
+the cost is significantly high. Finally, Step 4 (finetuning the
+ViT with the Optimal reuse pattern) requires 20× lower GPU
+hours compared to from-scratch training of DeiT-S.
+VI. TR E X-S IM P LATFORM
+A. Platform Architecture
+TReX-Sim is a hardware-realistic inference benchmarking
+platform for IMC-implemented ViTs. For evaluation, TReXSim is initialized with user-defined ViT and crossbar parameters shown in Table I. Following this, as shown in Fig. 8a, the
+encoder layers are mapped on a tiled-array architecture. We
+adopt the standard tiled architecture in prior works [7], [33].
+Following prior works, we assume that multiple tiles can map
+one layer but not vice-versa [7], [33]. Additionally, to reduce
+
+=== page 6 ===
+6
+
+Tile
+
+Encoder Weight Mapping
+
+K
+V
+Matmul
+QKT
+Matmul
+S(QKT)V
+
+Projection
+
+PE1
+
+PE2
+
+TB
+
+PE3
+
+PE4
+
+TA
+
+T1
+
+T2
+
+T3
+
+T4
+
+T5
+
+T6
+
+T7
+
+T8
+
+T9
+
+T10
+
+T11
+
+T12
+
+C1
+
+C2
+
+PB
+
+GB
+
+GA
+
+LN
+
+𝒮
+
+C3
+
+C4
+
+PA
+
+SRAM
+
+Tile Array
+
+BL0
+
+D1
+
+D3
+
+D4
+
+Crossbar (C)
+
+BL0
+
+FeFET
+
+ADC
+Output activations
+
+WL0
+
+BL1
+
+BL0
+
+BL1
+
+Fe RS0 BL1
+
+Processing Element
+Fe RS1
+
+SL0
+
+ADC
+
+L = Matmul QKT
+
+Fe
+
+WL1
+
+WL1
+
+(b)
+L=K
+
+D1
+
+WL0
+
+MLP
+Encoder
+
+L=Q
+
+Input activations
+
+Q
+
+(c)
+
+Row Decoder
+
+(a)
+
+Attention Block
+
+Q Input
+L = Matmul QKT
+
+L = Softmax
+
+Compute
+Softmax
+4
+
+L=V
+
+L = Matmul S(QKT)V
+
+Read Q, K, V
+
+Write KT, V
+
+Read Matmul QKT
+
+1
+
+2
+
+3
+
+Fe
+
+ADC
+
+L = Matmul S(QKT)V
+
+L = Projection
+
+L = MLP
+
+Read Matmul S(QKT)V Read Projection Read MLP
+6
+7
+5
+
+Fig. 8: (a) Mapping of encoder layers to Tiles. GB, TB and PB- Global, Tile and PE Buffers. GA, TA, PA- Global, Tile and PE Accumulators.
+LN-Layer Normalization. (b) The computation stages of an IMC-implemented ViT encoder. (c) SRAM and FeFET Crossbar architectures.
+TABLE I: Table describing the ViT and Crossbar parameters initialized at runtime of the TReX-Sim platform.
+ViT Parameters
+d
+Embedding dimension
+t
+#Tokens in Input
+mlp ratio
+MLP Ratio of ViT
+Nreuse
+#Encoders reusing Attention
+NEncoders
+Total Encoders in ViT
+N H
+Number of Heads in MHSA
+Crossbar Parameters
+Device
+Type of IMC Device
+Xbar size
+Crossbar Size
+N X PE
+#Crossbars per PE
+N P E T ile
+#PE per Tile
+ER,X , EW,X
+Crossbar Read and Write Energy
+DR,X , DW,X
+Crossbar Read and Write Delay
+AX
+Crossbar Area
+
+Val_Sel
+
+in dim
+out dim
+) × ceil(
+)
+Xbar size
+Xbar size
+
+xi
+
+x0
+
+Max_Reg
+
+>
+
+xmax Select_Circuit
+𝒮_Ctrl
+
+xi
+xmax
+
+-
+
++ Σ𝑒 ! "!
+!
+
+"#$
+
+!! "!"#$
+
+𝑒
+Exp_LUT Exp_Buffer
+
+÷
+
+Exponent_Computation Div
+
+the ADC precision, we follow input and weight splitting
+paradigms similar to prior works [7], [34]. The number of
+crossbars required to map layer L (L ̸= sof tmax) is defined
+by Equation 5. Here, in dim and out dim are the input
+and output dimensions of layer L, respectively, and crossbar
+Xbar size denotes the crossbar size.
+
+NX, L = ceil(
+
+max_val
+
+(5)
+
+Similar to prior IMC-driven transformer works [10], [11],
+the encoder execution occurs as shown in Fig. 8b. In 1 ,
+the Q, K and V values are read from tiles mapping layers
+L = Q, L = K and L = V . In 2 , the K T and V matrices
+are written to the tiles mapping L = M atmul QK T and L =
+M atmul S(QK T )V layers, respectively. This is followed by
+crossbar read operations in tiles of L = M atmul QK T to
+
+Fig. 9: Architecture of the softmax unit. Each softmax module S
+contains multiple softmax units dictated by the number of attention
+heads.
+
+generate the QK T in 3 . Next, the S(QK T ) is computed
+by the digital softmax module (S) in 4 . Following this,
+read operations are performed in the tiles mapping layers
+L = M atmul S(QK T )V , L = P rojection and L = M LP
+to compute the S(QK T )V , projection and the MLP outputs
+in 5 , 6 and 7 , respectively. Depending on the device,
+TReX-Sim can support two types of IMC crossbars:
+1) SRAM Crossbar: The crossbar architecture for the
+SRAM-based IMC device is shown in Fig. 8c (left).
+The SRAM array is written in a row-by-row manner
+involving a bit-line pre-charge followed by the write-line
+(WL) activation to write values into the corresponding
+SRAM cells. The read is performed in a parallel manner
+wherein all the WLs are simultaneously activated post
+
+=== page 7 ===
+7
+
+TABLE II: Table showing the energy, delay and area equations used
+by TReX-Sim Platform
+
+(2.3W)
+
+(0.15mW)
+
+Fig. 10: Figure showing the delay and power of softmax module
+implemented on ARM CPU (ARM Cortex-A53) and the softmax
+module integrated into TReX-Sim. The softmax for ARM CPU is
+implemented using a 6 degree Taylor series approximation (Taylor).
+Whereas, in TReX-Sim, we use Look-up Tables (LUT) to compute
+the exponent.
+
+the BL pre-charging stage. The analog currents accumulate over the bit lines (BL) and are converted to digital
+values using flash Analog-to-Digital Converters (ADCs)
+as shown.
+2) FeFET Crossbar: The FeFET array has different write
+and read paths. For the write operation, positive and
+negative voltage (typically 4V) is supplied to the BL in a
+series of write pulses. During write, the read-select (RS)
+line is grounded. For the read operation, read voltage is
+supplied at the RS line while the BL is grounded. The
+currents accumulate along the source lines (SL) and are
+converted to digital values using flash-ADCs. Similar to
+the SRAM array, the write operation is performed rowby-row while the read is parallel.
+Softmax Module (S): Fig. 9 shows the architecture of the
+softmax unit. Note, that prior IMC works [10], [11] have proposed NVM-based softmax modules which require repeated
+write cycles for softmax computation. However, given the high
+write energy and device variations in NVMs, NVM-based
+softmax modules are unreliable. Thus, in TReX, we use a
+digital softmax module similar to prior works [35]–[37] for reliable and energy-efficient softmax computation. The softmax
+is computed in a token-by-token basis. For each token, first the
+xmax (refer Equation 2) value is searched. This is performed
+in the xmax Select Circuit wherein the token features (of
+dimension t) are compared sequentially and the intermediate
+max values are stored in Max Reg. Among the t comparison
+operations, Val Sel = 1 for the first comparison and 0 for
+all other comparisons. Following this, the softmax control
+circuit (S Ctrl) enables the Exponent Computation circuit
+and forwards the xmax value. In the Exponent Computation
+circuit, xmax is subtracted from feature xi of the token and a
+lookup is performed on the Exp LUT to compute the exponent
+(exi −xmax ). Each exi −xmax is stored in the Exp Buffer for
+future computation. The exi −xmax is also accumulated over all
+the t tokens. After exponent computation, the S Ctrl enables
+the Div circuit to compute the softmax values. During this,
+the exponent values stored in Exp Buffer are reused. In TReXSim, we use independent softmax units for each attention head.
+For example, for a DeiT-S model with 6 attention heads, the
+S module contains 6 softmax units.
+Due to the Look-up Table (LUT)-based implementation and
+the parallel computation of softmax across attention heads,
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+ER, L
+tL × NX, L × ER, X
+EW, L
+NX, L × EW, X
+DR,L
+tL × DR,X × NX,P E
+DW,L
+DW,X × NX,P E
+ES
+NH × t2L × (ESelect + EExponent + EDiv )
+DS
+t2L × (DSelect + DExponent + DDiv )
+AL
+NX, L × AX
+EV iT
+NEncoders × (EM LP + EP rojection )
+(NEncoders − Nreuse ) × EAttn
+DV iT
+NEncoders × (DM LP + DP rojection )
+(NEncoders − Nreuse ) × DAttn
+AV iT
+NEncoders × (AM LP + AP rojection )
+(NEncoders − Nreuse ) × AAttn
+
+TReX-Sim’s softmax module is 3× faster and consumes
+103 × less power compared to CPU-based implementation
+using Taylor approximation of the exponent function. Notably,
+the Taylor series approximation is costly due to the large
+polynomial degree required to approximate the exponential
+function (polynomial degree = 6). This is shown in Fig. 10.
+B. Hardware Evaluation
+Table II shows the equations used by TReX-Sim to compute the read and write energies (ER, L , EW, L ), delays
+(DR, L , DW, L ) and area (AL ) for any encoder layer L
+(L ̸= Sof tmax) shown in Fig. 8b. These equations are
+computed based on the ViT and crossbar parameters shown
+in Table I. As an example, to compute the write energy
+of M atmul QK T layer, NX, L is the number of crossbars required to map the K T vector with in dim= t and
+out dim= d. NX, L multiplied with EW, X results in EW,L
+for M atmul QK T layer.
+Additionally, ES and DS denote the energy and delay
+of the softmax module, respectively. Here, ESelect /DSelect ,
+EExponent /DExponent and EDiv /DDiv are the energy/delay
+of Select Circuit, Exponent Computation and Div circuits,
+respectively. Note, the area consumption of the digital softmax
+module is negligible and hence not considered. Based on
+the value of NEncoders and Nreuse , TReX-Sim computes the
+ViT energy (EV iT ), delay (DV iT ) and area (AV iT ). Here,
+EAttn , DAttn and AAttn are the summation of read/write
+energy, delay and area of all layers (including softmax-based
+computations) in stages 1-5 shown in Fig. 8b.
+VII. R ESULTS
+A. Experimental Setup
+TReX-Optimization Platform: The baseline and TReXoptimized DeiT-S and LV-ViT-S models are trained using
+Pytorch 1.6 with Nvidia-V100 GPU backend. We utilize DeiTS and LV-ViT-S as backbone networks in our approach due to
+their compact nature and widespread usage in previous studies.
+During Step 3 of the attention reuse-based optimization, the
+ViTs are trained on 20% of the Imagenet-1k dataset. This only
+adds ∼5% to the overall training overhead. In Step 4 of TReX
+optimization, after the optimal pattern is applied, the TBBaseViT model is finetuned for 30 epochs on the Imagenet-1k
+dataset [38] with a learning rate of 0.01. The hyperparameters
+
+=== page 8 ===
+λ1 and λ2 and λ3 in Equation 3 and Equation 4 are 0.1, 0.5
+and 0.2, respectively.
+For FeFET-based implementation, read/write device variations shown in Table III and ADC quantization noise
+are added. For SRAM-based implementations, only ADC
+quantization noise is added. While there exists other IMCspecific non-idealities such as IR-drop [26] and transistor nonlinearities [29], we use read/write variations (only for FeFET
+implementation) and ADC quantization noise (for both FeFET
+and SRAM implementations) to evaluate TReX. Extensive
+research has shown that device variations and ADC quantization contribute significantly towards accuracy degradation
+and cannot be easily mitigated [28], [39]. The IR-drop and
+transistor non-linearity noise follow a structured profile and
+can be mitigated using simple approaches such as batchnorm
+adaptation and weight retraining [28], [30].
+TReX-Sim Platform: Table III shows the hardware parameters used for the energy, delay and area computations of the
+BaseViTs and the TReX-optimized ViTs. The crossbar energy,
+delay and area values are obtained based on IMC implementations of SRAM and FeFET crossbars of size 64×64 [33], [40].
+The energy, delay and area of the Exponent, Select and Div
+circuits in the Softmax unit are computed using 32nm CMOS
+implementations on the Synopsys DC compiler platform.
+TABLE III: Table enlisting the values of various Circuit and Device
+parameters used for experiments with TReX-Sim.
+Circuit Parameters
+Technology
+32nm CMOS
+Xbar size, N X PE, N PE Tile
+64, 8, 8
+ADC Precision
+6-bits
+Weight & Input Precision
+8-bit & 8-bit
+Input Splitting
+1-bit
+FeFET Parameters [40]
+Bits/Cell
+2
+Read & Write Variations
+10% & 20%
+Ron and Rof f
+100kΩ and 10MΩ
+ER, X , EW, X
+25pJ & 118pJ
+DR, X , DW, X
+0.02µs, 3.3µs
+AX
+0.03mm2
+SRAM Parameters [33]
+Bits/Cell
+1
+ER, X , EW, X
+29pJ & 13pJ
+DR, X , DW, X
+0.018µs, 0.018µs
+AX
+0.07mm2
+
+EDAP (mJ*ms*mm2)
+
+8
+
+TReX-D-9
+TReX-D-7
+
+Fig. 11: Figure showing the EDAP distribution of DeiT-S, TReX-D-9
+and TReX-D-7 models across Attention (Attn), transformation (TB),
+Projection (Proj) and MLP blocks.
+
+Fig. 12: Figure showing the (a) energy and (b) delay distributions
+across write circuits, data communication, read circuit, accumulator
+and ADC. The communication circuit performs intra-tile and inter-tile
+data communications. While accumulators accumulate partial sums
+from crossbars, PEs and Tiles.
+
+networks in our approach due to their compact nature and
+widespread usage in previous studies.
+As the attention module consumes 70-80% of the overall
+EDAP (Fig. 1), performing attention reuse majorly reduces
+the attention overhead which significantly lowers the overall
+EDAP as seen in Fig. 11. Although transformation blocks
+are added for attention reuse, their contribution to EDAP is
+minimal (less than 1%). Furthermore, the EDAP of projection
+and MLP layers remain constant as they are not reused. This
+further shows that attention reuse has greater capability to
+minimize the overall EDAP. From Fig. 12, it is observed
+that TReX optimization lowers the energy and delay across
+different modules in the TReX-Sim framework.
+C. Comparison with Prior Works
+
+B. Results on DeiT-S and LV-ViT-S Transformers
+As seen in Table IV at near-iso accuracy (<2% NI-accuracy
+reduction), TReX-D-9, TReX-D-7 and TReX-D-6 achieve
+significant reduction in the EDAP (upto 3.5×) and increase in
+the TOPS/W and TOPS/mm2 values by upto 1.05× and 2.63×,
+respectively. At a slight NI-accuracy degradation (∼4.7%)
+TReX-D-4 achieves 6.3× EDAP reduction at 1.11× (4.21×)
+higher TOPS/W (TOPS/mm2 ) values compared to DeiT-S.
+For the LV-ViT-S ViT model (Table V), TReX-L-12, TReXL-10, TReX-L-9 achieve upto 2.57× EDAP reduction and
+upto 1.06× (2.02×) higher TOPS/W (TOPS/mm2 ) with a
+minimal NI-accuracy drop (∼1.5%) compared to the LV-ViT-S
+model. With slightly higher accuracy drops (3-5%), TReX-L-8
+and TReX-L-6 achieve upto 5.57× EDAP reduction and upto
+1.11× (3.69×) higher TOPS/W (TOPS/mm2 ) compared to LVViT-S. Note, we utilize DeiT-S and LV-ViT-S as backbone
+
+Fig. 13a compares the Accuracy and the EDAP reduction
+achieved by prior works and TReX. For a fair comparison,
+all prior works and the baseline DeiT-S model have been
+implemented on TReX-Sim with 64×64 2-bit FeFET crossbars. ReTransformer [11] proposed an efficient dataflow to
+minimize the delay for computing QK T by eliminating the
+delay required to program K T . This is done by programming
+T
+X T in parallel with X-WQ and Q-WK
+multiplications. Interestingly, as the write delay of FeFET devices is generally
+∼ 103 × higher than the read delay [7], when ReTransformer
+is implemented on hardware-realistic IMC-architecture like
+TReX-Sim, it only reduces the EDAP by 1.03× compared
+to baseline while maintaining iso-accuracy.
+Recent works have proposed weight sharing [14] wherein,
+multiple encoders in the ViT share the same set of weights
+(determined by the weight sharing (W S) parameter). For
+example, a W S of 2 implies that 2 encoders share the same
+
+=== page 9 ===
+9
+
+TABLE IV: Energy, Delay, Area, Accuracy, EDAP, TOPS/W and TOPS/mm2 for DeiT-S and TReX-optimized DeiT-S ViTs optimized at
+different target delay for the Imagenet-1k dataset. Here, I and NI denote the ideal and non-ideal accuracy (under ADC quantization, read
+and write variation noise), respectively. TReX-D-N denotes the TReX-optimized DeiT-S Vit at target delay N .
+Model
+
+Target Delay (ms)
+
+Energy (mJ)
+
+Delay (ms)
+
+Area (mm2 )
+
+EDAP
+
+TOPS/W
+
+TOPS/mm2
+
+N/A
+9
+7
+6
+4
+
+0.13
+0.12
+0.11
+0.1
+0.091
+
+10.92
+8.46
+6.82
+5.18
+3.54
+
+775.2
+701.1
+651.7
+602.3
+552.9
+
+1115.23 (1×)
+700.2 (↓ 1.6×)
+484.15 (↓ 2.3×)
+311.43 (↓ 3.5×)
+177.6 (↓ 6.3×)
+
+34.45 (1×)
+35.49 (↑ 1.03×)
+36.32 (↑ 1.03×)
+37.31 (↑ 1.05×)
+38.49 (↑ 1.11×)
+
+0.00054 (1×)
+0.00077 (↑ 1.42×)
+0.00102 (↑ 1.85×)
+0.00145 (↑ 2.63×)
+0.00232 (↑ 4.21×)
+
+DeiT-S
+TReX-D-9
+TReX-D-7
+TReX-D-6
+TReX-D-4
+
+Accuracy
+I
+NI
+79.6
+79.2
+79.3
+79
+78.4
+78.1
+77.7
+77.3
+75
+74.5
+
+TABLE V: Energy, Delay, Area, Accuracy, EDAP, TOPS/W and TOPS/mm2 for LV-ViT-S and TReX-optimized LV-ViT-S ViTs optimized
+at different target delay for the Imagenet-1k dataset. I and NI denote the ideal accuracy and non-ideal accuracy, respectively. TReX-L-N
+denotes the TReX-optimized LV-ViT-S Vit at target delay N .
+Model
+
+Target Delay (ms)
+
+Energy (mJ)
+
+Delay (ms)
+
+Area (mm2 )
+
+EDAP
+
+TOPS/W
+
+TOPS/mm2
+
+N/A
+12
+10
+9
+8
+6
+
+0.153
+0.135
+0.125
+0.121
+0.112
+0.103
+
+14.55
+11.28
+9.64
+8.82
+7.18
+5.55
+
+912.0
+813.2
+763.8
+739.1
+689.7
+640.3
+
+2030.1 (1×)
+1234.87 (↓ 1.64×)
+924.03 (↓ 2.19×)
+788.35 (↓ 2.57×
+553.72 (↓ 3.8×)
+364.35 (↓ 5.57×)
+
+33.51 (1×)
+34.59 (↑ 1.03×)
+35.25 (↑ 1.05×)
+35.61 (↑ 1.06×)
+36.44 (↑ 1.08×)
+37.41 (↑ 1.11×)
+
+0.00039 (1×)
+0.00056 (↑ 1.43×)
+0.0007 (↑ 1.79×)
+0.00079 (↑ 2.02×)
+0.00103 (↑ 2.64×)
+0.00144 (↑ 3.69×)
+
+LV-ViT-S
+TReX-L-12
+TReX-L-10
+TReX-L-9
+TReX-L-8
+TReX-L-6
+
+TReX-D-9TReX-D-7
+
+NI-Accuracy(%)
+
+(a)
+
+NI-Accuracy(%)
+
+(b)
+
+P = 0.3
+P = 0.4
+
+P = 0.5
+
+WS = 3
+
+TReX-D-9TReX-D-7
+P = 0.3
+WS = 2
+TReX-D-6.5
+TReX-D-6
+P = 0.4
+P = 0.5
+
+D-9
+
+NI-Accuracy(%)
+
+TReX-D-9
+
+TReX-D-7
+TReX-D-9
+
+P = 0.3
+P = 0.4
+
+WS = 2TReX-D-6.5
+TReX-D-6
+
+TReX-D-7
+
+WS = 2 TReX-D-6.5
+TReX-D-6
+WS = 3
+
+NI-Accuracy(%)
+
+TReX-D-7
+TReX-D-9
+TReX-D-7 P = 0.5
+WS
+= 2 TReX-D-6.5
+P
+= 0.3
+ReX-D-7
+TReX-D-6.5
+P = WS
+0.3 = 2
+TReX-D-6
+WS = 2 TReX-D-6.5
+TReX-D-6.5
+2
+Token TReX-D-6
+Pruning TReX-D-6
+Weight Sharing TReX-D
+TReX-DViTs
+Models
+P
+= 0.4
+P
+= 0.4
+TReX-D-6
+P = 0.5
+P = 0.5
+3
+DeiT-S
+(Baseline)
+P = 0.5 ReTransformer WS =
+0.5
+
+TReX-D Models
+
+Fig. 13: (a) Figure comparing the
+accuracy and EDAP
+TReX-Dnon-ideal
+Models
+TReX-D Models
+WS = 3(relative
+reduction
+TReX-Dto the
+ModelsDeiT-S (Baseline) model) between TReX
+WS = 3
+= 3 comparing the trends in non-ideal
+and prior works. (b) WS
+Figure
+WS = 3
+accuracy and TOPS/W of TReX and prior works. For token pruning
+[9], P represents the token pruning ratio while W S represents the
+number of repeat encoders for weight sharing [14]. The TReX ViTs
+are optimized at 9ms, 7ms, 6.5ms and 6ms. For a fair comparison, all
+prior optimization works have been implemented on the TReX-Sim
+framework.
+
+weights which means that the number of weight parameters
+are halved. Weight sharing leads to on-chip area reduction in
+IMC architectures as less number of crossbars are required to
+map the weights. However, there is no energy/delay reduction
+as weight sharing does not reduce the number of computations
+in the ViT. As shown in Fig. 13a, for W S = 2, weight sharing
+
+Accuracy
+I
+NI
+83.3
+82.9
+82.9
+82.3
+82.6
+82.1
+81.7
+81.4
+80
+79.6
+78.1
+77.9
+
+achieves 78.3% accuracy with 2× EDAP reduction. Evidently,
+as W S is increased to 3, the accuracy drastically drops to 60%.
+In token pruning [9], standalone predictor networks are
+trained to identify least important tokens that can be pruned
+out (determined by P parameter) without accuracy loss. Token
+count reduction directly reduces the number of computations
+and ultimately the energy/delay. Reduced token count also
+slightly reduces the number of crossbars required to map
+K T and V matrices. However, due to the predictor networks,
+significant computation overhead is introduced. As seen in
+Fig. 13a this limits the EDAP reduction of token pruning
+to only 1.3× at 79.3% accuracy. At higher token pruning
+ratios (P > 0.3) token pruning achieves upto 2.2× EDAP
+reduction at 7.4% accuracy drop. Hence, like weight sharing,
+token pruning is incapable of achieving high EDAP reduction
+while maintaining high accuracy.
+Finally, TReX is able to beat the state-of-the-art works in
+terms of EDAP reduction while achieving a high accuracy.
+TReX-D-9 achieves 1.6× EDAP reduction at 79.3% accuracy.
+Additionally, TReX can maintain high accuracy at high EDAP
+reduction (∼1.2% accuracy drop compared to baseline at
+2.3× EDAP reduction). TReX achieves good EDAP-Accuracy
+tradeoff because it effectively eliminates the redundant attention blocks which as seen in Fig. 1b consumes the major
+energy-delay-area in a ViT.
+From Fig. 13b, we observe that TReX achieves better
+TOPS/W (1.03-1.1×) and accuracy tradeoff compared to prior
+ViT optimization works. For token pruning [9], the number
+of operations and the energy proportionally reduce leading to
+marginal improvements in the TOPS/W value (1.001-1.01×).
+When implementing weight sharing [14] on TReX-Sim, despite the reduction in the number of crossbars, the number
+of operations and energy consumption remain unchanged.
+Therefore, the TOPS/W will remain the same as the DeiTS (Baseline). Finally, ReTransformer entails delay intensive
+softmax operations leading to a significantly low TOPS/W
+improvement (1.0001×) compared to DeiT-S (Baseline).
+Fig. 14 compares the throughput of a DeiT-S ViT imple-
+
+=== page 10 ===
+10
+
+14mW
+
+15W
+9.6W
+
+8W
+(FeFET)
+
+(FeFET)
+
+Fig. 14: Plot showing the throughput (measured in Frames-per-second
+(FPS)) and power consumption of different AI acceleration platforms.
+FeFET signifies the TReX-Sim and TReX-D-9 implemented with
+64x64 FeFET device crossbars. The systolic array accelerator is
+implemented on a Xilinx ZCU102 FPGA. Raspi-4 and Jetson denote
+Raspberry-Pi 4 CPU and Nvidia Jetson Orin Nano GPU, respectively.
+
+mented on different low power AI acceleration platforms.
+Evidently, TReX-Sim (FeFET-based) outperforms CPU, Systolic Array and GPU by 68×, 12× and 2×, respectively at
+103 × lower power. Furthermore, applying the attention reuse
+optimization (TReX-D-9), improves the throughput by 1.3×
+compared to DeiT-S implemented on TReX-Sim (FeFET).
+
+To achieve the best accuracy-EDAP tradeoff, we propose a FeFET-SRAM hybrid implementation. Here, layers
+M atmul QK T and M atmul S(QK T )V are mapped onto
+noise-resilient 1-bit SRAM crossbars while layers Q, K,
+V , Projection and MLP are mapped onto area-efficient 2-bit
+FeFET crossbars. This significantly reduces the EDAP while
+increasing the non-ideal accuracy. Note that layers implemented on FeFET crossbars still suffer from read variations.
+However, the read variations are much smaller in magnitude
+compared to write variations [32] the non-ideal accuracy
+evidently improves.
+E. Effect of Reuse Pattern on Non-ideal Accuracy
+
+NI-Accuracy(%)
+
+11mW
+
+D. Effect of IMC Device on EDAP-Accuracy Tradeoff
+(a)
+
+(c)
+
+(b)
+
+(d)
+
+Fig. 15: (a) EDP (b) Area (c) EDAP and (d) NI-accuracy of DeiT-S,
+TReX-D-9 and TReX-D-7 ViT models implemented on 2-bit FeFET,
+1-bit SRAM and hybrid FeFET-SRAM IMC architectures. All results
+correspond to TReX-Sim implementations with 64×64 array.
+
+Interestingly, the choice of IMC device plays an important
+role in the energy-delay-area-accuracy of IMC-implemented
+ViTs as shown in Fig. 15. Here, FeFET and SRAM denote the cases when layers Q, K, V , P rojection, M LP ,
+M atmul QK T and M atmul S(QK T )V are mapped onto
+64×64 2-bit FeFET and 1-bit SRAM-based IMC arrays,
+respectively. As seen in Fig. 15a, the EDP of SRAM and
+FeFET-based implementations are similar. But as FeFET devices can accommodate more bits-per-device, FeFET-based
+implementations are area efficient compared to SRAM as
+seen in Fig. 15b leading to an overall lower EDAP (Fig.
+15c). However, FeFETs suffer from NVM write and read
+variations, which leads to low non-ideal accuracy. Typically,
+the write variations have a more pronounced effect as K T
+and V values are periodically written to crossbars mapping
+layers M atmulQK T and M atmulS(QK T )V , respectively.
+In contrast, SRAM implementations have higher non-ideal
+accuracy due to the absence of device read or write variations
+[33].
+
+★ Strided-2
+
+★ Strided-3
+
+★ Pyramid-3 ★ Pyramid-2 ★ Continuous
+
+Fig. 16: Figure showing the trend of non-ideal accuracy for different
+reuse patterns applied on BaseViT= DeiT-S with NEncoders = 12
+generated and Optimal Nreuse = 4 (for target delay=8ms).
+
+From Fig. 16, we find that the NI-accuracy depends on
+the reuse pattern, stride length SL and the start position. It
+is seen that the accuracy of strided pattern (Strided-2 and
+Strided-3) is higher than the pyramid. Similarly, the accuracy
+of pyramid (Pyramid-2 and Pyramid-3) is higher than the
+continuous pattern. For strided and pyramid patterns, higher
+SL ensures higher accuracy at the same start position. Interestingly, for the same reuse pattern, higher start position ensures
+higher accuracy. This suggests that attention reuse in the later
+encoders are more favorable compared to the attention sharing
+in the shallow encoders. This is intuitive as the attention in
+shallow encoders are responsible for extracting closer attention
+features as compared to the deeper encoders.
+The variance in accuracy across different reuse patterns
+can be explained from Fig. 17. Encoders close together have
+high correlation between the attention outputs depicted by
+high Center Kernel Alignment (CKA) values. The correlation
+reduces as the distance between encoders increases. This suggests that reuse of attentions in a continuous pattern removes
+important attention information and degrades the accuracy. In
+contrast, the strided pattern reuses the attention in the adjacent
+encoder which is highly correlated to the previous one, thereby,
+leading to better accuracy.
+F. TReX on NLP Task
+To evaluate the attention reuse in TReX on natural language
+processing (NLP) tasks, we use the CoLA [43] dataset which
+
+=== page 11 ===
+11
+
+Encoder Index 𝑖
+
+VIII. C ONCLUSION
+
+Encoder Index 𝑖
+
+Fig. 17: Center Kernel Alignment (CKA) [41] values computed
+between the attention output of different encoders of the DeiT-S ViT.
+Each row i corresponds to the CKA value computed between the
+attention output of the ith encoder with all the other encoders in the
+ViT. A high CKA value signifies high data correlation and vice-versa.
+Note, that the CKA of an attention output with itself is always 1.
+
+(a)
+
+BERT-Base TReX-B-7
+
+TReX-B-6 TReX-B-5
+
+TReX-B-4
+
+(b)
+
+BERT-Base
+
+TReX-B-7
+
+TReX-B-6
+
+TReX-B-5
+
+TReX-B-4
+
+Fig. 18: (a) EDAP and the non-ideal accuracy across different TReXoptimized BERT-Base language model [42] trained on the CoLA [43]
+dataset. TReX-B-N denotes TReX-optmized BERT-Base language
+model at target delay N. (b) TOPS/W and TOPS/mm2 values across
+different TReX-optimized BERT-Base language model.
+
+consists of 10657 sentences expertly annotated for grammatical acceptability. We apply attention reuse-based optimization
+(Section V-B) on a pre-trained BERT-Base language model
+[42] over the CoLA dataset. The TReX-optimized BERT-Base
+language model is finetuned for 10 epochs after applying
+attention reuse. As observed in Fig. 18a, TReX yields 2×
+lower EDAP at 3% reduction in accuracy in case of TReXB-5 transformer. In fact, for the TReX-B-7, TReX-B-6 transformer, the accuracy is 2% higher compared to the BERT-Base
+language model at an EDAP reduction of 1.6×. At an EDAP
+reduction of 3.5×, the accuracy drop is 8% in the TReX-B-4
+transformer. TReX also leads to an overall 2.75× and 1.1×
+higher TOPS/mm2 and TOPS/W, respectively (Fig. 18b).
+
+This work proposes TReX that exploits the unique codependence of the ViT attention blocks towards energy-delayarea-accuracy optimization. TReX effectively performs attention sharing in select encoders to achieve high EDAP reduction
+at minimal loss in non-ideal accuracy compared to BaseViTs
+without attention reuse. TReX-optimized ViTs also achieve
+higher TOPS/W and TOPS/mm2 compared to the BaseViTs.
+The efficacy of TReX is demonstrated on both vision and
+NLP tasks. In comparison to prior works, TReX-optimized
+ViTs achieve high EDAP reductions while maintaining high
+non-ideal accuracy on crossbars. Finally, this work shows the
+efficacy of FeFET-SRAM hybrid IMC architectures to improve
+the robustness of IMC-implemented ViT against IMC nonidealities while achieving high EDAP reductions.
+ACKNOWLEDGEMENT
+This work was supported in part by CoCoSys, a JUMP2.0
+center sponsored by DARPA and SRC, the National Science Foundation (CAREER Award, Grant #2312366, Grant
+#2318152), and the DoE MMICC center SEA-CROGS (Award
+#DE-SC0023198)
+R EFERENCES
+[1] H. Touvron, M. Cord, M. Douze, F. Massa, A. Sablayrolles, and
+H. Jégou, “Training data-efficient image transformers & distillation
+through attention,” in International conference on machine learning.
+PMLR, 2021, pp. 10 347–10 357.
+[2] X. Zhai, A. Kolesnikov, N. Houlsby, and L. Beyer, “Scaling vision
+transformers,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, 2022, pp. 12 104–12 113.
+[3] R. Ranftl, A. Bochkovskiy, and V. Koltun, “Vision transformers for dense
+prediction,” in Proceedings of the IEEE/CVF International Conference
+on Computer Vision, 2021, pp. 12 179–12 188.
+[4] M. Maaz, A. Shaker, H. Cholakkal, S. Khan, S. W. Zamir, R. M.
+Anwer, and F. Shahbaz Khan, “Edgenext: efficiently amalgamated cnntransformer architecture for mobile vision applications,” in Computer
+Vision–ECCV 2022 Workshops: Tel Aviv, Israel, October 23–27, 2022,
+Proceedings, Part VII. Springer, 2023, pp. 3–20.
+[5] X. Chen, B. Kang, D. Wang, D. Li, and H. Lu, “Efficient visual tracking
+via hierarchical cross-attention transformer,” in Computer Vision–ECCV
+2022 Workshops: Tel Aviv, Israel, October 23–27, 2022, Proceedings,
+Part VIII. Springer, 2023, pp. 461–477.
+[6] A. Moitra, A. Bhattacharjee, Y. Kim, and P. Panda, “Xpert: Peripheral
+circuit & neural architecture co-search for area and energy-efficient xbarbased computing,” arXiv preprint arXiv:2303.17646, 2023.
+[7] P.-Y. Chen, X. Peng, and S. Yu, “Neurosim: A circuit-level macro
+model for benchmarking neuro-inspired architectures in online learning,”
+IEEE Transactions on Computer-Aided Design of Integrated Circuits
+and Systems, vol. 37, no. 12, pp. 3067–3080, 2018.
+[8] Z.-H. Jiang, Q. Hou, L. Yuan, D. Zhou, Y. Shi, X. Jin, A. Wang,
+and J. Feng, “All tokens matter: Token labeling for training better vision transformers,” Advances in neural information processing systems,
+vol. 34, pp. 18 590–18 602, 2021.
+[9] Y. Rao, W. Zhao, B. Liu, J. Lu, J. Zhou, and C.-J. Hsieh, “Dynamicvit: Efficient vision transformers with dynamic token sparsification,”
+Advances in neural information processing systems, vol. 34, pp. 13 937–
+13 949, 2021.
+[10] C. Yang, X. Wang, and Z. Zeng, “Full-circuit implementation of transformer network based on memristor,” IEEE Transactions on Circuits
+and Systems I: Regular Papers, vol. 69, no. 4, pp. 1395–1407, 2022.
+[11] X. Yang, B. Yan, H. Li, and Y. Chen, “Retransformer: Reram-based
+processing-in-memory architecture for transformer acceleration,” in
+Proceedings of the 39th International Conference on Computer-Aided
+Design, 2020, pp. 1–9.
+[12] P. Dong, M. Sun, A. Lu, Y. Xie, K. Liu, Z. Kong, X. Meng, Z. Li, X. Lin,
+Z. Fang, and Y. Wang, “Heatvit: Hardware-efficient adaptive token
+pruning for vision transformers,” in 2023 IEEE International Symposium
+on High-Performance Computer Architecture (HPCA). IEEE, 2023, pp.
+442–455.
+
+=== page 12 ===
+12
+
+[13] C. Zheng, K. Zhang, Z. Yang, W. Tan, J. Xiao, Y. Ren, and S. Pu,
+“Savit: Structure-aware vision transformer pruning via collaborative
+optimization,” Advances in Neural Information Processing Systems,
+vol. 35, pp. 9010–9023, 2022.
+[14] J. Zhang, H. Peng, K. Wu, M. Liu, B. Xiao, J. Fu, and L. Yuan,
+“Minivit: Compressing vision transformers with weight multiplexing,”
+in Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2022, pp. 12 145–12 154.
+[15] C.-Y. Lin, A. Prabhu, T. Merth, S. Mehta, A. Ranjan, M. Horton, and
+M. Rastegari, “Spin: An empirical evaluation on sharing parameters
+of isotropic networks,” in European Conference on Computer Vision.
+Springer, 2022, pp. 553–568.
+[16] B. Chen, P. Li, B. Li, C. Li, L. Bai, C. Lin, M. Sun, J. Yan, and
+W. Ouyang, “Psvit: Better vision transformer via token pooling and
+attention sharing,” arXiv preprint arXiv:2108.03428, 2021.
+[17] J. Zhang, Y. Zhang, J. Gu, J. Dong, L. Kong, and X. Yang, “Xformer:
+Hybrid x-shaped transformer for image denoising,” arXiv preprint
+arXiv:2303.06440, 2023.
+[18] S. Sridharan, J. R. Stevens, K. Roy, and A. Raghunathan, “X-former:
+In-memory acceleration of transformers,” IEEE Transactions on Very
+Large Scale Integration (VLSI) Systems, 2023.
+[19] K. Spoon, H. Tsai, A. Chen, M. J. Rasch, S. Ambrogio, C. Mackin,
+A. Fasoli, A. M. Friz, P. Narayanan, M. Stanisavljevic, and G. W. Burr,
+“Toward software-equivalent accuracy on transformer-based deep neural
+networks with analog memory devices,” Frontiers in Computational
+Neuroscience, vol. 15, p. 675741, 2021.
+[20] Y. Xu, Z. Zhang, M. Zhang, K. Sheng, K. Li, W. Dong, L. Zhang,
+C. Xu, and X. Sun, “Evo-vit: Slow-fast token evolution for dynamic
+vision transformer,” in Proceedings of the AAAI Conference on Artificial
+Intelligence, vol. 36, no. 3, 2022, pp. 2964–2972.
+[21] L. Meng, H. Li, B.-C. Chen, S. Lan, Z. Wu, Y.-G. Jiang, and S.-N. Lim,
+“Adavit: Adaptive vision transformers for efficient image recognition,”
+in Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2022, pp. 12 309–12 318.
+[22] X. Shen, Z. Kong, M. Qin, P. Dong, G. Yuan, X. Meng, H. Tang, X. Ma,
+and Y. Wang, “The lottery ticket hypothesis for vision transformers,”
+arXiv preprint arXiv:2211.01484, 2022.
+[23] Y. Wang, Y. Qin, D. Deng, J. Wei, Y. Zhou, Y. Fan, T. Chen, H. Sun,
+L. Liu, S. Wei et al., “An energy-efficient transformer processor exploiting dynamic weak relevances in global attention,” IEEE Journal of
+Solid-State Circuits, vol. 58, no. 1, pp. 227–242, 2022.
+[24] H. Wang, Z. Zhang, and S. Han, “Spatten: Efficient sparse attention
+architecture with cascade token and head pruning,” in 2021 IEEE
+International Symposium on High-Performance Computer Architecture
+(HPCA). IEEE, 2021, pp. 97–110.
+[25] J. R. Stevens, R. Venkatesan, S. Dai, B. Khailany, and A. Raghunathan,
+“Softermax: Hardware/software co-design of an efficient softmax for
+transformers,” in 2021 58th ACM/IEEE Design Automation Conference
+(DAC). IEEE, 2021, pp. 469–474.
+[26] A. Moitra, A. Bhattacharjee, R. Kuang, G. Krishnan, Y. Cao, and
+P. Panda, “Spikesim: An end-to-end compute-in-memory hardware evaluation tool for benchmarking spiking neural networks,” IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems,
+2023.
+[27] S. Jain, A. Sengupta, K. Roy, and A. Raghunathan, “Rxnn: A framework
+for evaluating deep neural networks on resistive crossbars,” IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems,
+vol. 40, no. 2, pp. 326–338, 2020.
+[28] A. Bhattacharjee, A. Moitra, Y. Kim, Y. Venkatesha, and P. Panda,
+“Examining the role and limits of batchnorm optimization to mitigate
+diverse hardware-noise in in-memory computing,” in Proceedings of the
+Great Lakes Symposium on VLSI 2023, 2023, pp. 619–624.
+[29] I. Chakraborty, M. F. Ali, D. E. Kim, A. Ankit, and K. Roy, “Geniex:
+A generalized approach to emulating non-ideality in memristive xbars
+using neural networks,” in 2020 57th ACM/IEEE Design Automation
+Conference (DAC). IEEE, 2020, pp. 1–6.
+[30] A. Bhattacharjee, Y. Kim, A. Moitra, and P. Panda, “Examining the
+robustness of spiking neural networks on non-ideal memristive crossbars,” in Proceedings of the ACM/IEEE International Symposium on
+Low Power Electronics and Design, 2022, pp. 1–6.
+[31] X. Sun and S. Yu, “Impact of non-ideal characteristics of resistive
+synaptic devices on implementing convolutional neural networks,” IEEE
+JETCAS, 2019.
+[32] S. Agarwal, S. J. Plimpton, D. R. Hughart, A. H. Hsia, I. Richter,
+J. A. Cox, C. D. James, and M. J. Marinella, “Resistive memory device
+requirements for a neural algorithm accelerator,” in 2016 International
+
+Joint Conference on Neural Networks (IJCNN). IEEE, 2016, pp. 929–
+938.
+[33] X. Peng, S. Huang, H. Jiang, A. Lu, and S. Yu, “Dnn+ neurosim
+v2. 0: An end-to-end benchmarking framework for compute-in-memory
+accelerators for on-chip training,” IEEE Transactions on ComputerAided Design of Integrated Circuits and Systems, vol. 40, no. 11, pp.
+2306–2319, 2020.
+[34] W. Li, P. Xu, Y. Zhao, H. Li, Y. Xie, and Y. Lin, “Timely: Pushing data
+movements and interfaces in pim accelerators towards local and in time
+domain,” in 2020 ACM/IEEE 47th Annual International Symposium on
+Computer Architecture (ISCA). IEEE, 2020, pp. 832–845.
+[35] B. Li, S. Pandey, H. Fang, Y. Lyv, J. Li, J. Chen, M. Xie, L. Wan, H. Liu,
+and C. Ding, “Ftrans: energy-efficient acceleration of transformers using
+fpga,” in Proceedings of the ACM/IEEE International Symposium on
+Low Power Electronics and Design, 2020, pp. 175–180.
+[36] X. Zhang, Y. Wu, P. Zhou, X. Tang, and J. Hu, “Algorithm-hardware
+co-design of attention mechanism on fpga devices,” ACM Transactions
+on Embedded Computing Systems (TECS), vol. 20, no. 5s, pp. 1–24,
+2021.
+[37] P. Qi, Y. Song, H. Peng, S. Huang, Q. Zhuge, and E. H.-M. Sha,
+“Accommodating transformer onto fpga: Coupling the balanced model
+compression and fpga-implementation optimization,” in Proceedings of
+the 2021 on Great Lakes Symposium on VLSI, 2021, pp. 163–168.
+[38] K. He, X. Zhang, S. Ren, and J. Sun, “Delving deep into rectifiers:
+Surpassing human-level performance on imagenet classification,” in
+Proceedings of the IEEE international conference on computer vision,
+2015, pp. 1026–1034.
+[39] M. J. Rasch, C. Mackin, M. Le Gallo, A. Chen, A. Fasoli, F. Odermatt,
+N. Li, S. Nandakumar, P. Narayanan, H. Tsai et al., “Hardware-aware
+training for large-scale and diverse deep learning inference workloads
+using in-memory computing-based accelerators,” Nature communications, vol. 14, no. 1, p. 5282, 2023.
+[40] K. Ni, B. Grisafe, W. Chakraborty, A. Saha, S. Dutta, M. Jerry, J. Smith,
+S. Gupta, and S. Datta, “In-memory computing primitive for sensor data
+fusion in 28 nm hkmg fefet technology,” in 2018 IEEE International
+Electron Devices Meeting (IEDM). IEEE, 2018, pp. 16–1.
+[41] C. Cortes, M. Mohri, and A. Rostamizadeh, “Algorithms for learning
+kernels based on centered alignment,” The Journal of Machine Learning
+Research, vol. 13, pp. 795–828, 2012.
+[42] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “Bert: Pre-training
+of deep bidirectional transformers for language understanding,” arXiv
+preprint arXiv:1810.04805, 2018.
+[43] A. Warstadt, A. Singh, and S. R. Bowman, “Neural network acceptability
+judgments,” arXiv preprint arXiv:1805.12471, 2018.
+Abhishek Moitra is pursuing his Ph.D. in the Intelligent Computing Lab at
+Yale. His research works have been published in reputed journals such as IEEE
+TCAS-1, IEEE TCAD and conferences such as DAC. His research interests
+involve hardware-algorithm co-design and co-exploration for designing robust
+and energy-efficient hardware architectures for deep learning tasks.
+Abhiroop Bhattacharjee is pursuing his Ph.D. in the Intelligent Computing
+Lab at Yale University. His research interests lie in the area of algorithmhardware co-design of process in-memory architectures for deep learning
+& neuromorphic applications. His research have been published in reputed
+journals and conferences such as IEEE TCAD, ACM TODAES, DAC, DATE
+and ISLPED.
+Youngeun Kim is currently working toward a Ph.D. degree in Electrical
+Engineering at Yale University, New Haven, CT, USA. Prior to joining Yale,
+he worked as a full-time student intern at T-Brain, AI Center, SK Telecom,
+South Korea. He received his B.S. degree in Electronic Engineering from
+Sogang University, South Korea, in 2018 and M.S. degree in Electrical
+Engineering from Korea Advanced Institute of Science and Technology
+(KAIST), in 2020. His research interests include neuromorphic computing,
+computer vision, and deep learning.
+Priyadarshini Panda obtained her Ph.D. from Purdue University, USA, in
+2019. She joined Yale University, USA, as an assistant professor in the
+Electrical Engineering department in August, 2019. She received the B.E.
+degree in Electrical and Electronics Engineering from B.I.T.S. Pilani, India,
+in 2013. From 2013-14, she worked in Intel, India on RTL design for graphics
+power management. She has also worked with Intel Labs, USA, in 2017 and
+Nvidia, India in 2013 as research intern. During her internship at Intel Labs,
+she developed large scale spiking neural network algorithms for benchmarking
+the Loihi chip. She is the recipient of the 2019 Amazon Research Award, 2022
+Google Research Scholar Award, 2022 DARPA Riser Award, 2022 ISLPED
+Best Paper Award and 2023 NSF CAREER Award. Her research interests
+lie in Neuromorphic Computing, Spiking Neural Networks, energy-efficient
+accelerators, and compute in-memory processing.

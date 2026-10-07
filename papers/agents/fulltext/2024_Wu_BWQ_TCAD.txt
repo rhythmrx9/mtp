@@ -1,0 +1,1317 @@
+# Block-Wise Mixed-Precision Quantization: Enabling High Efficiency for Practical ReRAM-Based DNN Accelerators
+# id: W4399310783 | key: 2024_Wu_BWQ_TCAD | TCAD 2024 | card: ../cards/2024_Wu_BWQ_TCAD.md
+
+
+=== page 1 ===
+1
+
+Block-Wise Mixed-Precision Quantization: Enabling
+High Efficiency for Practical ReRAM-based DNN
+Accelerators
+
+arXiv:2310.12182v3 [cs.AR] 27 Oct 2023
+
+Xueying Wu, Edward Hanson, Nansu Wang, Qilin Zheng, Student Member, IEEE, Xiaoxuan Yang, Student
+Member, IEEE, Huanrui Yang, Member, IEEE, Shiyu Li, Student Member, IEEE, Feng Cheng, Partha Pratim
+Pande, Fellow, IEEE, Janardhan Rao Doppa, Senior Member, IEEE, Krishnendu Chakrabarty, Fellow, IEEE, and
+Hai (Helen) Li, Fellow, IEEE.
+
+Abstract—Resistive random access memory (ReRAM)-based
+processing-in-memory (PIM) architectures have demonstrated
+great potential to accelerate Deep Neural Network (DNN) training/inference. However, the computational accuracy of analog
+PIM is compromised due to the non-idealities, such as the
+conductance variation of ReRAM cells. The impact of these
+non-idealities worsens as the number of concurrently activated
+wordlines and bitlines increases. To guarantee computational
+accuracy, only a limited number of wordlines and bitlines of
+the crossbar array can be turned on concurrently, significantly
+reducing the achievable parallelism of the architecture.
+While the constraints on parallelism limit the efficiency of
+the accelerators, they also provide a new opportunity for finegrained mixed-precision quantization. To enable efficient DNN
+inference on practical ReRAM-based accelerators, we propose an
+algorithm-architecture co-design framework called Block-Wise
+mixed-precision Quantization (BWQ). At the algorithm level,
+BWQ-A introduces a mixed-precision quantization scheme at the
+block level, which achieves a high weight and activation compression ratio with negligible accuracy degradation. We also present
+the hardware architecture design BWQ-H, which leverages the
+low-bit-width models achieved by BWQ-A to perform highefficiency DNN inference on ReRAM devices. BWQ-H also adopts
+a novel precision-aware weight mapping method to increase the
+ReRAM crossbar’s throughput. Our evaluation demonstrates the
+effectiveness of BWQ, which achieves a 6.08× speedup and a
+17.47× energy saving on average compared to existing ReRAMbased architectures.
+Index Terms—DNN Acceleration, Processing-in-Memory
+(PIM), Resistive Random Access Memory (ReRAM), Model
+Compression, Mixed-Precision Quantization.
+
+I. I NTRODUCTION
+
+R
+
+ESISTIVE random access memory (ReRAM)-based
+Processing-in-memory (PIM) architectures can perform
+in-situ computation within the memory devices, and they
+This work was supported in part by the U.S. National Science Foundation (NSF) under Grant CNS-1955196, Grant CNS-2233808, Grant EECS2023752, Grant CNS-1822085, and Grant CSR-1955353. Xueying Wu,
+Edward Hanson, Nansu Wang, Qilin Zheng, Xiaoxuan Yang, Shiyu Li,
+Feng Cheng and Hai Li are with the Department of Electrical and Computer Engineering, Duke University, Durham, NC 27708 USA (e-mail:
+xw221@duke.edu). Huanrui Yang is with the EECS department of UC Berkeley, Berkeley, CA 94720 USA. Krishnendu Chakrabarty is with the School
+of Electrical, Computer and Energy Engineering, Arizona State University,
+Tempe, AZ 85281 USA. Janardhan Rao Doppa and Partha Pratim Pande are
+with the School of Electrical Engineering and Computer Science, Washington
+State University, Pullman, WA 99163 USA
+
+Fig. 1. Research about ReRAM-based DNN accelerators from different
+optimization perspectives.
+
+have demonstrated great potential in accelerating DNN training/inference [1, 2]. However, the manufacturing technology of
+ReRAM devices is still in its early stage, and there exist many
+challenges to its practical adoption [3]. Most of the works
+about ReRAM-based DNN accelerators have overlooked practical considerations and rely on an idealized assumption
+regarding ReRAM devices and associated analog-to-digital
+converter (ADC) overhead. They assume that it is possible to
+activate all the rows and columns of a 128 × 128 or 256 × 256
+array simultaneously within a single clock cycle without
+impacting computational accuracy[4, 5]. However, there are
+several challenges that render this assumption impractical.
+The major problem is the conductance variation of ReRAM
+devices. Since ReRAM crossbar arrays leverage Kirchhoff’s
+Current Law to perform vector-matrix multiplication (VMM)
+operations, the conductance variation accumulated along the
+bitlines (BLs) is proportional to the number of concurrently
+activated wordlines (WLs) [6]. Activating too many WLs
+simultaneously also leads to high BL current, which would
+induce significant IR-drop and cause non-uniform voltage
+and current distribution along the crossbar [7]. Therefore,
+to achieve high-accuracy computation, the number of WLs
+that can be activated within a crossbar array simultaneously
+should be limited. Another challenge is that for practical
+ReRAM-based DNN accelerators, the number of ADCs for
+each crossbar array should be restricted as they consume a
+significant amount of power and area [5, 8]. As such, it is
+necessary to share one ADC among multiple BLs. Given
+
+=== page 2 ===
+2
+
+that an ADC can only convert the signals of one BL in a
+single clock cycle, the number of BLs that can be activated
+simultaneously should match the number of ADCs in each
+crossbar [3]. For a practical ReRAM-based DNN accelerator,
+the VMM on the crossbar arrays should operate at a much finer
+granularity, termed as an Operation Unit (OU), rather than
+at the subarray granularity. [3, 9, 10]. It is demonstrated by
+several recent studies that for a practical ReRAM-based DNN
+accelerator to attain an acceptable level of inference accuracy,
+only nine WLs and eight BLs can be turned on concurrently
+[3, 11, 12].
+The above constraints impose significant limitations on
+the achievable parallelism of ReRAM-based accelerators, as
+multiple cycles are required to finish the computation with the
+entire crossbar array. In the OU-based operation scheme, ADC
+latency dominates the runtime, and ADC contributes mostly to
+the overall energy consumption due to the increased number
+of cycles for computation. Therefore, model compression
+methods are desired to reduce the number of computation
+cycles and improve the efficiency of the accelerators. Fig. 1
+provides a qualitative illustration of the performance of various
+ReRAM-based DNN accelerators. The speedup of previous
+studies is scaled considering the effects of the OU-based
+operation scheme. Basically, these studies can be categorized
+into three classes according to their optimization perspectives:
+hardware (HW)-based optimization, software (SW)-based optimization, and HW/SW co-design. HW-based optimization
+solutions only improve the accelerators’ performance from an
+HW perspective, featuring intra-layer pipeline (ISAAC [5]) or
+leveraging the natural sparsity of the neural networks with
+index reordering (SRE [3]). SW-based optimization solution
+ReCom [13] and MPQ [14] proactively compress the models with algorithms. However, these works fail to take into
+account the practical constraints of the underlying ReRAM
+devices and thus are not able to achieve the optimal model
+compression ratio. HW/SW co-design-based solutions perform optimizations from both HW and SW perspectives and
+are supposed to achieve the highest performance. However,
+existing solutions only compress the model with coarsegrained schemes. For example, CMP [15] conducts layerwise mixed-precision quantization, and its model compression
+performance is limited. In contrast, our work proposes a
+block-wise mixed-precision quantization algorithm (BWQ-A)
+that considers the parallelism constraints of ReRAM-based
+accelerators. BWQ-A performs mixed-precision quantization
+at the weight block (WB) level, matching the size of the
+OU. The WBs are assigned varying bit precisions based on
+their individual significance, and the precisions are learned
+throughout the training process. Leveraging a much finer
+quantization granularity, BWQ-A can achieve a 58.27× weight
+compression and a 9.47× activation compression on average
+over the floating-point baseline models with less than 1% of
+accuracy degradation. At the architecture level, we present a
+ReRAM-based hardware accelerator BWQ-H, which enables
+the efficient inference of the models quantized using BWQ-A.
+Experimental results show that BWQ-H can boost the energy
+efficiency by 17.47× and reduce the latency by 6.08× on
+average compared to existing ReRAM-based architectures.
+
+The main contributions of our work include:
+• We introduce BWQ-A, a novel mixed-precision quantization algorithm at the weight block level. Leveraging
+the small quantization granularity, we are able to achieve
+a higher weight and activation compression ratio under
+similar accuracy compared to the existing quantization
+schemes.
+• We propose a practical ReRAM-based accelerator with
+the OU-based operation scheme. BWQ-H enables efficient inference of the models quantized using BWQ-A. It
+employs a novel precision-aware weight mapping scheme
+that increases memory utilization within an OU for the
+mixed-precision quantized models. A memory controller
+is also designed to facilitate mixed-precision computation
+within the same crossbar.
+• We analyze the scalability of BWQ-A and BWQ-H with
+larger OU sizes. This serves as a future road map for
+practical ReRAM accelerators depending on the evolution
+of the manufacturing technology of ReRAM devices.
+The remainder of this paper is organized as follows: In
+Section II, we discuss the background of ReRAM-based
+DNN accelerators and review the mixed-precision quantization
+schemes for model compression. Section III introduces BWQA, the block-wise mixed-precision quantization algorithm.
+Next, Section IV presents the architecture of the hardware accelerator BWQ-H that enables efficient inference of the BWQA algorithm. Section V shows the evaluation methodology,
+and Section VI shows the performance of the algorithm and
+the architecture. Lastly, Section VII concludes the paper and
+outlines key points for future works.
+II. BACKGROUND
+A. ReRAM-based DNN Accelerators
+The potential of ReRAM-based platforms to achieve high
+performance and energy efficiency computation has made
+them promising for accelerating DNN inference. ReRAM
+is a type of non-volatile memory that stores information
+by changing the resistance of the metal oxide material [4].
+In ReRAM-based accelerators, the conductance of ReRAM
+devices is used to represent the weights of neural networks,
+and the analog VMM computations are performed inside the
+crossbar arrays. This allows for highly parallel computation
+and eliminates the need for data movement between memory
+and computation units.
+Most of the studies on ReRAM-based DNN accelerators
+have utilized crossbars with sizes of 128 × 128 or 256 × 256
+[4, 5]. These design choices strike a balance between the
+throughput and utilization of the ReRAM crossbars. These
+studies usually assume that it is possible to activate all the
+rows and columns of the array simultaneously, and the VMM
+computation with the whole weight matrix on the subarray
+could finish within a single clock cycle. However, this assumption is ideal. According to the experimental results in [3],
+activating the entire ReRAM crossbar within one cycle leads
+to significant accuracy loss and introduces high peripheral
+circuitry overhead. To guarantee high-accuracy computation, it
+is necessary to reduce the accumulated conductance variation
+
+=== page 3 ===
+3
+
+of the ReRAM devices and IR-drop along the BLs. Thus,
+the number of concurrently activated WLs should be limited.
+Additionally, the number of BLs to be turned on concurrently
+should also be limited to constrain the overhead of the ADCs.
+According to [8], the ADCs account for 50% 70% of the
+overall power consumption in a ReRAM-based accelerator. For
+energy and area efficient implementation, one ADC should be
+shared among multiple BLs and the number of concurrently
+activated BLs should also be restricted by the number of
+ADCs. A practical ReRAM accelerator should operate at the
+granularity of an OU, which is much smaller than the entire
+crossbar. Several studies have demonstrated that, in practice,
+an OU can accommodate a block with only nine WLs and
+eight BLs [3, 11].
+B. Mixed-Precision Quantization
+Quantization is a model size reduction technique that converts the floating-point weights into low-precision floatingpoint or integer formats. Low precision quantization is particularly beneficial for ReRAM-based accelerators as it efficiently
+reduces the number of columns required to represent each
+weight, thus reducing the computation cycles and ADC’s
+power consumption. Compared with uniform quantization,
+mixed-precision quantization can achieve lower average bit
+precision under similar accuracy levels [16–18]. However,
+determining the optimal precision for each layer or each
+channel is a challenging task. Most previous works have
+either performed manual bit-with selection, which relies on
+expert knowledge [16], or neural architecture search with
+reinforcement learning, which requires massive computation
+[17, 18].
+To address the above challenges, Bit-level sparsity quantization (BSQ) [19] proposes a layer-wise mixed-precision
+quantization scheme that learns the precision of the weights in
+each layer through a single-pass training process. To achieve
+an optimal trade-off between model size and accuracy, BSQ
+proposes exploiting bit-level sparsity by training bit representation of the weights instead of floating-point weights.
+During training, a bit-level group Lasso regularizer is also
+incorporated to induce higher sparsity. As evaluated on a
+diverse range of models and datasets, BSQ is able to achieve
+higher compression ratios under similar accuracy compared to
+previous methods [19].
+C. Motivation
+A practical ReRAM-based accelerator’s achievable throughput and energy efficiency are limited by the OU size due to
+the computation accuracy and the peripheral circuitry overhead
+concerns. The VMM with the entire weight matrix on a single
+crossbar array should require multiple ADC cycles as each
+cycle can only activate a 9 × 8 OU, which is the maximum
+size that a state-of-the-art ReRAM accelerator can achieve
+[11]. BSQ’s potential to achieve ultra-low weight precision
+provides a possible solution for efficient DNN inference
+on ReRAM-based accelerators, as the low-bit-width models
+greatly reduce the required ADC cycles and ADC energy
+consumption. However, BSQ only considers quantization at
+
+the layer level. According to Dash et. al. [20], the significance,
+or the contribution towards the training objective of each
+weight element within the same layer can vary considerably.
+BSQ assigns a uniform bit precision to all the weight elements
+in a layer, which may not lead to the optimal trade-off
+between accuracy and average bit-width per weight. On the
+other hand, the constraints for a practical ReRAM accelerator
+provide a new opportunity for finer-grained mixed-precision
+quantization. This motivates us to explore a higher weight
+compression ratio with a new quantization scheme, block-wise
+mixed-precision quantization algorithm, or BWQ-A. We also
+propose a corresponding hardware design BWQ-H to enable
+efficient implementation of the BWQ-A algorithm on ReRAMbased architecture.
+III. BWQ-A: B LOCK -W ISE M IXED -P RECISION
+Q UANTIZATION A LGORITHM
+BSQ’s potential to achieve ultra-low weight precision provides a possible solution for efficient DNN inference on
+ReRAM-based accelerators under the OU-based operation
+scheme, as the low-bit-width models effectively reduce the
+required clock cycles and ADC energy consumption. However,
+BSQ only performs layer-wise mixed-precision quantization,
+overlooking the fact that the significance, or the contribution
+towards the training objective of each weight element within
+the same layer can vary considerably [20]. On the other hand,
+the OU-based operation scheme provides a new opportunity
+for finer-grained mixed-precision quantization. This motivates
+us to explore a higher weight compression ratio with a novel
+quantization scheme BWQ-A.
+A. Weight Compression
+To implement mixed-precision quantization at the block
+level, we first divide the weights of each layer into multiple
+2D WBs with the same size as an OU. For fully-connected
+layers, we can directly partition the 2D weight tensor with the
+shape of (Cout , Cin ), as illustrated in Fig. 2 (a). However, for
+convolutional layers, the weights form a 4D tensor and must
+be flattened into 2D. We apply the reshaping method discussed
+in CSP [21] to reshape the convolutional layers. This method
+transforms a 4D tensor with a shape of (Cout , Cin , k, k) into
+a 2D tensor with a shape of ((Cin × k × k), Cout ). Next, we
+divide the weights in the flattened tensor into WBs (see Fig.
+2 (b)).
+Inspired by BSQ, we train the weights in their bit-level
+representations to exploit the bit-level sparsity. The bit-level
+representation of the weight applied in BWQ-A is defined as:
+n−1
+
+W = sign(W ) ⊙
+
+s X (b) b (b)
+Ws 2 m ,
+n
+2 −1
+
+(1)
+
+b=0
+
+where n denotes the number of bits, s is the scaling factor,
+(b)
+and Ws is the bth bit in the binary representation, which
+is non-negative. A binary mask m(b) is also introduced to
+indicate whether a certain bit b in the WB should be removed
+(m(b) = 0) or retained (m(b) = 1). To induce higher sparsity
+in the model, a WB-level group Lasso is integrated during the
+
+=== page 4 ===
+4
+
+Fig. 2. Partitioning weight layers into weight blocks (WBs). (a) Fullyconnected layer. (b) Convolutional layer.
+
+training process. The WB-level group Lasso for the rth layer
+is formulated as:
+r
+
+BGL (W ) =
+
+Gr
+−1 n−1
+X
+X
+
+||Ws(g,b) m(b) ||2 ,
+
+(2)
+
+g=0 b=0
+
+where Gr is the total number of WBs in the rth layer, and
+(g,b)
+denotes the binary representation of the weights of the
+Ws
+th
+b bit within the g th WB. Applying the WB-level group lasso
+is able to make a certain bit of all weight elements in the same
+WB zero simultaneously. This method regularizes the weights
+in each WB individually, rather than penalizing the weights
+in the same layer as a whole. The overall training objective is
+formulated as:
+
+L = LCE + α
+
+R
+X
+#P aram(W r ) × #Bit(W r )
+r=1
+
+#P aram(W (1:R) )
+
+BGL (W r ),
+
+(3)
+where LCE is the cross-entropy loss, R is the number of layers
+of the model, and α is the regularization strength. To minimize
+the total number of bits in the model, the loss function includes
+coefficients for each WB-level group Lasso. These coefficients
+impose greater penalties on layers with a higher number of
+bits.
+To enhance the model’s resilience against quantization
+noises, we conduct regular re-quantization followed by adjusting the precision in a block-wise manner at specific intervals
+throughout the training process. The overall weight compression scheme of BWQ-A is illustrated in Fig. 3 (a). In the
+re-quantization process, we convert each bit of the weights
+into exact binary values. The precision adjustment scheme in
+BWQ-A, which is depicted in Fig. 3 (b), conducts the removal
+of the zero-valued bits in a block-wise manner. The initial
+precision for all WBs is set to 8-bit (in the simplified example
+of Fig. 3 (b), the WBs are initially set to 4-bit), and the initial
+value of the binary bit mask m(b) for every bit of the weights
+is 1. During the precision adjustment process, we check each
+bit of Ws within a WB from the most significant bit (MSB)
+down to the least significant bit (LSB). If a certain bit for all
+the weight elements within a WB only contains zeros, then the
+bit could be removed in this block by setting the corresponding
+bit mask to 0. The bit value checking stops until we encounter
+
+Fig. 3. (a) The quantization-aware-training scheme of BWQ-A. (b) Blockwise precision adjustment operation.
+
+the first non-zero bit. In this way, the WBs are assigned
+different precisions according to their individual contribution
+towards the training objective. As illustrated in Fig. 3 (a), in
+the forward pass, the weights are updated with the product of
+the weight tensor and the mask tensor. Therefore, the pruned
+bits of the weights will remain zero in the subsequent training
+epochs. This ensures that the sparsity of the model is nondecreasing throughout the training process.
+Our compression objective is to achieve the highest possible
+weight compression ratio while ensuring that the quantized
+model’s accuracy does not drop by more than 1%. Therefore,
+we gradually increase the regularization strength by a fixed
+interval ∆α until the accuracy loss is larger than 1%.
+B. Activation Compression
+
+ 0,
+x,
+y = P ACT (x) = 0.5(|x|−|x−β|+β) =
+
+β,
+
+x ∈ (−∞, 0)
+x ∈ [0, β)
+x ∈ [β, +∞)
+(4)
+To minimize the end-to-end latency of the accelerator,
+BWQ-A performs activation quantization as well, as reducing
+the activation bit-width effectively decreases the buffer’s read
+latency. Weight compression and activation compression are
+two orthogonal processes in BWQ-A, and we predetermine
+the activation bit-width before each training process. To
+achieve low-bit-width activations, we apply the Parameterized
+Clipping Activation Function (PACT) proposed in [22] prior
+to activation quantization. As shown in Equation 4, PACT
+removes outliers of the activation values and constrains the
+activations to a relatively small range, thereby decreasing the
+quantization noise. We first determine the weight quantization
+scheme with 8 bit activations and then gradually decrease the
+activation precision until the accuracy degradation exceeds
+
+=== page 5 ===
+5
+
+Algorithm 1 Quantization scheme of BWQ-A.
+Require: ∆α , Init Act Precision, Init Weight Precision
+1: Act Precision ← Init Act Precision
+2: α ← 0
+3: M ← 1 /*Initialize the binary mask*/
+4: Wf p ← Random Weight Init()
+5: Wb ← Bit Representation(Wf p , Init Weight Precision)
+6: /*Determine the weight regularization strength*/
+7: while acc loss ≤ 1% do
+8:
+α ← α + ∆α
+9:
+for epoch=1,..., Total Training Epoch do
+10:
+train(Wb , M, α, Act Precision)
+11:
+if epoch in Quant Epochs then
+12:
+Wb ← Quant(Wb )
+13:
+M ← Prec Adjust(Wb )
+14:
+end if
+15:
+end for
+16: end while
+17: /*Determine the activation precision*/
+18: while acc loss ≤ 1% do
+19:
+Act Precision ← Act Precision - 1
+20:
+for epoch=1,..., Total Training Epoch do
+21:
+train(Wb , M, α, Act Precision)
+22:
+if epoch in Quant Epochs then
+23:
+Wb ← Quant(Wb )
+24:
+M ← Prec Adjust(Wb )
+25:
+end if
+26:
+end for
+27: end while
+28: return Wb , M, Act Precision
+
+1%. The overall quantization scheme of BWQ-A is illustrated
+in Algorithm 1.
+IV. BWQ-H: H ARDWARE ACCELERATION O F BWQ-A
+W ITH R E RAM-PIM
+This section describes the implementation of BWQ-H,
+which is designed for the efficient inference of BWQ-A
+models. BWQ-H is a practical ReRAM-based PIM accelerator
+that adopts the OU-based operational scheme. While the OUbased scheme limits the parallelism of the ReRAM crossbars,
+the confined number of simultaneously activated WLs in an
+OU allows for a significant reduction in the required ADC precision. Since ADC power consumption increases exponentially
+with its precision, accelerators with the OU-based operation
+scheme can achieve more energy-efficient performance by
+utilizing low-precision ADCs.
+The overall architecture of BWQ-H is illustrated in Fig. 4.
+The accelerator comprises multiple tiles connected through a
+Network-on-Chip (NoC) and external memory. Within each
+tile, there are several PIM banks, accumulation units, tilelevel input/output registers, functional units, and the local
+bus. Each PIM bank includes a ReRAM crossbar, input/output
+register, WL decoder, DACs, MUX, ADCs, S&A units, and
+the memory controller.
+In the remainder of this section, we first introduce a
+precision-aware weight mapping method that increases the
+
+Fig. 4. Architecture of BWQ-H. The grey arrows represent the dataflow,
+while the blue arrows denote the control flow of the memory controller.
+
+utilization of the ReRAM crossbar arrays for the mixedprecision quantized models. Next, we present the design of
+a memory controller, which generates control signals for the
+peripheral circuits to enable the computation with mixedprecision weights on the same crossbar.
+A. Precision-Aware Weight Mapping
+Fig. 5 provides an illustration of different weight mapping
+schemes. In this example, a 4 × 4 WB is mapped to the
+crossbar consisting of 4 × 4 OUs. Within the WB, there are 4
+3-bit weight vectors A, B, C, and D. Fig. 5 (a) illustrates the
+traditional weight mapping method. Here, different bits from
+the same weight vector are mapped in consecutive columns of
+the crossbar array. For our mixed-precision quantized models,
+however, this mapping method will lead to an induced peripheral circuit overhead or low OU utilization if the number of
+columns in an OU is not divisible by the weight precision in a
+certain block, as shown in Fig. 5 (a) and (b). In Fig. 5 (a), since
+the second weight vector B spans two OUs, the computation
+results with B[0] on OU1 and the results with B[1] and B[2] on
+OU2 should be accumulated. Thus, complex indexing control
+logic for shift-and-add (S&A) units is required to sum up
+the computation results with bits of the same weight vector
+from different OUs activated in different clock cycles. This
+can cause additional overhead for the peripheral circuitry and
+result in increased computation latency. To avoid the overhead
+associated with the complex control logic, one alternative is
+to only allow the bits of the same weight to be mapped within
+the same OU, as depicted in Figure 5 (b). However, this can
+lead to low memory utilization of the OUs, thus leading to
+throughput reduction. In the given example, each OU would
+contain a spare column, resulting in a 25% reduction in OU
+throughput.
+To enable efficient computation of the mixed-precision
+quantized models, we propose a precision-aware weight map-
+
+=== page 6 ===
+6
+
+Fig. 6. (a) Mapping two WBs with different precisions to a 4 × 4 crossbar
+array with the precision-aware mapping scheme. (b) An example of mixedprecision computation on BWQ-H. Ci denote the ith cycle.
+
+B. Memory Controller Design
+Fig. 5. Example of different weight mapping schemes. Cells with the same
+color represent the same weight vector, Vi [n] denotes the nth bit of the ith
+element in vector V . (a) Conventional mapping scheme, in which bits of the
+same weight element may span different OUs. (b) A mapping scheme that
+constrains the bits of the same weight element to be mapped on the same
+OU. The blank cells represent spare columns. (c) Precision-aware mapping
+scheme.
+
+ping scheme, which is illustrated in Fig. 5 (c). Instead of mapping different bits of the same weight vector in consecutive
+columns, we assign them to different OUs. Within an OU,
+we map the same bit of different weights in the 4 × 4 WB.
+The computation results with different bits of the same weight
+vector are accumulated by the S&A units from different OUs.
+This precision-aware mapping scheme eliminates the need for
+additional peripheral circuits and is able to achieve 100%
+memory utilization within an OU.
+Fig. 6 (a) shows an example of mapping multiple WBs with
+different precisions onto the crossbar with the aforementioned
+scheme. This is a simple example of mapping a weight tensor
+that only contains two 2 × 2 WBs. Note that if the total bitwidth of each row of WBs varies, there may exist spare OUs
+in the crossbar (as illustrated by OU3 in Fig. 6 (a). However,
+this will not impact the throughput of the OUs or result in
+increased power consumption. This is due to the fact that
+within one clock cycle, only one OU can be activated, and
+the computation with unused OUs will be skipped. Moreover,
+the capacity of the peripherals in each PIM bank is designed
+to handle the operations of a single OU. Owing to the high
+density of the ReRAM crossbars in contrast to the peripheral
+circuits, the spare OUs would only result in negligible area
+overhead [5].
+
+To enable the computation with mixed-precision weights on
+the same crossbar, a memory controller is required to generate
+control signals for the peripheral circuits. The memory controller contains a look-up-table (LUT) to store the bit-width of
+all the WBs in one PIM bank, and generates control signals
+to the WL decoder, multiplexer (MUX), the S&A units, and
+the input register (IR) at the PIM bank level.
+The control logic of the memory controller is illustrated
+in Algorithm 2. To perform OU-based computation with the
+mixed-precision WBs, the controller (1) generates the row and
+column addresses for the current OU, and sends the addresses
+to the WL decoder and the MUX so that the corresponding
+rows and columns are activated; (2) produces a skip signal for
+the S&A upon completing the computation across multiple
+OUs related to one WB, so that the computation results of
+different WBs are not accumulated; (3) generates an enable
+signal for the IR once the computation for a row of WBs
+is finished, so that the corresponding activation data for the
+next WB row can be fetched from the register and sent to the
+activated WLs. The control signal flow is denoted by the blue
+arrows in Fig. 4.
+Fig. 6 (b) shows an example of how BWQ-H conducts
+mixed-precision computations coordinated by the memory
+controller. In the first cycle C1, the activation data stored in
+the upper-right section of the IR is sent to the 1st and 2nd
+WLs, and performs the multiply-accumulate (MAC) operation
+with OU1 . This results in the outputs of O1 and O2. To reuse
+the activation data, in C2, we perform the MAC operation
+with OU2 , and generate O3 and O4. Since OU1 and OU2
+store different bits of the same WB, the outputs in C1 and C2
+are accumulated by the S&A units. Next, in C3, we fetch the
+activation data in the bottom-right section of the IR and send
+it to the 3rd and 4th WLs. As OU3 is a spare OU, we skip
+its computation and proceed to OU4 . In C3, the S&A units
+
+=== page 7 ===
+7
+
+receive a skip signal from the memory controller, preventing
+O5 and O6 from being accumulated with previous outputs. To
+complete the computation presented in this example, a total of
+6 cycles are required. The subsequent computation sequence
+is depicted in Fig. 6 (b).
+Algorithm 2 Control logic of the memory controller.
+Require: Cout , Cin , k, OU Width,
+OU Height, Bitwidth Table
+1: Num Hblock ← Ceil(Cout / OU Width)
+2: Num Vblock ← Ceil(Cin * k * k / OU Height)
+3: Col Start Idx ← 0
+4: Fetch Next ← 0
+5: for i = 0, 1, ..., Num Hblock - 1 do
+6:
+Fetch Next ← 0
+7:
+for j = 0, 1, ..., Num Vblock - 1 do
+8:
+Weight Precision ← BW Table[i-1][j-1]
+9:
+if Weight Precision ̸= 0 then
+10:
+Psum ← 0
+11:
+Activated Rows ← [(i-1) * OU Height :
+i * OU Height]
+12:
+for k = 0, 1, ..., Weight Precision - 1 do
+13:
+Activated Cols ← [Col Start Idx :
+Col Start Idx + OU Width]
+14:
+Psum ← Shift Left(Psum) +
+Current ADC Output
+15:
+Col Start Idx ← Col Start Idx + OU Width
+16:
+end for
+17:
+end if
+18:
+if j == Num Vblock - 1 then
+19:
+Fetch Next ← 1
+20:
+end if
+21:
+end for
+22: end for
+
+V. E VALUATION M ETHODOLOGY
+To assess BWQ’s efficacy, we examine the impact of its
+two components, BWQ-A and BWQ-H, both separately and
+in combination. First, we verify the influence of BWQ-A on
+the model’s performance and compression ratio. Then, we
+evaluate BWQ-H’s inference latency and energy overhead with
+the quantized models obtained by BWQ-A to examine the
+effectiveness of the proposed co-design scheme.
+A. Algorithm Performance Validation
+BWQ-A is compared against the floating-point baseline
+models and BSQ models in terms of accuracy and model
+compression ratio. We consider a spectrum of representative
+models on CIFAR-10, CIFAR-100 [23] and ImageNet [24]
+datasets. For the CIFAR experiments, ResNet-20, ResNet-18,
+ResNet-34 [25], VGG16-BN, VGG19-BN [26], MobileNetV2
+[27] and DenseNet-121 [28] are examined. For the evaluations
+on ImageNet, we use ResNet-34 and DenseNet-121.
+In the CIFAR experiments, the floating-point baseline models are trained for 200 epochs with SGD optimizer with
+0.9 momentum and 1e-4 weight decay. The initial learning
+
+TABLE I
+H ARDWARE C ONFIGURATION .
+BWQ-H configuration (1.2 GHz)
+Component
+Spec
+Memristor
+size: 128×128;
+array
+bit-per-cell: 1; OU size: 8×9
+DAC
+resolution: 1-bit
+ADC
+resolution: 4-bit
+Buffer
+bitwidth: 64-bit
+Memory
+tech node: 28nm
+controller
+Other digital
+S+A: 4 per PIM Bank;
+components
+IR: 2KB; OR: 256B
+Chip total
+
+Power
+0.89W
+0.36W
+23.22W
+0.59W
+92.8mW
+92.6mW
+25.25W
+
+rate is 0.1, and a cosine annealing learning rate scheduler
+is utilized. The training for BWQ-A uses the same hyperparameters as the baseline models, except that BWQ-A is
+trained for 650 epochs because it incorporates a quantizationaware-training approach. This extension of training epochs
+proves advantageous as it facilitates the models’ adaptation
+to the quantization noises. The number of training epochs
+is comparable with the total training epochs (training and
+fine-tuning) used in previous studies such as BSQ [19] and
+CSQ [29]. The VGG models are re-quantized every 200
+epochs, while the ResNet, DenseNet, and MobileNet models
+are re-quantized every 300 epochs. A final re-quantization and
+precision adjustment operation is conducted after the training
+process, finalizing the precisions of the WBs.
+For the ImageNet experiments, we use the pretrained models
+from torchvision [30] as the floating-point baseline models.
+The BWQ-A models are trained for 90 epochs with SGD
+optimizer with 0.9 momentum. We set the initial learning rate
+as 0.001, and use a cosine annealing learning rate scheduler. A
+weight decay parameter of 1e-4 is incorporated. The models
+are re-quantized at the 60th and the 90th epoch. All the
+training processes are conducted using two A5000 GPUs with
+distributed data parallel.
+
+B. Architecture Modelling and Comparison
+For hardware performance, we compare BWQ-H with several representative ReRAM-based accelerators, including a
+baseline architecture ISAAC [5] with no model compression,
+SRE [3], BSQ [19] and SME[31], which perform model compression with HW-based, SW-based and HW/SW co-design
+approaches, respectively. The detailed operational principles of
+SRE and SME are discussed in Section VI-B. BSQ’s hardware
+performance on a ReRAM-based accelerator is simulated by
+modifying BWQ-H and following the same simulation method
+as BWQ-H. We modified the MNSIM [32] simulator to
+evaluate the performance of BWQ-H. For the analysis of the
+overhead for implementing the BWQ-A model with the OUbased operation scheme, we build an RTL model in Verilog
+for the memory controller and synthesize the model using
+Synopses Design Compiler with TSMC commercial 28nm
+standard library. Table I shows the hardware configuration to
+evaluate the BWQ-H architecture.
+
+=== page 8 ===
+8
+
+Fig. 7. Quantization results of 7 representative layers of VGG19-BN trained on CIFAR-10. The first and the second lines present the quantization results
+of BWQ-A and BSQ, respectively. Each column contains two bit-width maps corresponding to the same weight layer. The X-axis and Y-axis represent the
+index of the WBs in the Cout dimension and the Cin (or Cin × k × k) dimension, respectively. A colorbar is presented on the right. The specific layers
+are: “features.0”, “features.4”, “features.13”, “features.18”, “features.26”, “features.43”, “features.64”.
+TABLE II
+P ERFORMANCE C OMPARISON OF THE C OMPRESSED M ODELS .
+Dataset
+
+Model
+
+BSQ
+
+BWQ-A
+
+#Param (M)
+
+Baseline Acc (%)
+Act. Prec.
+
+Acc (%)
+
+Comp. (×)
+
+Act. Prec.
+
+Acc (%)
+
+Comp. (×)
+
+CIFAR-10
+
+ResNet-18
+ResNet-34
+VGG16-BN
+VGG19-BN
+ResNet-20
+MobileNetV2
+
+11.17
+21.28
+33.65
+38.96
+0.27
+2.30
+
+95.38
+95.61
+92.60
+92.94
+92.61
+94.43
+
+4
+4
+3
+3
+3
+4
+
+95.38
+94.66
+92.45
+92.84
+92.16
+94.24
+
+26.05
+83.86
+26.59
+28.15
+13.76
+5.73
+
+3
+4
+3
+3
+3
+3
+
+94.59
+94.73
+92.60
+91.96
+92.07
+93.54
+
+56.46
+117.52
+136.01
+443.01
+16.04
+47.34
+
+CIFAR-100
+
+ResNet18
+ResNet34
+VGG16-BN
+VGG19-BN
+MobileNetV2
+DenseNet121
+
+11.22
+21.33
+34.02
+39.33
+2.41
+7.00
+
+75.61
+76.41
+72.93
+72.94
+75.54
+75.99
+
+4
+4
+4
+4
+8
+5
+
+76.35
+76.37
+72.37
+72.05
+75.13
+75.18
+
+6.21
+33.40
+19.88
+23.09
+6.22
+7.26
+
+4
+4
+3
+3
+4
+4
+
+75.31
+76.16
+72.87
+72.04
+74.57
+75.07
+
+45.97
+63.93
+50.42
+78.56
+18.35
+23.65
+
+ImageNet
+
+ResNet34
+DenseNet121
+
+21.80
+7.98
+
+73.55
+74.65
+
+4
+5
+
+72.62
+73.70
+
+9.48
+7.47
+
+4
+4
+
+72.56
+73.68
+
+13.55
+12.56
+
+the model compression ratio. Typically, BWQ-A is able to
+achieve a higher weight and activation compression ratio with
+more redundant models. On the CIFAR-10 dataset, BWQA achieves an average (geometric mean) weight compression
+ratio of 81.98× and an average activation compression ratio of
+10.17×, all while maintaining an accuracy degradation within
+1% compared to the floating-point baseline models. Image
+classification tasks on CIFAR-100 and ImageNet are more
+complicated. However, on average, BWQ-A is still able to
+attain a 41.42 × /13.05× weight compression ratio and an
+8.81 × /8.00× activation compression ratio, respectively.
+Fig. 8. Bit-width distribution of the VGG19-BN model trained on CIFAR-10
+with BWQ-A and BSQ.
+
+VI. E XPERIMENTAL R ESULTS
+A. Algorithm
+In this section, we compare the performance of BWQA with 32-bit floating-point baseline models and BSQ. The
+experimental results on CIFAR-10, CIFAR-100, and ImageNet
+are presented in Table II. Here, ‘Act. Prec.’ refers to activation precision, ‘Acc’ is the test accuracy, and ‘Comp’ is
+
+Compared with BSQ, BWQ-A is able to achieve a higher
+model compression ratio with similar accuracy, as BWQ-A
+leverages a finer mixed-precision quantization granularity. Fig.
+7 shows the quantization results of 7 layers of VGG19-BN
+trained on CIFAR-10 with BSQ and BWQ-A. The first and the
+second rows of heatmaps present the quantization results of
+BWQ-A and BSQ, respectively. Each column contains two bitwidth maps corresponding to the same weight layer. According
+to Fig. 7, in BWQ-A, as the WBs contribute differently to
+the training objective, they can be assigned flexible precisions
+based on their individual significance. In contrast, BSQ restricts the weights in the same layer to have the same precision.
+
+=== page 9 ===
+9
+
+Fig. 9. The normalized speedup and energy efficiency (over ISAAC) of BWQ-H and other baseline accelerators.
+
+In BSQ, although many of the WBs may have low significance,
+all of the weights are designated with the maximum bit-width
+of the WB for that specific layer. The effects of this issue
+become more pronounced in deeper layers that contain a larger
+number of parameters. This drawback prevents BSQ from
+achieving the optimal trade-off between compression ratio
+and accuracy, rendering BSQ more resource-intensive when
+deployed on ReRAM-based accelerators.
+Fig. 7 (c) presents the bit-width distribution of the entire
+VGG19-BN model trained on CIFAR-10. We observe an evident shift in the distribution of these two model compression
+schemes. Notably, BWQ-A achieves a substantial reduction in
+average bit-width compared to BSQ, with an average 15.74×
+lower bit-width.
+B. Accelerator
+Fig. 9 shows the normalized speedup and energy efficiency
+of all accelerators considered in this work normalized with
+respect to ISAAC. The performance of the accelerators is
+simulated under the OU-based operation scheme to ensure
+high computational accuracy and manageable peripheral overhead. Our proposed architecture BWQ-H is able to achieve
+the highest speedup and energy efficiency for all models and
+datasets considered in this work. On average, BWQ-H achieves
+6.08× speedup and 17.47× energy saving over ISAAC. Fig.
+10 illustrates the breakdown of BWQ-H’s energy saving over
+ISAAC. The primary source of energy saving is attributed to
+the high weight compression ratio achieved through BWQ-A,
+while activation compression and the precision-aware mapping
+scheme also contribute to reducing BWQ-H’s energy con-
+
+sumption. In the OU-based operation scheme, the increased
+number of cycles needed to complete the computation with
+the entire crossbar leads to a significant rise in ADC energy,
+which becomes the dominant part of energy consumption in
+the ReRAM-based accelerators. Therefore, applying models
+with a high weight compression ratio can effectively reduce the
+number of computation cycles, thus greatly enhancing energy
+efficiency.
+A notable observation from Fig. 9 is that on both CIFAR10 and CIFAR-100 datasets, despite achieving a significantly
+higher weight compression ratio with BWQ-A, BWQ-H’s
+speedup for VGG19-BN is not higher than that of VGG16-BN.
+This is due to the fact that BWQ-H optimizes specific parts
+of the system, and there exists a speedup limit determined
+by the latency of the unoptimized components. BWQ-H is
+reaching the speedup limit on both models. However, being a
+deeper model, VGG19-BN introduces more layers with large
+input feature maps. As a result, the latency of relatively lower
+optimized parts, such as buffers and accumulation circuits, is
+increased.
+Since the baselines represent different types of architectures,
+we discuss the comparison between BWQ-H’s design with
+each baseline architecture separately.
+ISAAC: To guarantee high computational accuracy, the 2-bit
+ReRAM cells assumed in ISAAC are replaced by 1-bit cells
+in our simulations. In ISAAC, both weights and activations
+are represented with 16-bit. While this configuration delivers
+nearly lossless accuracy, it’s deemed excessive and resourcedemanding for edge devices. The primary reason for BWQ-H’s
+superior performance over ISAAC is its superior weight and
+
+=== page 10 ===
+10
+
+activation compression rates. On average, BWQ-H achieves a
+speedup of 6.08× and saves 17.47× more energy than ISAAC.
+SRE: SRE applies a HW-based optimization approach,
+exploring very fine-grained structured sparsity on the OU-row
+level from both the weight and the activation side. This method
+omits zero-valued OU rows, replacing them with subsequent
+non-zero values. However, this optimization approach only
+leverages the inherent sparsity of neural networks but does not
+proactively compress the models. Thus, its weight compression
+performance is much lower than what BWQ-A can achieve.
+For example, the highest average compression ratio that SRE
+can achieve is about 10×, and this is accomplished with the
+smallest 2 × 2 OUs. For 9 × 8 OUs, the compression ratio
+is only about 3.3×. On the other hand, to leverage finegrained sparsity, SRE imposes substantial peripheral overheads
+for indexing control, including index storage and complex
+indexing logic. Therefore, BWQ-H is able to achieve 4.44×
+average speedup and 11.98× energy saving over SRE.
+SME: SME proposes a HW/SW co-design approach to
+design a DNN acceleration framework for ReRAM devices. At
+the algorithm level, SME performs post-training-quantization
+to compress the model. In the proposed quantization scheme,
+at most 3 consecutive bits of the weights can be non-zero. To
+leverage the bit-level sparsity obtained from the compression
+algorithm, SME proposes a bit-wise inter-crossbar mapping
+scheme and a squeeze-out scheme. In the mapping scheme, the
+different bits of a weight matrix are mapped to different crossbars. In the squeeze-out process, if a crossbar row representing
+the LSB only contains zeros, then the zeros are squeezed out
+and the row is replaced with the non-zero values from the
+other crossbars with a right-shift. This requires doubling the
+corresponding activation values. However, SME’s quantization
+scheme can significantly compromise model accuracy due to
+its constraints on the number of non-zero bits. Moreover, the
+mapping and squeeze-out methods only leverage the sparsity
+to a very limited extent. Only if an entire crossbar row consists
+of zero-weight values then the data in that row can be squeezed
+out. Thus, the de facto model compression ratio is low when
+large crossbars are utilized. Since SME requires doubling the
+activation data on specific rows, it also induces additional
+overhead to record the index of the activation data that is
+required to be doubled. Therefore, BWQ-H is able to achieve
+3.66× average speedup and 7.65× energy saving over SME.
+BSQ: As introduced in Section II-B, BSQ performs layerwise mixed-precision quantization to compress both the
+weights and activations. Since all the weights within a layer
+have a uniform precision, BSQ doesn’t necessitate a memory
+controller to track the bit-width for each WB as BWQ-H
+does. Under the OU-based operation scheme, BSQ simply
+performs sequential computation on each OU and sequential
+activation data fetch from the IR. The indexing overhead
+for BSQ under the OU-based operation scheme is negligible.
+Nonetheless, the hardware performance of BSQ is lower than
+that of BWQ-H due to the fact that BWQ can achieve a higher
+model compression ratio with the fine-grained quantization
+granularity. On average, BWQ-H is able to achieve 1.45×
+speedup and 2.66× energy saving over BSQ.
+
+Fig. 10. Breakdown analysis for BWQ-H’s energy saving over ISAAC.
+
+Fig. 11. Indexing overhead comparison of CIFAR-10 models.
+
+C. Indexing Overhead Analysis
+In this section, we evaluate the index overhead of BWQH, SRE, and SME when using the OU-based scheme for
+CIFAR-10 models which are mentioned in Table II. Here, 9×8
+OUs are assumed. As shown in Fig. 11, on average, BWQH’s indexing overhead is 17.38× lower than SRE and 4.46×
+higher than SME. As discussed in the previous section, as SRE
+exploits the extremely fine-grained OU-row level sparsity for
+both weight and activation, it suffers from significant index
+storage overhead. SRE can require as much as 704KB to store
+the index for the ResNet-34 model. On the other hand, the
+memory consumption for storing the index in SME is much
+smaller, as it only explores the sparsity at the crossbar-row
+level. However, this coarse-grained compression granularity
+hinders SME from achieving the optimal model compression
+ratio. As a result, BWQ-H can attain higher speedup and
+reduced energy consumption than SME.
+D. Ablation Studies
+1) Regularization Strength and Re-quantization Interval:
+These are the two most important hyperparameters in BWQA that affect the model’s accuracy and compression ratio. As
+shown in Fig. 12, we evaluate the performance of BWQ-A
+with VGG19-BN on the CIFAR-10 dataset. Each data series
+represents 5 experiments, each with a different regularization
+strength: [5e-4, 1e-3, 3e-3, 5e-3, 1e-2]. It is understandable
+that applying larger regularization strength and more frequent
+re-quantization can enhance the model’s compression ratio
+at the expense of accuracy. It can be concluded from Fig.
+12 that the model’s compression ratio is more influenced by
+the re-quantization interval than the regularization strength.
+It is evident from Fig. 12 that using shorter re-quantization
+intervals consistently yields a better trade-off between compression ratio and accuracy. However, for VGG-19BN trained
+on CIFAR-10, using a re-quantization interval shorter than 200
+
+=== page 11 ===
+11
+
+analysis can be made for energy consumption. Fig. 13 also
+shows the energy consumption breakdown of different components. ADC energy steadily increases with OU size since larger
+OUs require ADCs with higher precisions, and ADC energy
+scales up significantly with its precision. As ADC energy
+constitutes the majority of the energy consumption in our OUbased scheme, the overall energy consumption increases as the
+OU size grows. Therefore, if the primary goal is minimizing
+the runtime, a medium-sized OU would be preferable. On
+the other hand, if the task has a limited energy consumption
+budget, then the 9 × 8 OU configuration would be the most
+beneficial design option.
+Fig. 12. BWQ-A’s accuracy and model compression ratio against varying
+regularization strength and re-quantization intervals.
+
+Fig. 13. BWQ’s energy consumption, normalized model size, and normalized
+runtime against varying OU sizes. The bars correspond to the y-axis on the
+left, while the orange and black lines correspond to the y-axis on the right.
+
+introduces excessive quantization noise, making the training
+process unstable.
+2) OU Size: In spite of the fact that the OU size for
+practical ReRAM-based accelerators is currently limited by
+the manufacturing technology of ReRAM devices, it is highly
+plausible that future advancements in manufacturing technology will enable the support of larger OU sizes. Therefore,
+we provide a future roadmap for practical ReRAM-based
+accelerators by examining the scalability of BWQ with varying
+OU sizes, from 9 × 8 to 128 × 128.
+Fig. 13 shows BWQ’s performance with the ResNet-18
+model tested on CIFAR-10 for varying OU sizes. Other models
+exhibit similar trends. As coarser quantization granularity
+results in a lower model compression ratio, the model size
+achieved with the BWQ-A quantization scheme increases with
+OU size. The model’s inference runtime can be affected by a
+number of factors when OU size varies. When a larger OU
+is considered, then the computation with the entire crossbar
+can be completed within fewer clock cycles, thus reducing
+the runtime. However, a larger OU leads to a lower model
+compression ratio. Thus, more clock cycles are required to
+finish the computation with a larger model. As a larger OU
+contains more BLs, it also requires higher ADC precision,
+which leads to increased ADC latency. Overall, the runtime
+only shows minor variations with increasing OU size, reaching
+its minimum value at an OU size of 64 × 64. A similar
+
+VII. C ONCLUSION
+In this paper, we present BWQ, an algorithm-architecture
+co-design framework to enable highly efficient ReRAM-based
+DNN accelerators. Due to the practical concerns, BWQ adopts
+the OU-based operation scheme. At the algorithm level, we
+introduce BWQ-A, a block-wise mixed precision quantization
+scheme. The size of the weight block aligns with the size
+of the OU. By employing finer quantization granularity, a
+high average model compression ratio of 58.27× is achieved
+within 1% accuracy degradation compared to the floatingpoint baseline models. At the architecture level, we present
+the design of BWQ-H, which enables the efficient inference
+of the models quantized using BWQ-A. BWQ-H incorporates
+a novel precision-aware mapping scheme to increase memory
+utilization with an OU for the mixed-precision quantized
+models. Additionally, a memory controller is designed to
+generate control signals to the peripheral circuits to enable the
+computation of mixed-precision weights on the same crossbar.
+Leveraging the high model compression ratio, on average,
+BWQ-H achieves a 17.47× speedup and a 6.08× energy
+efficiency over existing ReRAM-based architectures. We also
+analyze the scalability of BWQ-A and BWQ-H with varying
+OU sizes. This serves as a future road map for practical
+ReRAM-based accelerators depending on the evolution of the
+manufacturing technology of ReRAM devices.
+R EFERENCES
+[1] L. Song, X. Qian, H. Li, and Y. Chen, “Pipelayer: A pipelined rerambased accelerator for deep learning,” in 2017 IEEE international symposium on high performance computer architecture (HPCA), pp. 541–552,
+IEEE, 2017.
+[2] X. Yang, B. Yan, H. Li, and Y. Chen, “Retransformer: Reram-based
+processing-in-memory architecture for transformer acceleration,” in
+Proceedings of the 39th International Conference on Computer-Aided
+Design, pp. 1–9, 2020.
+[3] T.-H. Yang, H.-Y. Cheng, C.-L. Yang, I.-C. Tseng, H.-W. Hu, H.-S.
+Chang, and H.-P. Li, “Sparse reram engine: Joint exploration of activation and weight sparsity in compressed neural networks,” in Proceedings
+of the 46th International Symposium on Computer Architecture, pp. 236–
+249, 2019.
+[4] P. Chi, S. Li, C. Xu, T. Zhang, J. Zhao, Y. Liu, Y. Wang, and Y. Xie,
+“Prime: A novel processing-in-memory architecture for neural network
+computation in reram-based main memory,” ACM SIGARCH Computer
+Architecture News, vol. 44, no. 3, pp. 27–39, 2016.
+[5] A. Shafiee, A. Nag, N. Muralimanohar, R. Balasubramonian, J. P. Strachan, M. Hu, R. S. Williams, and V. Srikumar, “Isaac: A convolutional
+neural network accelerator with in-situ analog arithmetic in crossbars,”
+ACM SIGARCH Computer Architecture News, vol. 44, no. 3, pp. 14–26,
+2016.
+[6] F. Tu, Y. Wang, L. Liang, Y. Ding, L. Liu, S. Wei, S. Yin, and Y. Xie,
+“Sdp: Co-designing algorithm, dataflow, and architecture for in-sram
+
+=== page 12 ===
+12
+
+sparse nn acceleration,” IEEE Transactions on Computer-Aided Design
+of Integrated Circuits and Systems, vol. 42, no. 1, pp. 109–121, 2022.
+[7] Q. Zheng, X. Li, Z. Wang, G. Sun, Y. Cai, R. Huang, Y. Chen, and H. Li,
+“Mobilatice: a depth-wise dcnn accelerator with hybrid digital/analog
+nonvolatile processing-in-memory block,” in Proceedings of the 39th
+International Conference on Computer-Aided Design, pp. 1–9, 2020.
+[8] C. Ogbogu, M. Soumen, B. K. Joardar, J. R. Doppa, D. Heo,
+K. Chakrabarty, and P. P. Pande, “Energy-efficient reram-based ml training via mixed pruning and reconfigurable adc,” in 2023 IEEE/ACM International Symposium on Low Power Electronics and Design (ISLPED),
+pp. 1–6, 2023.
+[9] M.-Y. Lin, H.-Y. Cheng, W.-T. Lin, T.-H. Yang, I.-C. Tseng, C.-L.
+Yang, H.-W. Hu, H.-S. Chang, H.-P. Li, and M.-F. Chang, “Dl-rsim:
+A simulation framework to enable reliable reram-based accelerators
+for deep learning,” in 2018 IEEE/ACM International Conference on
+Computer-Aided Design (ICCAD), pp. 1–8, ACM, 2018.
+[10] S. Yang, W. Chen, X. Zhang, S. He, Y. Yin, and X.-H. Sun, “Auto-prune:
+Automated dnn pruning and mapping for reram-based accelerator,” in
+Proceedings of the ACM International Conference on Supercomputing,
+pp. 304–315, 2021.
+[11] W.-H. Chen, K.-X. Li, W.-Y. Lin, K.-H. Hsu, P.-Y. Li, C.-H. Yang, C.X. Xue, E.-Y. Yang, Y.-K. Chen, Y.-S. Chang, et al., “A 65nm 1mb
+nonvolatile computing-in-memory reram macro with sub-16ns multiplyand-accumulate for binary dnn ai edge processors,” in 2018 IEEE
+International Solid-State Circuits Conference-(ISSCC), pp. 494–496,
+IEEE, 2018.
+[12] C.-X. Xue, T.-Y. Huang, J.-S. Liu, T.-W. Chang, H.-Y. Kao, J.-H. Wang,
+T.-W. Liu, S.-Y. Wei, S.-P. Huang, W.-C. Wei, et al., “15.4 a 22nm 2mb
+reram compute-in-memory macro with 121-28tops/w for multibit mac
+computing for tiny ai edge devices,” in 2020 IEEE International SolidState Circuits Conference-(ISSCC), pp. 244–246, IEEE, 2020.
+[13] H. Ji, L. Song, L. Jiang, H. Li, and Y. Chen, “Recom: An efficient
+resistive accelerator for compressed deep neural networks,” in 2018
+Design, Automation & Test in Europe Conference & Exhibition (DATE),
+pp. 237–240, IEEE, 2018.
+[14] S. Huang, A. Ankit, P. Silveira, R. Antunes, S. R. Chalamalasetti,
+I. El Hajj, D. E. Kim, G. Aguiar, P. Bruel, S. Serebryakov, et al., “Mixed
+precision quantization for reram-based dnn inference accelerators,” in
+Proceedings of the 26th Asia and South Pacific Design Automation
+Conference, pp. 372–377, 2021.
+[15] Z. Zhu, H. Sun, Y. Lin, G. Dai, L. Xia, S. Han, Y. Wang, and H. Yang,
+“A configurable multi-precision cnn computing framework based on
+single bit rram,” in Proceedings of the 56th Annual Design Automation
+Conference 2019, pp. 1–6, 2019.
+[16] Z. Dong, Z. Yao, A. Gholami, M. W. Mahoney, and K. Keutzer, “Hawq:
+Hessian aware quantization of neural networks with mixed-precision,”
+in Proceedings of the IEEE/CVF International Conference on Computer
+Vision, pp. 293–302, 2019.
+[17] K. Wang, Z. Liu, Y. Lin, J. Lin, and S. Han, “Haq: Hardware-aware
+automated quantization with mixed precision,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+pp. 8612–8620, 2019.
+[18] B. Wu, Y. Wang, P. Zhang, Y. Tian, P. Vajda, and K. Keutzer, “Mixed
+precision quantization of convnets via differentiable neural architecture
+search,” arXiv preprint arXiv:1812.00090, 2018.
+[19] H. Yang, L. Duan, Y. Chen, and H. Li, “Bsq: Exploring bit-level
+sparsity for mixed-precision neural network quantization,” arXiv preprint
+arXiv:2102.10462, 2021.
+[20] S. Dash, Y. Luo, A. Lu, S. Yu, and S. Mukhopadhyay, “Robust
+processing-in-memory with multibit reram using hessian-driven mixedprecision computation,” IEEE Transactions on Computer-Aided Design
+of Integrated Circuits and Systems, vol. 41, no. 4, pp. 1006–1019, 2021.
+[21] E. Hanson, S. Li, H. Li, and Y. Chen, “Cascading structured pruning:
+enabling high data reuse for sparse dnn accelerators,” in Proceedings
+of the 49th Annual International Symposium on Computer Architecture,
+pp. 522–535, 2022.
+[22] J. Choi, Z. Wang, S. Venkataramani, P. I.-J. Chuang, V. Srinivasan,
+and K. Gopalakrishnan, “Pact: Parameterized clipping activation for
+quantized neural networks,” arXiv preprint arXiv:1805.06085, 2018.
+[23] A. Krizhevsky, G. Hinton, et al., “Learning multiple layers of features
+from tiny images,” 2009.
+[24] O. Russakovsky, J. Deng, H. Su, J. Krause, S. Satheesh, S. Ma,
+Z. Huang, A. Karpathy, A. Khosla, M. Bernstein, A. C. Berg, and
+L. Fei-Fei, “ImageNet Large Scale Visual Recognition Challenge,”
+International Journal of Computer Vision (IJCV), vol. 115, no. 3,
+pp. 211–252, 2015.
+[25] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image
+
+recognition,” in Proceedings of the IEEE conference on computer vision
+and pattern recognition, pp. 770–778, 2016.
+[26] K. Simonyan and A. Zisserman, “Very deep convolutional networks for
+large-scale image recognition,” arXiv preprint arXiv:1409.1556, 2014.
+[27] M. Sandler, A. Howard, M. Zhu, A. Zhmoginov, and L.-C. Chen,
+“Mobilenetv2: Inverted residuals and linear bottlenecks,” in Proceedings
+of the IEEE conference on computer vision and pattern recognition,
+pp. 4510–4520, 2018.
+[28] G. Huang, Z. Liu, L. Van Der Maaten, and K. Q. Weinberger, “Densely
+connected convolutional networks,” in Proceedings of the IEEE conference on computer vision and pattern recognition, pp. 4700–4708, 2017.
+[29] L. Xiao, H. Yang, Z. Dong, K. Keutzer, L. Du, and S. Zhang, “Csq:
+Growing mixed-precision quantization scheme with bi-level continuous
+sparsification,” arXiv preprint arXiv:2212.02770, 2022.
+[30] T. maintainers and contributors, “Torchvision: Pytorch’s computer vision
+library.” https://github.com/pytorch/vision, 2016.
+[31] F. Liu, W. Zhao, Z. He, Z. Wang, Y. Zhao, T. Yang, J. Feng,
+X. Liang, and L. Jiang, “Sme: Reram-based sparse-multiplication-engine
+to squeeze-out bit sparsity of neural network,” in 2021 IEEE 39th
+International Conference on Computer Design (ICCD), pp. 417–424,
+IEEE, 2021.
+[32] Z. Zhu, H. Sun, K. Qiu, L. Xia, G. Krishnan, G. Dai, D. Niu, X. Chen,
+X. S. Hu, Y. Cao, et al., “Mnsim 2.0: A behavior-level modeling tool
+for memristor-based neuromorphic computing systems,” in Proceedings
+of the 2020 on Great Lakes Symposium on VLSI, pp. 83–88, 2020.

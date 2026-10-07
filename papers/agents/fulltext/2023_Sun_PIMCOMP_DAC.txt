@@ -1,0 +1,1403 @@
+# PIMCOMP: A Universal Compilation Framework for Crossbar-based PIM DNN Accelerators
+# id: W4386763580 | key: 2023_Sun_PIMCOMP_DAC | DAC 2023 | card: ../cards/2023_Sun_PIMCOMP_DAC.md
+
+
+=== page 1 ===
+This paper is published in Design Automation Conference 2023 (DAC’23)
+
+PIMCOMP: A Universal Compilation Framework
+for Crossbar-based PIM DNN Accelerators
+
+arXiv:2307.01475v1 [cs.AR] 4 Jul 2023
+
+Xiaotian Sun, Xinyu Wang, Wanqian Li, Lei Wang, Yinhe Han, Xiaoming Chen∗
+Center for Intelligent Computing Systems, Institute of Computing Technology, Chinese Academy of Sciences
+University of Chinese Academy of Sciences
+∗ Corresponding author: chenxiaoming@ict.ac.cn
+Abstract—Crossbar-based PIM DNN accelerators can provide layers to keep the execution pipeline balanced. However, this
+massively parallel in-situ operations. A specifically designed method does not make effective use of resources. It needs a
+compiler is important to achieve high performance for a wide toolchain to elaborate the task mapping, resource allocation,
+variety of DNN workloads. However, some key compilation issues
+such as parallelism considerations, weight replication selection, data distribution, dataflow scheduling, etc., to fully exploit the
+and array mapping methods have not been solved. In this work, performance of PIM DNN accelerators when running DNN
+we propose PIMCOMP - a universal compilation framework for models. Although PUMA [10] has proposed a compiler for
+NVM crossbar-based PIM DNN accelerators. PIMCOMP is built memristor crossbar-based accelerators, it has not effectively
+on an abstract PIM accelerator architecture, which is compatible solved the problems mentioned above.
+with the widely used Crossbar/IMA/Tile/Chip hierarchy. On this
+To address these limitations, we propose a universal compibasis, we propose four general compilation stages for crossbarlation
+framework, PIMCOMP, for NVM crossbar-based PIM
+based PIM accelerators: node partitioning, weight replicating,
+core mapping, and dataflow scheduling. We design two compi- accelerators. The compilation process is divided into 4 phases:
+lation modes with different inter-layer pipeline granularities to node partitioning, weight replicating, core mapping, and
+support high-throughput and low-latency application scenarios, dataflow scheduling. Based on these steps, we design a DNN
+respectively. Our experimental results show that PIMCMOP
+yields improvements of 1.6× and 2.4× in throughput and latency, inference compiler. We make the following contributions.
+• We propose a general and representative NVM crossbar
+respectively, relative to PUMA.
+Index Terms—NVM, PIM accelerator, deep neural network,
+based accelerator architecture as a hardware abstraction
+compilation framework
+for studying the actual execution of DNNs;
+I. I NTRODUCTION
+• We provide two compilation modes: “low latency” and
+In recent years, deep neural networks (DNNs) have made
+“high throughput”, according to the user’s application
+breakthroughs in a variety of tasks. Due to the expansion of the
+scenario;
+parameter scale of DNN models, the industry expects consider• We propose a genetic algorithm to optimize weight repliable performance improvements in hardware to efficiently run
+cation and core mapping, with novel fitness function for
+DNN algorithms. Therefore various DNN accelerators (e.g.,
+both compilation modes;
+[1], [2]) have been proposed. However, these devices based
+• We design scheduling algorithms to support DNN neton CMOS and following the von Neumann architecture are
+works with complex topologies and multiple operators
+now hitting the memory wall challenge [3], and encounter
+and optimize on-chip memory usage.
+bottlenecks in the improvements of storage, bandwidth, and
+II. BACKGROUND AND M OTIVATION
+energy consumption.
+Process-in-memory (PIM) is regarded as a promising tech- A. NVM Crossbar based DNN Accelerators
+Fig. 1 shows the structure of the
+nology to avoid the memory wall, and has become a popular
+DAC
+research direction in the field of DNN accelerators. PIM has NVM crossbar which is the basic
+DAC
+a variety of implementations, among which emerging Non- operation unit of PIM DNN accelDAC
+Volatile Memory (NVM) devices such as RRAM, PCM and erators. Due to hardware characterDAC
+MRAM have great potential to challenge the dominance of istics, NVM crossbars can perform
+S&H S&H S&H S&H
+CMOS. Integrating these devices into a 2D cross-point array matrix-vector multiplication (MVM)
+ADC
+S&A
+results in a crossbar array. The 2D crossbar structure formed operations efficiently in an analog
+by NVM devices has attracted growing interest due to its high manner. The conductance of a crossmemory density and parallel in-situ computing properties [4]. bar cell at each cross-point can be Fig. 1. A NVM crossbar
+There are previous works (e.g., [5]–[9]) proposing NVM programmed to store an element of with peripheral devices
+crossbar-based PIM DNN accelerators. However, they mainly matrix G and a voltage vector representing the vector V is
+focus on the design of specific architectures and lack con- applied to the rows. According to Ohm’s law, the current
+sideration of the execution details of DNNs. First, existing value at each cross-point is Iij = Gij Vj , and according
+works rely on manually mapping the weight data to the to Kirchhoff’s law, the accumulatedPcurrent value that can
+crossbars, which ignores the impact of weight mapping on be read in each column is Ii =
+j Gij Vj . In this way,
+the parallelism of the crossbars and has poor scalability. the crossbar can calculate the dot product of matrix G and
+Second, existing designs often determine the replication of vector V in parallel. Since the NVM crossbar operates in the
+the weights intuitively, such as replicating weight data in early analog domain and other circuits of the accelerator work in the
+
+=== page 2 ===
+digital domain, peripheral circuits such as ADC/DAC, Sample
+and Hold (S&H), Shift And Add (S&A) are required in the
+operation unit.
+To speed up DNN inference, the weight data is mapped
+into the crossbar, and the input is fed as the voltage input.
+So the crossbar can complete the MVM operations in DNNs
+in parallel and previous works (e.g., [5], [8], [9]) have used
+NVM crossbars to accelerate DNN inference.
+B. DNN Compilation Framework
+To bridge the gap between various Deep Learning (DL)
+frameworks and different DL hardwares, several DNN compilation frameworks have been proposed by industry and
+academia (e.g., [11], [12]).
+TVM [11] is a popular end-to-end DL optimization stack
+that provides multi-stage back-end optimization for different
+hardwares. However, TVM is not suitable for PIM architectures. First, storage units in PIM are also computation units,
+which makes the storage and computing characteristics of
+PIM different from traditional hardware. Second, a significant
+stage in TVM’s optimization of computing is the scheduling
+of multi-layer loops, including unrolling, vectorization, parallelization, and tiling. However, the parallel MVM operation is
+naturally supported by PIM crossbars, so TVM optimization
+will have limited effects on NVM crossbar-based accelerators.
+In the field of PIM, PUMA [10] is the first memristorbased ML inference accelerator that supports ISA with a
+compiler that can convert high-level languages into ISA code.
+Nonetheless, heuristic weight replicating and core mapping
+methods adopted by its compiler are difficult to guarantee high
+performance. In addition, the granularity of PUMA’s interlayer pipeline is inference, that is, different layers process
+data of different inferences, and this processing manner is
+unacceptable in low-latency scenarios.
+III. A BSTRACT ACCELERATOR A RCHITECTURE
+We propose an abstract PIM accelerator architecture. On this
+basis, we propose an execution model to capture the execution
+characteristics and parallelism of PIM accelerators.
+A. Hardware Abstraction
+Fig. 2 illustrates the proposed abstract DNN accelerator
+architecture. At a high level, the accelerator consists of a
+series of cores connected to a global memory. Each core can
+be controlled by instructions or state machines. The cores
+can be interconnected through NoC or busses. The weights
+of the neural network are stored in the cores, while the
+Core
+
+Core
+C
+
+Core
+
+Core
+C
+
+Core
+
+VFU
+
+Core
+
+Core
+C
+
+C
+
+PIMMU
+
+C
+
+C
+
+IV. C OMPILATION F RAMEWORK
+Local
+Memory
+
+Core
+C
+
+Global Memory
+
+B. Execution Model
+According to our abstract architecture, after mapping the
+DNN to the cores, each core can get a static operation
+sequence, which is composed of the basic operations such as
+MVM, VEC, COMM, and MEM, representing MVM operations by PIMMU, vector operations by VFU, communication
+between cores, and access to global memory, respectively. We
+do not restrict the format of the operation sequence. It can be
+a series of instructions, or a schedule of basic operators, etc.
+For any two MVMs in the operation sequence of the same
+core, the parallel relationship between them is analyzed as
+follows.
+• If they are for the same crossbar, that is, there is a
+structural conflict between them, the latter one must wait
+for the previous one to complete before it can start.
+• If the input data of the latter MVM is the output of the
+former one, that is, there is a data dependency between
+them, the latter one must also wait for the former MVM
+to finish before it can start.
+For several MVM operations that do not have structural
+conflicts, data dependencies, and synchronization blocking at
+a certain moment, the start time interval between two adjacent
+MVM operations is determined by the on-chip bandwidth of
+each core.
+
+Control Unit
+
+Core
+C
+
+inputs, outputs and intermediate results are stored in the global
+memory. Different cores perform operations asynchronously.
+Inter-core synchronization occurs when there is an inter-core
+data transfer.
+The abstract core in Fig. 2 consists of a control unit, a local
+memory and two types of operation units: PIM matrix unit
+(PIMMU) and vector functional unit (VFU). The PIM matrix
+unit is composed of several PIM crossbars, which are used to
+perform MVM operations in the DNN, while the VFU performs other operations, including activation function, pooling,
+and element-wise operations. The local memory works as a
+scratchpad that stores inputs and outputs of DNN nodes. The
+PIMMU and VFU can only access data in the local memory.
+In addition, operations such as padding, concatenation, and
+split can also be handled using the local memory.
+Our proposed abstract architecture is compatible with the
+Crossbar/IMA/Tile/Chip structure widely adopted in previous
+work [5]. This work focuses on the general optimization
+idea of the compilation process of crossbar-based PIM DNN
+accelerator, and we do not consider the detailed optimization
+inside the PIM matrix unit. Nonetheless, related optimizations
+such as mixed size crossbars [13] and low-bit ADCs [14] are
+compatible with this abstract architecture.
+
+C
+
+OR
+
+IR
+N×
+
+Global Memory /
+Router / Bus
+
+PIMMU PIM Matrix Unit
+VFU Vector Functional Unit
+IR Input Register
+OR
+Output Register
+C
+some kind of Connection
+
+Fig. 2. Abstract PIM accelerator architecture
+
+A. The Overview of PIMCOMP
+Fig. 3 illustrates the high-level overview of PIMCOMP.
+First, PIMCOMP reads the user input and loads DNN model in
+ONNX format which facilitates conversion between different
+DL frameworks, and obtains the model description including
+node (in this work, node and layer share the same meaning)
+
+=== page 3 ===
+User Input
+Crossbar Size
+Core Number
+Chip Number
+Core Connection Methods
+Weight/Input Bit Number
+Local Memory Bandwidth
+Global Memory Bandwidth
+MVM Operation Latency
+
+ONNX DNN Model
+
+GA-based
+Optimization
+
+Node
+Partition
+CONV
+Weight
+
+Weight
+Replicating
+
+Application Scenario
+1. high-throughput
+2. low-latency
+
+Core
+Mapping
+
+Dataflow
+Scheduling
+Core
+
+Weight
+Matrix
+
+MEM
+MVM
+MVM
+MVM
+VEC
+COMM
+
+Fig. 3. The overview of PIMCOMP
+
+information and topological relationship after parsing the
+model. This information will be fed to the backend. The
+entire backend includes 4 stages. Node Partitioning (Section
+IV-B) describes the rules for dividing the convolutional and
+fully connected layers according to the crossbar size. Weight
+Replicating (Section IV-C) determines the replication numbers
+of different nodes, Core Mapping (Section IV-C) decides
+the mapping relationship between crossbars and cores, and
+Dataflow Scheduling (Section IV-D) performs scheduling and
+optimization according to user’s requirement to generate control flow or instruction flow.
+We provide two compilation modes for users to choose
+from: High Throughput (HT) and Low Latency (LL), which
+are suitable for scenarios with continuous input data of large
+batches and intermittent input of a small amount of data,
+respectively. Their main design difference is the granularity
+of the inter-layer pipeline. In HT mode, DNN processes in
+a layer-by-layer manner. When the pipeline is filled, different
+layers process data from different inferences. There is no interlayer data communication so parallelism between layers is
+high. In LL mode, as long as one layer produces an output, it
+passes the output to the position required by subsequent layers.
+When a layer receives enough data, it can start its operation,
+so the overall latency is low.
+B. Node Partitioning
+
+H out Wout
+
+Cout
+AG1
+
+H xbar
+
+Kh  Kw Cin
+
+AG2
+Wxbar
+
+Input Data
+
+Kernels
+
+Sliding
+Windows
+
+Weight
+Matrix
+
+Fig. 4. Node Partitioning strategy
+
+Due to the limited size of a crossbar array, weight data
+of convolutional layers and fully connected layers cannot be
+completely mapped to the same crossbar in general, so we
+need to partition these nodes to fit in the crossbars. Node
+partitioning strategy is shown in Fig. 4. First, the convolutional
+layers and fully connected layers (which can be regarded as
+special convolutional layers) in DNN are converted into MVM
+operations. Specifically, the weights of each convolution kernel
+are flatten into a column, thus obtaining a weight matrix with
+height kw ×kh ×Cin and width Cout , where kw , kh represent
+the width and height of the convolution kernel and Cin , Cout
+represent the number of input channels and output channels,
+respectively. After that, the entire weight matrix is divided
+into several Array Groups (AG) according to the size of the
+
+crossbar array. The height of each AG is equal to the height
+of the crossbar array Hxbar , and the width is equal to Cout .
+Therefore each AG contains ⌈Cout /Wxbar ⌉ crossbar arrays,
+where Wxbar is the width of crossbar array. Each AG needs to
+run Hout × Wout input cycles (input sliding windows), where
+Hout and Wout are the height and width of the output feature.
+It is preferred to map all crossbars of one AG to the same
+core. Crossbar arrays belonging to the same AG can be driven
+by the same instruction or control signal, therefore gathering
+them in one core can reduce control complexity. More importantly, these crossbar arrays have the exact same input. If
+they are in the same core, input data can be broadcast to these
+arrays, which avoids repeatedly accessing Input Register and
+alleviates on-chip bandwidth and buffer pressure.
+After partitioning the weight, the AGs need to be allocated
+to the cores. One core may contain AGs of multiple nodes,
+and AGs of one node may be mapped to different cores.
+The MVM results obtained by AGs of the same node need
+to be accumulated to get a complete computation result. If
+AGs of the same node are mapped to different cores, data
+accumulation across cores is required.
+C. Weight Replicating and Core Mapping
+The storage units in PIM are also computation units, so
+an important way to improve computation parallelism is to
+replicate the weight data multiple times. Besides, allocating
+computing tasks among cores also greatly influences performance of PIM accelerators, taking into account structural conflict and data dependency. The above two steps are intertwined
+so we employ a modified genetic algorithm to optimize them
+simultaneously.
+1) Algorithm Design: In the genetic algorithm, each gene
+represents several AGs of a node, which is encoded as
+an integer, expressed as node index × 10000 + AG num.
+For example, 1030025 represents 25 AGs of the 103rd
+node. To ensure that the mapping result is not so scattered
+that on-chip communication becomes a bottleneck, we set
+a limit on the number of nodes that each core can hold,
+max node num in core. Therefore, the chromosome length
+of each individual is core num × max node num in core,
+where core num is user specified. The location of each gene
+in the chromosome determines the index of core these AGs
+are mapped to. This encoding takes into account flexibility and
+operational efficiency. If each AG is coded, the chromosome
+will be too long to process efficiently.
+In the initialization phase, we randomly select the replication number for each node, and randomly map the AGs
+to the cores. The design of the fitness function is directly
+related to the optimization effect, which will be described
+in the following subsection. Crossover phase in this issue
+lacks practical significance, so we skip it. Mutation is an
+important phase to improve resource utilization and inference
+performance. In this stage, the algorithm will randomly select
+individuals to perform one of the following four mutation
+operations: I. Randomly select a node, increase its replication
+number, and randomly map the expanded AG to cores. II.
+
+=== page 4 ===
+Randomly select a node, reduce its replication number, and
+recover the crossbar arrays occupied by that replicated block.
+III. Randomly select a gene and spread its AG to other cores.
+IV. Randomly select a gene and merge its AG into the same
+W1nodeE1of other cores. (b) rearrange the information
+(a) the i-th core
+mapping information
+
+W1
+
+#Cycle
+
+Gene
+
+3000
+
+10002
+
+1000
+
+20002
+
+500
+
+30001
+
+#AG in one cycle
+#cycle
+
+(c) compute the process time of the i-th core
+
+timei = 300  f (8) + 200  f (5) + 500  f (4) + 2000  f (2)
+
+TMVM
+? (n  Tinterval ) : TMVM
+W3 f (n ) = n 
+Tinterval
+E3
+
+300 W2 40003
+
+E1
+
+8
+5 4
+2
+300 200 500 2000
+
+Fig.E25. An example to estimate execution time of the i-th core
+
+2) Fitness Function: For HT mode, the overall inference
+
+ (W0 + E 0  f 0 )time can directly reflect the performance. Fig. 5 is an example
+
+of how to calculate the estimated inference time of the i-th
+core in HT mode. A total of 4 nodes are mapped to the i-th
+ {W + E  f core,
+ [W +containing
+( E  f )  (W
+f )]} 3 AGs respectively, and the AGs
+2, +2,E 1, and
+of each node have 3000, 1000, 500, and 300 input sliding
+windows respectively. Because there is no data dependency
+between AGs, each AG starts to execute in turn at interval
+Tinterval under the condition that no structural conflict occurs.
+Rearrange theLayer-2
+information to get the table in Fig. 5(b). The
+er-0
+Layer-1
+(8,W1300) in the W
+first column means that the number of AGs
+=0
+2
+in this core is 8 for the first 300 operation cycles. After 300
+E1
+E2
+cycles, the 4-th node is completed, so the number of AGs
+execution
+Layer-0 is 5. Based on this information, the
+for the
+next time
+200 ofcycles
+execution time of Layer-1
+T / R  (W + E  f
+)
+estimated
+time of the
+i-th core can be calculated according to
+execution
+time of
+Layer-2 the operation time
+the
+formula
+in
+Fig.
+5(c).
+f (n)
+calculates
+T / R  [W + ( E  )  (W + E  f )]
+of
+one
+operation
+cycle
+when
+there
+T / R  {W + ( E  f )  [W + ( E  f )  (W + E  f )]} are n AGs in the core. If
+MV M
+n > TTinterval
+, where TM V M is the time to complete a single
+MVM operation, then each operation cycle takes f (n) = n ×
+Tinterval ; otherwise f (n) = TM V M . In this way, an ideal
+inference time timei is calculated for each core, so the fitness
+function for HT mode is FHT = maxi timei .
+
+ [W0 + E 0  f 0  (W1 + E1  f 1 )]
+0
+
+0
+
+0
+
+1
+
+0
+
+1
+
+1
+
+o
+
+0
+
+o
+
+0
+
+0
+
+0
+
+1
+
+o
+
+0
+
+0
+
+0
+
+1
+
+2
+
+2
+
+2
+
+0
+
+1
+
+1
+
+1
+
+1
+
+2
+
+2
+
+2
+
+Node-0
+
+Node-1
+
+Node-2
+
+W0 = 0
+
+W1
+
+W2
+
+E0 = 0
+
+E1
+
+E2
+
+execution time of Node-0
+execution time of Node-1
+
+time 0 = T / Ro  (W0 + E 0  f 0 )
+
+execution time of Node-2
+
+time 1 = T / Ro  [W0 + ( E 0  f 0 )  (W1 + E1  f 1 )]
+time 2 = T / Ro  {W0 + ( E 0  f 0 )  [W1 + ( E1  f 1 )  (W2 + E2  f 2 )]}
+Fig. 6. An illustration to estimate runtime of LL mode
+
+For LL mode, the inter-layer execution sequence in LL
+mode can be equivalent to “after waiting for the provider node
+(layer) to generate enough output, the consumer node (layer)
+starts to execute and generates all outputs without pause”.
+This waiting percentage W can be calculated for each node.
+Further, if the uninterrupted execution time of node m is Tm
+and if the replication number of node m is r times that of
+its consumer node n, it takes Tm × r × (1 − Wn ) for the
+consumer node n to complete the calculation without pausing
+after waiting Tm ×Wn . Therefore the overall time to complete
+computing these two nodes is Tm × (Wn + r × (1 − Wn )).
+The estimated runtime of LL mode can be derived as shown
+
+R
+
+, 1), where
+in Fig. 6. For convenience, we set fx = min( Rp(x)
+x
+Rx is the replication number of the node x and p(x) gets the
+provider node index of node x. We let Ex = 1 − Wx , which
+represents the percentage of execution of node x. We assume
+the execution time of the first node without extra replication
+is T . Iterate based on topology and the final estimated time is
+used as the fitness function FLL .
+D. Dataflow Scheduling
+The dataflow scheduling stage will generate a sequence of
+instructions or control flow according to the pipeline mode
+selected by the user. We first introduce the dataflow scheduling
+algorithms in HT mode and LL mode, and then describe the
+on-chip memory optimization technique.
+Algorithm 1 HT Dataflow Scheduling Algorithm
+1: for each core do
+2:
+while have unfinished AG do
+3:
+load data from global memory
+4:
+for each unfinished AG do
+5:
+perform one MVM operation
+6:
+accumulate results across AGs within core
+7:
+accumulate results across AGs between cores
+8:
+apply activation function to the results
+9:
+store data to global memory
+10: allocate other operations to cores
+1) HT Dataflow: Algorithm 1 shows dataflow scheduling
+for HT mode. It is unrealistic to store all data in a inference
+of each node in on-chip local memory so it is necessary to
+periodically transfer some input (output) data from (to) the
+global memory to (from) the local memory (Lines 3 and 9).
+In the inter-core data accumulation process (Line 7), AGs are
+required to transfer the data to be accumulated to the core
+where the first AG of this replicated weight block is located.
+To improve parallelism, other operations such as POOL, CONCAT, ELTWISE are distributed among several cores (Line 10).
+DNNs with complex topology are easy to implement in HT
+mode with each node reading the corresponding data from
+global memory.
+2) LL Dataflow: In LL mode, each node computes an
+output and then immediately passes it to its consumer nodes.
+When one node receives enough input, it can start executing.
+The condition for the output (r, c)i of node i to start computing
+is that the node has received the last input (rd , cd )i [15] that
+it requires, and (rd , cd )i can be formulated as:
+
+(
+
+min Hi , (Ki + si × (r − 1) − pi )
+CON V, P OOL
+Hi
+FC
+(r
+)
+CON
+CAT,
+ELT
+W
+ISE
+i
+d
+
+(
+min Wi , (Ki + si × (c − 1) − pi )
+CON V, P OOL
+Wi
+FC
+(cd )i =
+(cd )i
+CON CAT, ELT W ISE
+
+(rd )i =
+
+where Hi and Wi are the height and width of the output
+feature of node i, respectively. Ki , si , and pi are kernel size,
+stride, and padding size of node i, respectively, if node i is
+convolutional or pooling layer.
+According to the formula, the required input and expected
+output of each replicated block can be obtained. In order
+
+=== page 5 ===
+MVM AG-0
+MVM AG-1
+
+Instruction / Operation
+
+to improve computational parallelism and reduce the transmission between cores, other operations in DNN are divided
+into several cores according to the replication number of their
+predecessor convolutional layer.
+Memory Usage
+0
+
+0
+0
+
+1
+
+ADD AG-0 AG-1 A0
+
+0
+
+1
+
+0
+
+MVM AG-2
+
+0
+
+1
+
+0
+
+2
+
+0
+
+1
+
+0
+
+2
+
+ADD A0 AG-2 A1
+
+(a) Naïve
+
+1
+
+0
+
+0
+
+1
+
+0
+
+1
+
+0
+
+0
+
+1
+
+0
+
+0
+
+1
+
+1
+
+0
+
+1
+
+0
+
+1
+
+2
+
+0
+
+2
+
+2
+
+1
+
+2
+
+(b) ADD-reuse
+
+overhead of inter-core communication and can obtain energy
+consumption and area overhead.
+As a comparison, we faithfully implement the PUMA
+dataflow under our framework and it is called a PUMAlike dataflow. According to [10], [18], the purpose of node
+replicating is to balance the pipeline and a heuristic method is
+adopted to deal with core mapping. Since PUMA only support
+dataflow with pipeline granularity of inference (HT mode), we
+implement the LL mode for PUMA.
+
+(c)AG-reuse
+
+Fig. 7. An example illustrating memory reuse optimization
+
+3) On-Chip Memory Reuse: Since the capacity of onchip local memory is limited and global memory access is
+expensive, efficient utilization of on-chip local memory is
+important to reduce the frequency of accessing global memory,
+improve executing efficiency and reduce power consumption.
+Fig. 7 illustrates an example of memory optimization. For
+the naive method, we allocate new memory block for each
+operation. Most memory blocks are accessed once and will
+never be used again. So we use an ADD-reuse in Fig. 7(b)
+to reuse the memory for data accumulation. But allocating
+memory blocks for each AG still causes a lot of waste.
+Therefore, we propose AG-reuse on the basis of ADD-reuse
+in Fig. 7(c), which fully reuses the on-chip storage of AGs.
+V. E VALUATION
+A. Experiment Setup
+1) hardware characteristics: In order to evaluate the performance of PIMCOMP and facilitate fair comparison, we
+adopt PUMA architecture to instantiate our design. The PIM
+material is ReRAM, and NoC is selected as core connection
+implementation. Our evaluation adopts the same parameters
+as PUMA, including area and power information of ReRAM
+crossbars, VFUs, and control units. The ReRAM cell precision
+is 2-bit, and inputs, outputs and weights are 16-bit fixedpoint numbers. Memory modules and routers are modeled by
+CACTI [16] and Orion 3.0 [17] respectively, to get energy and
+area estimation. The detailed configurations of hardware are
+summarized in Table I.
+TABLE I
+H ARDWARE C ONFIGURATIONS
+Component
+
+Parameters
+
+Specification
+
+Power
+(mW )
+
+Area
+(mm2 )
+
+PIMMU
+VFU
+Local Memory
+Control Unit
+Core
+Router
+Global Memory
+Hyper Transport
+Chip
+
+# crossbar
+# per core
+capacity
+—
+# per chip
+flit size
+capacity
+link bandwidth
+—
+
+64
+12
+64 kB
+—
+36
+64
+4 MB
+6.40 GB/s
+—
+
+1221.76
+22.80
+18.00
+8.00
+1270.56
+43.13
+257.72
+10.40 k
+56.79 k
+
+0.77
+0.048
+0.085
+0.11
+1.01
+0.14
+2.42
+22.88
+62.92
+
+2) benchmarks and baselines: We use both computationally
+intensive network (vgg16) and topologically complex networks
+(resnet18, squeezenet, googlenet and inception-v3) as benchmarks. We build a cycle-accurate simulator. It accepts the
+operation stream compiled by PIMCOMP, and can simulate
+the structure conflict and data dependency of MVM operation, the usage of on-chip local memory, the synchronization
+
+B. Experimental Result
+1) Throughput and Latency: Fig. 8 shows the results of
+throughput and latency of PIMCOMP under different degrees
+of parallelism. The degree of parallelism here refers to how
+many AGs are allowed to calculate at the same time, limited
+by the user given on-chip bandwidth. According to the results,
+we can observe that with the increase of parallelism, the
+improvement of PIMCOMP gradually decreases. This is because the source of optimization is the gap between the actual
+performance and the ideal performance of the hardware. Still,
+PIMCOMP gains 1.6× and 2.4× improvements in throughput
+and latency, respectively, relative to PUMA.
+In HT mode, the optimization effect of googlenet and
+squeezenet is limited. The main reason is that the MVM calculation pressure of these networks is light, so the time to access
+global memory and to process vector and memory operations
+become dominant. For computationally intensive tasks such
+as vgg16, PIMCOMP can achieve better optimization effect.
+In LL mode, the optimization effect of PIMCOMP is more
+significant because the node replicating method adopted by
+PUMA is not efficient enough.
+2) Energy: Fig. 9 shows the energy evaluation results with
+parallelism degree 20. The computational load of the same
+network is relatively fixed so dynamic energy of PUMA
+and PIMCOMP are close. The main difference between two
+compilation results is static energy consumption. In HT mode,
+PUMA allocates computation unevenly, causing some cores
+to run for a long time while others finish early. PIMCOMP
+ensures the computing tasks are evenly distributed. This results
+in a slight increase in static energy due to having more cores
+active, although PIMCOMP has a shorter overall runtime. In
+LL mode, there is data dependency between cores, and the
+active time of each core is related to the overall inference
+time. PIMCOMP is able to reduce static energy by 58.3% by
+reducing overall runtime.
+3) Memory Usage: Fig. 10 shows the effect of different
+memory reuse optimization. In the evaluation of HT mode,
+every core will transfer results back to global memory and
+load new input data into local memory after each AG performs
+2 MVM operations. In HT mode, if AG-reuse is adopted,
+the global memory access can be reduced by an average
+of 47.8% compared with the naive method. This will result
+in faster inference speed and lower memory access energy
+consumption. In LL mode, the average local memory usage
+can be controlled within 64kB using AG-reuse optimization,
+which is in line with our architectural design.
+
+=== page 6 ===
+Normalized Throughput
+Normalized Speed
+
+HT mode
+3.9x
+
+4
+
+PUMA-like
+PIMCOMP
+
+3.1x
+
+3
+
+2.0x
+
+2
+
+2.0x 1.8x
+
+1.5x 1.5x
+
+1
+0
+
+1
+
+20
+
+1
+
+40 200 2000
+
+20
+
+vgg16
+
+1.4x 1.3x 1.3x
+
+1.4x 1.2x 1.2x 1.2x 1.2x
+
+40 200 2000
+
+1
+
+20
+
+resnet18
+
+40 200 2000
+
+2.0x
+
+1
+
+googlenet
+
+1.3x 1.3x 1.3x 1.3x
+
+1.4x 1.5x 1.4x 1.4x 1.4x
+
+20
+
+1
+
+40 200 2000
+
+inception-v3
+
+20
+
+40 200 2000
+
+squeezenet
+
+LL mode
+4.9x
+
+4
+
+3.1x
+
+2
+0
+
+1
+
+PUMA-like
+PIMCOMP
+
+3.9x 3.8x 3.6x 3.6x
+2.6x 2.5x 2.5x 2.5x
+
+20
+
+2.6x
+
+1
+
+40 200 2000
+
+vgg16
+
+20
+
+1
+
+40 200 2000
+
+resnet18
+
+1.8x 1.7x 1.6x 1.6x
+20
+
+40 200 2000
+
+googlenet
+
+2.3x 2.2x 2.2x 2.2x 2.2x
+
+2.6x
+
+1
+
+1
+
+20
+
+40 200 2000
+
+inception-v3
+
+2.1x 2.0x 1.9x 1.8x
+
+20
+
+40 200 2000
+
+squeezenet
+
+Fig. 8. Throughput and latency results with different parallelism normalized to baseline
+1.0
+
+1.00× 0.97× 1.00×
+
+1.06×
+
+LL mode
+
+1.00× 1.00× 1.00× 0.99× 1.00× 0.97×
+
+0.8
+0.6
+0.4
+0.2
+0.0
+
+vgg16
+
+Normalized Energy
+
+Normalized Energy
+
+HT mode
+1.00×
+
+1.0
+
+1.00×
+
+0.8
+
+1.00×
+
+1.00×
+
+0.70×
+
+0.6
+
+0.55×
+
+0.69×
+
+0.48×
+0.38×
+
+0.4
+0.2
+0.0
+
+resnet18 googlenetinception-v3squeezenet
+
+1.00×
+
+vgg16
+
+PUMA-like Leakage Energy
+PUMA-like Dynamic Energy
+
+resnet18 googlenetinception-v3squeezenet
+
+PIMCOMP Leakage Energy
+PIMCOMP Dynamic Energy
+
+HT mode
+60
+
+1.00×
+
+1.00×
+
+50
+
+0.79× 1.00×
+
+20
+
+0.75×
+
+0.82× 1.00×
+
+40
+30
+
+Local Memory Usage On Average (kB)
+
+Local Memory Usage On Average (kB)
+
+Fig. 9. Energy breakdown for two compilation modes normalized to baseline
+
+1.00×
+0.84×
+
+0.78×
+0.71×
+
+0.58×
+
+0.44×
+
+0.35×
+
+0.62×
+
+10
+0
+
+vgg16
+
+et
+resnet18 googlenetinception-v3
+squeezen
+
+naive
+
+LL mode
+
+70
+1.00×
+0.95×
+
+60
+
+1.00×
+1.00×
+
+0.85×
+
+0.82×
+
+50
+
+0.76×
+
+0.67× 1.00×
+
+40
+
+0.76×
+
+30
+
+0.50×
+
+20
+
+0.63×
+
+1.00×
+0.78×
+0.61×
+
+10
+0
+
+vgg16
+
+et
+resnet18 googlenetinception-v3
+squeezen
+
+ADD-reuse
+
+AG-reuse
+
+Fig. 10. On-chip local memory usage with memory reuse optimization
+TABLE II
+C OMPILING T IME ( SECOND ) F OR B ENCHMARKS
+vgg16
+Node Partitioning
+Replicating+Mapping
+Dataflow Scheduling
+Total
+
+googlenet
+
+squeezenet
+
+HT
+
+LL
+
+HT
+
+resnet18
+LL
+
+HT
+
+LL
+
+HT
+
+LL
+
+inception v3
+HT
+
+LL
+
+0.01
+8.93
+1.62
+10.56
+
+0.01
+1.80
+6.67
+8.48
+
+0.04
+12.39
+0.54
+12.96
+
+0.03
+6.35
+4.39
+10.78
+
+0.04
+12.90
+0.64
+13.57
+
+0.04
+8.10
+5.44
+13.58
+
+0.05
+12.04
+1.08
+13.17
+
+0.05
+7.43
+32.72
+40.21
+
+0.03
+12.88
+0.80
+13.71
+
+0.03
+8.76
+20.78
+29.57
+
+4) Compiling Time: Table II shows the running time of
+PIMCOMP. The population size is 100 and the maximum iteration number is 200 in the genetic algorithm. We can observe
+that weight replicating and core mapping take longer time in
+HT mode, while dataflow scheduling is time-consuming in LL
+mode. The overall compiling time is acceptable.
+VI. C ONCLUSION
+Previous research studies on NVM crossbar based PIM accelerator downplay several practical issues, such as parallelism
+consideration, weight replication selection and array mapping
+methods. In this work, we propose PIMCOMP, which has 4
+general optimization stages to form a complete compilation
+toolchain for PIM accelerators. Evaluations show that our work
+outperforms a PUMA-like compiler on average in terms of per-
+
+formance and power consumption. PIMCOMP is orthogonal
+to other studies on PIM accelerators, and researchers can apply
+PIMCOMP to their accelerators for further improvement.
+R EFERENCES
+[1] T. Chen et al., “Diannao: A small-footprint high-throughput accelerator
+for ubiquitous machine-learning,” in ASPLOS, p. 269–284, 2014.
+[2] Y.-H. Chen et al., “Eyeriss: A spatial architecture for energy-efficient
+dataflow for convolutional neural networks,” in ISCA, pp. 367–379,
+2016.
+[3] S.-L. Lu et al., “Scaling the “memory wall”: Designer track,” in ICCAD,
+pp. 271–272, 2012.
+[4] I. Chakraborty et al., “Resistive crossbars as approximate hardware
+building blocks for machine learning: Opportunities and challenges,”
+Proceedings of the IEEE, vol. 108, no. 12, pp. 2276–2310, 2020.
+[5] A. Shafiee et al., “Isaac: A convolutional neural network accelerator
+with in-situ analog arithmetic in crossbars,” in ISCA, pp. 14–26, 2016.
+[6] X. Qiao et al., “Atomlayer: A universal reram-based cnn accelerator
+with atomic layer computation,” in DAC, pp. 1–6, 2018.
+[7] T. Song et al., “Brahms: Beyond conventional rram-based neural
+network accelerators using hybrid analog memory system,” in DAC,
+pp. 1033–1038, 2021.
+[8] S. Jung et al., “A crossbar array of magnetoresistive memory devices
+for in-memory computing,” Nature, vol. 601, pp. 211–216, Jan 2022.
+[9] A. Chen et al., “Enabling high-performance dnn inference accelerators
+using non-volatile analog memory (invited),” in EDTM, pp. 1–4, 2020.
+[10] A. Ankit et al., “Puma: A programmable ultra-efficient memristor-based
+accelerator for machine learning inference,” in ASPLOS, p. 715–731,
+2019.
+[11] T. Chen et al., “Tvm: An automated end-to-end optimizing compiler for
+deep learning,” in OSDI, (USA), p. 579–594, 2018.
+[12] N. Vasilache et al., “Tensor comprehensions: Framework-agnostic highperformance machine learning abstractions,” 2018.
+[13] Z. Zhu et al., “Mixed size crossbar based rram cnn accelerator with
+overlapped mapping method,” in ICCAD, pp. 1–8, 2018.
+[14] Y. He et al., “Infox: An energy-efficient reram accelerator design with
+information-lossless low-bit adcs,” in DAC, p. 97–102, 2022.
+[15] Z. Zhu et al., “Mnsim 2.0: A behavior-level modeling tool for memristorbased neuromorphic computing systems,” in GLSVLSI, p. 83–88, 2020.
+[16] R. Balasubramonian et al., “Cacti 7: New tools for interconnect exploration in innovative off-chip memories,” ACM Trans. Archit. Code
+Optim., vol. 14, jun 2017.
+[17] A. B. Kahng et al., “Orion3.0: A comprehensive noc router estimation
+tool,” IEEE Embedded Systems Letters, vol. 7, no. 2, pp. 41–45, 2015.
+[18] J. Ambrosi et al., “Hardware-software co-design for an analog-digital
+accelerator for machine learning,” in ICRC, pp. 1–13, 2018.

@@ -1,0 +1,2726 @@
+# FORMS: Fine-grained Polarized ReRAM-based In-situ Computation for Mixed-signal DNN Accelerator
+# id: W3191560475 | key: 2021_Yuan_FORMS_ISCA | ISCA 2021 | card: ../cards/2021_Yuan_FORMS_ISCA.md
+
+
+=== page 1 ===
+FORMS: Fine-grained Polarized ReRAM-based
+In-situ Computation for Mixed-signal DNN
+Accelerator
+Geng Yuan? 1 , Payman Behnam? 2 , Zhengang Li1 , Ali Shafiee3 , Sheng Lin1 , Xiaolong Ma1 , Hang Liu4 ,
+Xuehai Qian5 , Mahdi Nazm Bojnordi6 , Yanzhi Wang1 , Caiwen Ding7
+
+arXiv:2106.09144v1 [cs.AR] 16 Jun 2021
+
+1
+
+Northeastern University, 2 Georgia Institute of Technology, 3 Samsung, 4 Stevens Institute of Technology,
+5
+University of Southern California, 6 University of Utah, 7 University of Connecticut
+1
+{yuan.geng, li.zhen, lin.sheng, ma.xiaol, yanz.wang}@northeastern.edu,
+2
+payman.behnam@gatech.edu, 3 ali.shafiee@samsung.com, 4 hang.liu@stevens.edu,
+5
+xuehai.qian@usc.edu, 6 bojnordi@cs.utah.edu, 7 caiwen.ding@uconn.edu
+
+Abstract—Recent work demonstrated the promise of using
+resistive random access memory (ReRAM) as an emerging
+technology to perform inherently parallel analog domain in-situ
+matrix-vector multiplication—the intensive and key computation
+in deep neural networks (DNNs). One key problem is the weights
+that are signed values. However, in a ReRAM crossbar, weights
+are stored as conductance of the crossbar cells, and the in-situ
+computation assumes all cells on each crossbar column are of
+the same sign. The current architectures either use two ReRAM
+crossbars for positive and negative weights (PRIME), or add
+an offset to weights so that all values become positive (ISAAC).
+Neither solution is ideal: they either double the cost of crossbars,
+or incur extra offset circuity. To better address this problem, we
+propose FORMS, a fine-grained ReRAM-based DNN accelerator
+with algorithm/hardware co-design. Instead of trying to represent
+the positive/negative weights, our key design principle is to
+enforce exactly what is assumed in the in-situ computation—
+ensuring that all weights in the same column of a crossbar
+have the same sign. It naturally avoids the cost of an additional
+crossbar. Such polarized weights can be nicely generated using
+alternating direction method of multipliers (ADMM) regularized
+optimization during the DNN training, which can exactly enforce
+certain patterns in DNN weights. To achieve high accuracy, we
+divide the crossbar into logical sub-arrays and only enforce this
+property within the fine-grained sub-array columns. Crucially,
+the small sub-arrays provides a unique opportunity for input zeroskipping, which can significantly avoid unnecessary computations
+and reduce computation time. At the same time, it also makes the
+hardware much easier to implement and is less susceptible to nonidealities and noise than coarse-grained architectures. Putting all
+together, with the same optimized DNN models, FORMS achieves
+GOP s
+1.50× and 1.93× throughput improvement in terms of s×mm
+2
+GOP s
+and W compared to ISAAC, and 1.12× ∼ 2.4× speed up in
+terms of frame per second over optimized ISAAC with almost
+the same power/area cost. Interestingly, FORMS optimization
+framework can even speed up the original ISAAC from 10.7×
+up to 377.9×, reflecting the importance of software/hardware
+co-design optimizations.
+
+I. I NTRODUCTION
+Deep Neural Networks (DNNs) have become the fundamental element and core enabler of ubiquitous artificial intelligence, thanks to their high accuracy, excellent scalability, and
+self-adaptiveness [1]. As the ever-growing DNN model size,
+the high computation and memory storage of DNN models
+introduce substantial data movements, posing key challenges
+to the conventional Von Neumann architectures, where weight
+? These Authors contributed equally.
+
+storage and computation units are separated. To reduce data
+movement, model compression techniques [2–4] and hardware
+accelerators [5–11] have been intensively investigated. However, as Moore’s law is reaching an end [12], the potential of
+the acceleration architecture based on conventional technology
+is still limited. We argue that drastic improvements can be only
+achieved by 1) the next-generation emerging device/circuit
+technology beyond CMOS; and 2) the vertical integration [13]
+and optimization of algorithm, architecture, and technology
+innovations to deliver better overall performance and energy
+efficiency for various applications.
+A promising emerging technology is the recently discovered resistive random access memory (ReRAM) [14, 15]
+devices that are able to perform the inherently parallel insitu matrix-vector multiplication in the analog domain. This
+key feature has been applied to several significant problems,
+including solving systems of linear equations in O(1) time
+complexity [16], and more interestingly, building DNN accelerators [17–24]. Since the key computation in DNNs can be
+essentially expressed as matrix-vector multiplication, ReRAM
+crossbars can naturally accelerate DNNs with much less data
+movement and low-cost computation. Due to their promising
+results, structured pruning [3] and quantization [4] are also
+developed to facilitate a smaller number of weights and bits
+to reduce the amount of computation and ReRAM hardware
+resources.
+On the other side, a key complication of the ReRAMbased DNN accelerator is that although the weights stored
+in ReRAM crossbar cells can be either positive or negative,
+the in-situ computation assumes all cells in each crossbar
+column hold values of the same sign, i.e., all positive or all
+negative. There are two approaches to tackle the problem.
+The general way is to use two ReRAM crossbars to hold the
+positive and negative magnitudes weights separately, doubling
+the ReRAM portion of hardware cost [17, 25–28]. In contrast,
+ISAAC [18] adds an offset to weights so that all values become
+positive. While keeping the number of crossbars the same,
+the latter approach introduces additional hardware costs for
+the peripheral circuits by adding extra offset circuits and may
+also decrease the network robustness to hardware failures [29].
+We argue that both solutions are not ideal, and we attempt to
+develop an alternative approach with better cost/performance
+
+=== page 2 ===
+Pruned
+Polarized
+
+2D weight format
+
+after pruning
+pruned weight
+
+positive weight
+negative weight
+
+FORMS Optimization Framwork
+
+Quantized
+
+MCU
+
+MCU
+
+MCU
+
+MCU
+
+MCU
+
+MCU
+
+S&H
+ADCs
+
+Driver
+zero-skip
+DAC
+
+MCU
+
+Driver
+
+S&H
+ADCs
+
+Tile
+
+S&H
+ADCs
+Driver
+
+zero-skip
+DAC
+
+Quantization
+
+MCU
+
+zero-skip
+DAC
+
+Weight Pruning
+
+Optimized
+ReRAM-aware
+DNN Model
+
+Data-Flow Controller
+
+Fragment
+Polarization
+
+zero-skip
+DAC
+
+Pre-trained
+DNN Model
+
+Sign Indicator
+Driver
+
+Controller
+
+}
+
+Training with ADMM regularized optimization
+
+S&H
+ADCs
+
+MCU
+
+FORMS Accelerator Architecture Design
+
+Fig. 1: Overall Flow of FORMS Algorithm/Hardware Co-designed.
+trade-offs.
+Different from the previous approaches, which use additional hardware to “fix” the problem, our design principle is to
+enforce exactly what is assumed in the in-situ computation—
+ensuring the pattern that all weights in the same column of a
+crossbar have the same sign. This idea takes the opportunity
+of algorithm and hardware co-design, and is motivated by
+the capability of the powerful alternating direction method
+of multipliers (ADMM) regularized optimization [30], which
+is exactly able to enforce patterns in DNN training while
+maintaining high accuracy. Based on this idea, we can train
+a DNN model using ADMM with our novel constraints such
+that the weights mapped to the same crossbar columns are all
+positive or negative. With the typical ReRAM crossbar size,
+e.g., 128 × 128, we found that the “same-sign” property of
+the coarse granularity, i.e., the whole column of 128 weights,
+can lead to accuracy degradation. To maintain high accuracy,
+we propose to divide the crossbar into smaller logical subarrays and only enforce the property within the fine-grained
+sub-array columns, and use fine-grained computation instead
+of coarse-grained computation (i.e., calculate fine-grained subarray column at each time). However, this raises another
+problem: the mainstream designs take advantage of coarsegrained computation to achieve high performance (i.e., frames
+per second (FPS)). For a fine-grained design to reach a similar
+FPS to that of coarse-grained designs, if no other optimizations
+are applied, more parallel analog-to-digital converters (ADCs)
+are needed to operate in parallel to compensate for the
+performance degradation caused by computation granularity,
+which will generally lead to a higher hardware overhead than
+the coarse-grained designs.
+Is this yet another failed idea that seems to work at the
+first thought but actually not after deliberation? Fortunately,
+the answer is no, because our idea opens a new opportunity
+for more significant performance improvements. The crucial
+observation is that if all inputs to the crossbar become zeros
+in higher bits after a certain position, e.g., 00001011, they can
+be simply skipped, saving cycles and improving performance.
+The effectiveness of the input zero-skipping technique is
+determined by the size of the crossbar sub-array. The smaller
+the number of inputs, the higher the probability all inputs
+become zero at the higher bits, thereby more zeros can be
+skipped. This is why zero-skipping is a unique opportunity
+for small sub-arrays. With a fraction of a crossbar column
+(e.g., 4 or 8 cells), zeros can be aggressively skipped among 4
+or 8 inputs. Moreover, it is worth noting that small ADCs for
+
+fine-grained computation are easier to implement than large
+ADCs for coarse-grained computation, and make the design
+less susceptible to non-idealities and noise [31, 32].
+Putting all together, this paper proposes FORMS, the first
+algorithm/hardware co-designed fine-grained ReRAM architecture solution leveraging polarized weights. The overall
+flow of FORMS algorithm/hardware co-design is shown in
+Figure 1. Starting with a pretrained model, we first apply
+structured pruning. Then, the weight matrix in the pruned
+model is divided into fixed-sized fragments, and each fragment corresponds to a column of the crossbar sub-array. By
+incorporating our fragment polarization constraints in ADMM
+regularized training, the weights in each fragment will be
+trained to have the same sign. Please note that we are not
+moving the weights around to form polarized fragments.
+Finally, the quantization is applied to reduce the number of bits
+required for each weight. With the multi-step ADMM-based
+structured pruning, polarization, and quantization, a significant
+model compression ratio is achieved.
+At the hardware level, we design a fine-grained DNN
+accelerator architecture leveraging fine-grained computations.
+A novel zero-skipping logic is developed to control the shift
+of input bit streams on-the-fly and avoids entering the unnecessary zero bits into each layer of the DNNs-based ReRAMs
+to eliminate useless computations and start computation on
+the next input early. Applied to the inputs of a small subarray (fragment), zero-skipping significantly reduces the frame
+processing time and energy consumption.
+II. BACKGROUND AND C HALLENGES
+A. ReRAM Crossbar and ReRAM-Based DNN Acceleration
+Recently, there is significant progress in fabricating nonvolatile memories. The 3D Xpoint [33, 34] is an example
+of commercial non-volatile memories fabricated jointly by
+Micron and Intel. Resistive RAM is a non-volatile memory
+with nearly zero leakage power, high integration density, and
+high scalability. Research papers demonstrated the results of
+fabricated ReRAM memory cells, memory arrays [35] and also
+neuromorphic accelerators using ReRAM technology [33, 36].
+Several ReRAM-based in-situ mixed-signal DNN accelerators such as ISAAC [18], Newton [19], PipeLayer [20],
+PRIME [17], PUMA [21], MultiScale [22], XNORRRAM [37], RapidDNN [38], have been proposed in recent
+years. These designs utilize a combination of analog and
+digital units to speed up the computation. Besides, the recent
+work TIMELY [23] is proposed to enhance the analog data
+
+=== page 3 ===
+C. Motivation
+We realize the possibility of generating polarized weights
+that can elegantly solve the natural problem of mapping
+positive/negative weights to the ReRAM crossbar without
+doubling crossbar cost or introducing extra hardware for
+result compensation. We explore a good balance between the
+overall hardware cost and performance. Even with paying the
+extra overhead to compensate for the performance degradation caused by fine-grained computation, our design can still
+
+el
+s
+
+}
+ch
+an
+n
+
+n
++5 -1 -8
+
+-3 -1 +2
+
++2 -2 +2
+
++3 +1 -6
+
++2 +1 +1
+
+-1 +5 -4
+
+-4 -2 +4
+
++1 0 -2
+
++3 +1 -3
+
+filter 1
+
+filter 2
+
+filter m
+
+pruned
+filter(s)
+2D weight format
+
+Filter Shape Prune
+ch
+
+an
+
+}
+
+ne
+ls
+
+}
+
+m columns
+
+n
++5 -1 -8
+
+-3 -1 +2
+
++2 -2 +2
+
++3 +1 -6
+
++2 +1 +1
+
+-1 +5 -4
+
+-4 -2 +4
+
++1 0 -2
+
++3 +1 -3
+
+filter 1
+
+filter 2
+
+filter m
+
+pruned
+filter
+shape(s)
+peripheral peripheral
+
+controller
+
+Original
+weight
+matrix
+Harware
+mapping
+
+Xbar
+
+Xbar
+
+peripheral peripheral
+Xbar
+
+Xbar
+
+Original
+cost
+
+peripheral peripheral
+
+controller
+
+Pruned
+weight
+matrix
+
+}
+}
+
+}
+
+m columns
+
+3x3xn rows
+
+B. Challenges
+Despite the recent research progress, we identify two challenges for ReRAM-based DNN acceleration.
+Mapping signed weights. When we map the arbitrary
+DNN weights onto ReRAM crossbars, it is challenging to
+represent negative weights using positive conductance. Prior
+works address the problem differently. The general way is
+to decompose each weight into a positive magnitude portion
+and a negative magnitude portion, then use two crossbars to
+represent each of the portions [17, 26–28, 41]. This method
+doubles the hardware cost of the ReRAM crossbar. Instead,
+ISAAC [18] addresses this problem by shifting or adding
+an offset to the original negative weight value, so that all
+the weights become positive. To be able to calculate correct
+results, ISAAC needs to count the number of 1’s in each
+individual input. If considering 16-bit weights are used, for
+each 1 in each input, a bias of 215 must be subtracted from
+the final results. Counting all 1s for all inputs (that feed to the
+crossbar in parallel) and performing subtractions for each of
+1’s introduces significant overhead to ISAAC. Moreover, this
+mapping method decreases the network robustness to hardware
+failures [29]. We can see that both methods will cost extra
+resources in terms of area, power, and energy consumption.
+ADC/DAC implementation. To ensure high throughput,
+the mainstream accelerator designs (e.g., ISAAC, PRIME,
+PUMA) take advantage of coarse-grained computations, a
+large number of ReRAM crossbar rows (e.g., 128 or 256) need
+to be processed at the same time and hence large ADCs are
+needed. However, the ADC does not scale as fast as the CMOS
+technology does [18, 42]. The recent study [40, 42] reports
+the ADC/DAC blocks may become the major contributor
+to the total chip area and power. To save power and area,
+many designs share an ADC with many crossbar columns
+(e.g., 128 columns in ISAAC). Therefore, the ADC needs to
+switch among those columns at a high-speed, which is hard
+in practice.
+
+Reshape
+
+Filter Prune
+
+3x3xn rows
+
+locality to keep computations in analog domain to save the
+energy cost of data movements and D/A and A/D domain
+conversion. The SRE [39] exploits the sparsity of both weights
+and activations to achieve better energy efficiency and performance by proposing hardware mechanisms. However, it
+induces remarkable hardware overhead as all mechanisms
+such as row indexing, routing controls, and word-line controls
+are hardware-managed. TinyADC [40] proposes a pruning
+solution that fixes the number of non-zero weights in each
+column of the ReRAM crossbar while their positions can vary.
+This helps to decrease the accumulated value and required
+ADC resolution. In contrast, FORMS proposes hardwaresoftware co-design optimizations to improve frame processing
+rate, area, and power efficiency.
+
+Xbar
+
+Xbar
+
+peripheral peripheral
+Xbar
+
+Hardware
+Saved
+
+Xbar
+
+Fig. 2: Structured pruning
+achieve four benefits: 1) zero-skipping techniques can achieve
+significant performance improvements; 2) making ADC/DAC
+implementation less challenging compared to the state-of-theart coarse-grained architecture designs (e.g., ISAAC, PUMA,
+and PRIME); 3) fine-grained architecture is less susceptible to
+non-idealities and noise than coarse-grained architecture; and
+4) achieving a higher overall performance rate than coarsegrained designs under a similar power and area cost. We
+demonstrate that by leveraging the principle of algorithm
+and hardware co-design, our proposed solution significantly
+advances the state-of-the-art and paves a new way for finegrained mixed-signal accelerators design.
+III. H ARDWARE -AWARE O PTIMIZATION
+F RAMEWORK
+In this section, we describe the whole software procedure
+to generate hardware-friendly DNN models. The key novelty
+is the fragment polarization technique that enforces the same
+sign for weights in each fragment. As recent works [43–46]
+have demonstrated, the structured pruning and quantization are
+two essential steps for hardware-friendly model compression
+that are universally applicable to all DNN accelerators. Thus,
+we perform structured pruning before fragment polarization
+considering the size of the ReRAM crossbars, and quantization
+after. Thus, the sign of each fragment is determined by the
+structurally pruned model. And the quantization is applied
+after the structure and sign of the weights are determined.
+All of the three steps are uniformly supported by Alternating
+Direction Method of Multipliers (ADMM) regularized optimization method [30] which has shown to be very suitable
+for DNN training and produced state-of-the-art results [47].
+In the following sections, we describe these three steps, and
+then explain how to express our desired pattern in ADMM.
+A. Crossbar-Aware Structured Pruning
+There are different types of structured sparsity in DNNs.
+FORMS combines two types of structured pruning methods—
+
+=== page 4 ===
+el
+
+}
+an
+n
+
+ch
+height
+
+}
+
+B. Fragment Polarization
+A fragment is a set of consecutive weights mapped to
+ReRAM crossbar. The fragment size is determined by the
+number of rows in sub-array—a fragment contains weights
+that will be mapped to the same column of a sub-array, as
+shown in Figure 3. In our design, the weights in a fragment are
+polarized. They are either positive or negative. Therefore, the
+multiply-accumulate operations performed by each column of
+the ReRAM crossbar sub-array do not suffer from the arbitrary
+sign of its operands.
+With the concept of fragment introduced, we need to
+consider two issues: 1) how to determine the sign of weights in
+a fragment; and 2) the mapping policy of weights to sub-array
+columns. The second problem matters because it determines
+which set of weights in the DNN model will contain the same
+sign. Next, we show how to handle these two problems.
+To orchestrate fragment polarization during the training
+process, we calculate the sum of weights in each fragment
+and determine the fragment sign based on the following
+principle: if the sum is greater than or equal to 0, we set
+the sign of the fragment as positive, otherwise, we set it
+as negative. We incorporate ADMM regularized optimization
+with the fragment polarization constraint to regularize the
+weights to have the same sign as the fragment or to become
+zero. Eventually, the negative/positive weights are eliminated
+in positive/negative fragments.
+During training, since the weights are continuously updated,
+the sign of a fragment changes. Specifically, at the beginning
+of fragment polarization, the fragment signs are determined by
+the above policy based on the structurally pruned model. Then,
+the training for fragment polarization starts. Let us assume that
+the training process contains N epochs, each goes through
+the entire training dataset once. We can update the target sign
+
++3 -1 +2
++4 -5 +1
++1 -4 +3 -2
++3 -1 +4 +4-4
+-6
+-1 +2 -2 -6
+-3
+-1 -1 -4
+
+}
+
+filter pruning and filter-shape pruning. As shown in Figure 2,
+we reshape the weights from convolutional filters of a convolutional layer into a 2D weight matrix, each column represents
+all the weights from the same filter, while each row represents
+the weights on the same position of all filters. By adopting
+these two types of pruning, the entire columns and rows of
+the weight matrix will be removed while the remaining weight
+matrix is still dense. After the structured pruning, the weight
+matrix size becomes much smaller, which effectively reduces
+the number of ReRAM crossbars to store the weights and also
+removes the corresponding peripheral circuits.
+The previous ReRAM-based accelerator designs [47, 48]
+apply structured pruning and aim to make the pruning ratio
+as high as possible while maintaining an acceptable accuracy
+loss. They do not take the ReRAM crossbar size into consideration, therefore causing performance degradation when the
+pruned model is mapped onto the ReRAM crossbars. For example, if the size of the crossbar is 128×128, only the portion
+of pruned columns/rows of weights that reaches the multiple
+of the 128 (e.g., 128, 256) will lead to the actual crossbar
+reduction. The remaining pruned columns/rows of weights still
+need to be stored as zeros on the crossbars. Consequently,
+those pruned columns/rows are wasted, and the accuracy drop
+is incurred without gaining the full benefit. In FORMS, we
+perform a crossbar-aware structured pruning by considering
+the crossbar size and carefully choosing the pruning ratio for
+each DNN layer to avoid unnecessary accuracy drop.
+
+width
+
+sub-array
+
+W-major
+
+original fragments
+
++3
+-1
++4
+-1
+
++2 -1
+-2 -4
+-2 +1
+-1 -4
+
+fragment 1
+
+H-major
+
+C-major
+
+polarized fragments
+
++4
++1
++5
+0
+fragment 2
+
+-1
+-3
+-2
+-2
+
+-2
+-5 mapping
+0
+-3
+
+fragment 3
+
+sub-array
+
+sub-array
+
+crossbar array
+
+Fig. 3: Fragments and direction of polarization
+every M epochs. This means that at the end of M epochs,
+the sign for each fragment will be calculated again using the
+current weights belonging of the fragment. During the training
+process, the fragment signs are updated for N/M times.
+Next, we consider the design space of mapping weights
+to fragments. As shown in Figure 3, given the weights of
+a convolution filter in 3-D format with width (W), height
+(H), and channel (C) dimension, we can naturally have three
+polarization policy. In width-major or W-major polarization,
+the consecutive weights in one or multiple consecutive rows
+in a filter are mapped to the same fragment. The weights in
+two consecutive fragments are also consecutive in the widthmajor order. After all weights in a filter are mapped, we move
+on to the next filter using the same procedure. More details
+regarding the ReRAM mapping scheme will be discussed in
+Section IV-A.
+Similarly, we can define height-major or H-major polarization, and channel-major or C-major polarization. In particular,
+for C-major, the weights in the same position at all channels
+are mapped before moving to the next position of the filter.
+Since the polarization policy determines which region of
+weights should have the same sign, different policies could
+affect accuracy. Our observation results show the W-major
+polarization scheme achieves the highest accuracy on the
+ImageNet dataset, where C − major polarization is the best
+choice for the CIFAR-10/100 dataset. Since the same polarization scheme will be applied over the entire neural network,
+we only need to uniformly re-order the weights with their
+corresponding inputs in advance, then directly map them to the
+ReRAM crossbars. Base on the chosen polarization scheme,
+the weights are trained to enforce the fragment polarization
+properties. There is no need to individually move the weights
+around to form a polarized fragment, and it will not incur any
+hardware overheads due to location indices.
+C. ReRAM Customized Weight Quantization
+We develop ReRAM customized weight quantization, to
+reduce the bit representation of weight parameters. Similar to
+crossbar-aware structured pruning, we consider the numbers
+of valid ReRAM conductance states into our quantization
+constraint during the training process. In reality, the number
+of ReRAM conductance states is limited by the provided
+resolution of the peripheral write and read circuitry. More
+state levels require more sophisticated peripheral circuitry. Due
+to limited computational accuracy, multiple ReRAM cells are
+usually used to represent one weight. For example, we need
+eight 2-bit ReRAM cells to represent one 16-bit weight, and
+four 2-bit ReRAM cells to represent one 8-bit weight. Thus,
+
+=== page 5 ===
+the quantization can effectively reduce the design area and
+power consumption. In FORMS, if the 2-bit ReRAM cells are
+used in the design, the quantization bits will be set to the
+multiply of 2, which can fully utilize the resolution of the
+ReRAM cells. More importantly, compared to forcing a highbit representation DNN model into a low-bit representation
+during the ReRAM mapping process, introducing the quantization to the training process allows the weights to be trained
+into a low-bit representation.
+
+Pre-trained Model
+
+Sub-problem1: Sub-problem2:
+find Z
+find W, b
+
+Crossbar-aware
+Structural Pruning
+
+ADMM
+Regularization
+
+Fragement
+Polarization
+ReRAM Customized
+Quantization
+
+Update: U
+Euclidean
+Projection
+Optimized
+Model
+
+Polarized Model
+for ReRAM
+
+Fig. 4: Procedure of ADMM-Regularized Optimization.
+D. ADMM-Regularized Optimizations
+ADMM [30] is an advanced optimization technique, where
+an original optimization problem is decomposed into two subproblems that can be solved separately and iteratively. We
+incorporate ADMM-regularized training into FORMS training
+process to achieve and optimize the crossbar-aware structured
+pruning, fragment polarization, and ReRAM customized quantization feature. Using ADMM can guarantee the solution
+feasibility (satisfying ReRAM hardware constraints) while
+providing high solution quality (no obvious accuracy degradation after model compression and after hardware mapping).
+Consider the i-th layer in an N -layer DNN, the weights
+and bias can be represented by Wi and bi . And we define
+N
+the loss function as: L {Wi }N
+i=1 , {bi }i=1 . We minimize the
+loss function associated with DNN model and subject to the
+constraints of FORMS. Then the overall problem is given by:
+
+4) ADMM-Regularized Optimization Flow: As shown in
+Figure 4, the overall ADMM-regularized optimization flow
+is an iterative training process, which is similar in ADMMNN [49]. Thanks to the flexibility in the definition of constraint
+sets Si , Pi , and Qi , the above constraints can be jointly
+included, or applied individually. First, we incorporate one of
+the three constraints
+by using indicator function, which is
+
+0
+if Wi ∈ Si or Pi or Qi ,
+gi (Wi ) =
++∞ otherwise.
+Problem (1) with constraint cannot be directly solved by
+classic stochastic gradient descent (SGD) methods [50] as
+original DNN training. However, the ADMM regularization
+can reforge and separate the problem, then solve them iteratively [51, 52]. First, we reformulate problem (1) as follows:
+N
+ X
+N
+minimize f {Wi }N
+,
+{b
+}
++
+gi (Zi ),
+i
+i=1
+i=1
+(3)
+{Wi },{bi }
+i=1
+
+N 
+{Wi }N
+i=1 , {bi }i=1 ,
+
+minimize
+
+L
+
+subject to
+
+Wi ∈ Si , Wi ∈ Pi , Wi ∈ Qi , i = 1, . . . , N,
+
+{Wi },{bi }
+
+subject to Wi = Zi , i = 1, . . . , N,
+(1)
+
+where Si , Pi and Qi are the constraint sets of Crossbaraware Structured Pruning, Fragment Polarization and ReRAM
+Customized Quantization, respectively.
+1) Crossbar-aware Structured Pruning Constraints: In
+crossbar-aware structured pruning, we use H to represent
+the weights in 2D format of a specific layer, as shown in
+Figure 2. The constraints in the i-th CONV layer becomes
+Wi ∈ Si := {H | the percentage of nonzero filters and filtershapes in H is less than or equal to αi and βi , where αi and
+βi are predefined hyperparameters. For example, suppose we
+want a 43% filter sparsity and 62% shape sparsity in ith layer,
+then we set αi = 0.57 and βi = 0.38.
+2) Fragment Polarization Constraints: For fragment polarization, the constraint set Pi = {the weights on each fragment
+(a column of a crossbar sub-array) have the same sign}, where
+the ReRAM crossbar sub-array size m × n is a predefined
+hyperparameter. The sign of the fragment is determined by
+the following function:
+
+Pm
++ if
+i=1 (Wi ) ≥ 0,
+Signf =
+(2)
+− otherwise,
+where i ∈ 1, . . . , m is the i-th weight on a fragment.
+3) Customized Quantization Constraints: For the ReRAM
+customized quantization, the set Qi = {the weights in the i-th
+layer are mapped to the quantization values}. The quantization
+values depend on the characteristics of the ReRAM device
+such as conductance range and valid state levels.
+
+where Zi is an auxiliary variable. With formation of augmented Lagrangian [53], problem (3) can be decomposed into
+two subproblems (4) and (5),
+N
+X ρi
+N 
+kWi −Zti +Uti k2F , (4)
+minimize f {Wi }N
+i=1 , {bi }i=1 +
+2
+{Wi },{bi }
+i=1
+
+minimize
+{Zi }
+
+N
+X
+
+gi (Zi ) +
+
+N
+X
+ρi
+
+i=1
+
+2
+i=1
+
+kWit+1 − Zi + Uti k2F ,
+
+(5)
+
+where Ui denotes dual variable and t is the iteration index.
+The positive scalars ρi is a penalty hyperparameter for the L2
+regularization. The first subproblem can be solved by classic
+SGD, and the solution for the second subproblem is given by
+Zt+1
+=
+i
+
+Y
+
+(Wit+1 + Uti ),
+
+(6)
+
+Xi
+
+Q
+where Xi (?) is Euclidean projection to Xi ∈ {Si , Pi , Qi },
+thereby weight matrices are structured pruned or fragment
+polarized or customized quantized. These two subproblems
+will be iteratively solved and we update Ui in each iteration
+by Uti := Uit−1 + Wit − Zti until convergence. The detailed
+solution process can refer to [54].
+IV. FORMS A RCHITECTURE
+This section describes the FORMS accelerator architecture
+that can execute the optimized DNN models generated by
+the FORMS optimization framework. Our design only needs
+to map the magnitude bits of all the weights to ReRAM
+crossbars without adding extra crossbars or offset circuits. To
+ensure high throughput, we develop a new pipelined design
+incorporated with zero skipping logic.
+
+=== page 6 ===
+A. Mapping Scheme and Dataflow
+In FORMS, instead of mapping both the sign and magnitude
+bits of arbitrary/mixed signs of weight values as in prior works
+such as memristive Boltzman machine [55], ISAAC [18],
+Newton [19], PipleLayer [20], PRIME [17], PUMA [21], we
+only need to store the magnitude bits to the ReRAM, and the
+sign bit of each fragment in the 1R ReRAM-based array [56].
+Figure 5 shows an example of the ReRAM mapping scheme
+on a crossbar array. We assume the physical crossbar array
+size is q × m rows by p × n columns (e.g., 128 by 128),
+where q, p, m, n could be various depending on different
+design specifications. We partition the crossbar array into
+logical sub-arrays, where each sub-array has m rows and n
+columns. On one crossbar array, q × m weights from the same
+filter will be mapped on the same column, and the weights
+from different p × n filters will be mapped onto different
+columns of this crossbar array. The rest of the weights will be
+mapped onto other crossbar arrays in the same manner. Thus,
+in order to accommodate all the weights of a CONV layer,
+multiple ReRAM crossbar arrays are needed. In reality, due
+to the limitation of the ReRAM resolution, we need multiple
+ReRAM cells to represent one weight. For example, we need
+four 2-bit ReRAM cells to represent one 8-bit weight. In this
+way, each fragment will still have m rows, but 4 columns
+instead of 1 column. And all m weights in the same fragment
+that are represented by those m × 4 ReRAM cells.
+The optimized ReRAM-aware DNN model obtained from
+the ADMM regularized optimization process in Section III-D,
+has the fragment polarization property. Thus, all the weights
+within a fragment have the same sign, and we do not need to
+move the weights around to satisfy the polarization constraint.
+For each fragment, an associated 1R is used to store the sign
+bit. All the associated 1Rs are grouped as a sign indicator.
+The sign bits stored in the sign indicator will be carried out
+for accumulation in the digital domain.
+Convolution Dataflow. CONV layers perform convolution
+of input feature maps and weight filters. The convolution
+results are then accumulated. After passing intermediate results through an activation function (e.g., rectified linear unit
++
+
+f1 f2
+
++
+
+-
+
+fn
+
+sign indicator
+
+fn+1
+
++
+
+-
+
+f2n
+
+inpm+1
+
+inp2m
+
+fpn
+weights
+of
+filter f pn
+
+inp1
+inp2
+inpm
+
++
+
+Fragment
+sub-array
+
+010010
+011000
+000001
+110010
+110100
+100001
+
+010010
+011000
+000001
+
+inpqm
+
+crossbar array
+
+Fig. 5: Polarized ReRAM Crossbar Mapping Scheme.
+
+(ReLU)), we produce a single output feature map. By repeating
+this procedure for the rest of the weight filters, we obtain the
+whole output feature maps.
+We fetch the digital inputs (feature maps) from eDRAM or
+DRAM (DRAM for input images, eDRAM for intermediate
+results) and arrange them into input buffers to be sent to
+DAC. The output of DAC becomes the analog input vi of the
+ReRAM crossbars. The matrix-vector multiplication can be
+performed by leveraging the feature of the ReRAM crossbars,
+and the output can be calculated by: io = WT vi . Each
+fragment (column) of the ReRAM crossbar sub-array produces
+an intermediate result, which is the accumulated current result. Intermediate results produced by all fragments will be
+propagated through ADC. The converted digital values will
+be carried to our proposed accumulation blocks along with the
+corresponding sign bits from sign indicator for accumulation.
+The accumulation blocks are used for accumulating all the
+intermediate results from crossbar sub-arrays. The sign-bit
+indicator specifies whether the adder should work in add or
+subtract mode. The output of the adder will be accumulated
+to the temporary results from other fragments. Iteratively, we
+finish the CONV operation and obtain the output feature map
+to be stored into eDRAM, which will become the inputs
+(feature maps) of the next layer. By using the sign indicator
+with our polarized ReRAM crossbar mapping, our design
+can save half of the crossbars, which are used to store the
+positive/negative weights separately. When compared to the
+designs like ISAAC [18], FORMS avoids introducing the
+offset circuity with small overhead caused by sign indicator.
+Moreover, since we only store the magnitude bits on ReRAM
+crossbars, FORMS can take the advantage to store one more
+magnitude bit when using the same number of ReRAM
+crossbars, which allows FORMS to achieve higher weight
+representation precision.
+B. Fragment Size Exploration and Zero Skipping Logic
+The fine-grained sub-array is a key feature of FORMS architecture that ensures high accuracy, more feasible hardware
+implementation, and significant performance improvement.
+We perform experiments to understand the relation between
+the size of fragment size and accuracy. Figure 6 shows that
+the smaller fragment size introduces zero or minor accuracy
+degradation in polarized form, while the larger fragment size
+may lead to a small accuracy degradation. Compared to the
+coarse-grained crossbars, the small fragment size corresponds
+to small ADCs. For example, FORMS can use 4-bit ADCs instead of one 8-bit ADC per each crossbar used in ISAAC [18]
+or PROMISE [57]. In general, the area and power of ADCs
+grow exponentially with the number of bits of ADCs. To save
+the area and power, ISAAC shares a large 8-bit ADC with
+128 columns. Unfortunately, this leads to stringent hardware
+implementation requirement. Specifically, one 8-bit ADC must
+switch between 128 columns and convert the analog current
+to digital values within 100ns. This design makes ISAAC
+impractical for fabrication. More importantly, having finegrained fragments opens a new opportunity to significantly
+improve performance by employing a novel zero skipping
+logic that reduces the required cycles to feed input bits to
+sub-arrays, leading to significant performance improvement.
+To understand how FORMS saves input cycles, we use a 16bit input representation as an example. For each clock cycle,
+
+=== page 7 ===
+Accuracy vs. diﬀerent fragment size
+Persentage(%)
+
+Distribu�on of eﬀec�ve input cycles of fragments (ResNet50)
+
+77
+76
+75
+74
+
+80
+60
+40
+20
+0
+
+1
+
+73
+72
+
+2~13
+4
+
+1
+
+4
+
+8
+
+16
+
+Fragment Size
+VGG16
+ResNet18
+
+32
+
+64
+
+128
+
+ResNet50
+
+Fig. 6: Test accuracy under different fragment sizes on CIFAR100 dataset.
+1 input bit is fed into the fragments in parallel. Generally,
+it needs 16 cycles to feed a 16-bit input to the crossbar.
+However, most inputs actually have small values [58] and can
+be represented by just a few bits, which means the upper bits
+are all 0s and can be skipped from feeding to the crossbar.
+We define effective bits as the number of input bits that
+contribute to output results. It is obtained by removing the
+consecutive most significant zeros among all inputs. We also
+define the effective input cycles (EIC) as the minimum number
+of required cycles to fed effective bits of all inputs into a
+fragment, which is equal to the maximum effective bits of
+all inputs corresponding to that fragment. For example, as
+shown in Figure 7, the effective bits of inp1 is 6, however, the
+required EIC for the fragment is 7. Because the inp2 has the
+largest effective bits in the fragment, which is 7. The EIC in
+the coarse-grained designs that have large fragment size (e.g.,
+128) is generally higher than the fine-grained designs that have
+smaller fragment size (e.g., 4,8 or 16). The reason is that the
+larger fragments have a higher probability to contain the inputs
+that have higher effective bits. Figure 8 (a) shows an example
+of the percentage of EIC (1 to 16) of fragments using 16-bit
+inputs and various fragment sizes (i.e., 4, 8, 16, 32, 64, 128)
+in one CONV layer. As the fragment size becomes larger, it
+increases the percentage of the fragments that require more
+EIC. Figure 8 (b) shows, under different fragment sizes, the
+average required EIC over all fragments for different layers.
+For fragment size of 4, the average required EIC of all layers
+to feed all effective bits into crossbar is 10.7, which saves 33%
+of the total 16 cycles. The required EIC for fragment size of
+128 is 15, which only saves 6% cycles. These results show that
+while zero-skipping is applicable to coarse-grain crossbars as
+well, the benefits are drastically less.
+To take this key advantage, we propose a zero skipping logic
+as shown in Figure 9. It dynamically controls the input cycles
+to skip the redundant cycles for feeding zeros, which do not
+contribute to output, but consume power, energy and increase
+latency. As a result, FORMS achieves higher performance than
+the coarse-grained designs.
+Effective Bits
+
+1 bit/cycle
+
+Fragment
+
+14
+Eﬀec�ve input cycles
+16
+32
+
+8
+
+(a)
+
+8
+4
+
+4
+
+8
+
+layer10
+
+layer26
+
+16
+32
+Fragment size
+
+(b)
+
+64
+
+layer49
+
+128
+
+all-layers avg
+
+Fig. 8: (a) Percentage of effective input cycles for different
+fragment sizes using 16-bit input data; (b) average effective
+input cycles for various fragment sizes.
+C. Overall Architecture
+FORMS includes several architectural and circuit-level optimizations. We performed design space exploration to find
+the best size of crossbar arrays, ADCs, DACs, and eDRAM
+storage. The FORMS system is organized into the multiple
+nodes/tiles as shown in Figure 10. Each layer of the CNN is
+mapped into one or multiple tiles. Tiles are connected together
+in a mesh-based network while the data flow between different layers (tiles) in a pipelined manner. The chip controller
+orchestrates the flow of operation between different tiles. Each
+tile comprises multiple MAC units (MCU), eDRAMs, and
+digital units (DUs) that contain shift and add units, activation
+function, and output registers. Each MCU comprises eight
+128×128 crossbar arrays, ADC units, and output registers. For
+fragment sizes of 16, 8, and 4, FORMS employs 5,4, and 3-bit
+ADCs. Unless mentioned explicitly, we assume the fragment
+size 8 in our discussion. In ISAAC, the 8-bit ADCs contribute
+to 58% of tile power and 31% of tile area consumption. If
+with the same technology, we build a 4-bit ADC, it results in
+almost 4× times less area and power [59, 60]. By reducing
+the ADC resolution from 8-bit to 4-bit, the throughput will
+drop by a factor of 16× since each time only one fragment
+(i.e, 8 rows) is activated for computing dot-products using 4bit ADCs; whereas in ISAAC, 128 rows are processed each
+time. In FORMS, we use 2-bit ReRAM cells. Through design
+space explorations, we find that 2-bit ReRAM cells delivers
+a better energy-efficiency than other number of bits per cell
+(e.g., 4-bit, 8-bit). ADC bits increase as we increase the
+ReRAM cell bits, thereby consuming more power and area.
+More importantly, using more bits per ReRAM cells requires
+more rigorous hardware fabrication, which also introduces
+imprecision in analog computing and is more prone to process
+...
+
+inp3 0000 0000 0000 0110
+
+...
+
+......
+
+inpm 0000 0000 0011 0100
+Zero Skipping
+Logic
+
+...
+
+Load next inputs
+
+......
+......
+......
+
+Input shift register
+
+......
+
+Fig. 9: Zero-skipping Logic.
+
+DAC
+
+inp
+
+......
+
+flow control
+
+0000 0000 0100 1011
+2
+
+Fig. 7: Input Effective Bits and Required Fragment EIC.
+
+16
+128
+
+12
+
+inp1 0000 0000 0010 1011
+
+Required
+Effective Input Cycles
+=7
+
+15
+64
+
+Average eﬀec�ve input cycles of fragments (ResNet50)
+
+16
+
+Avg eﬀec�ve
+input cycles
+
+Accuracy (%)
+
+78
+
+=== page 8 ===
+Tile Architecture
+DU
+eDRAM
+
+Sh&Add
+
+Chip
+Chip Controller
+
+Output
+Regs
+
+ReLU
+
+T1
+
+T1
+
+Tk-2
+
+MCU
+
+MCU
+
+MCU
+
+MCU
+
+T2
+
+T1
+
+Tk-1
+
+MCU
+
+MCU
+
+MCU
+
+MCU
+
+T3
+
+T1
+
+Tk
+
+Fig. 10: Components of FORMS architecture.
+variation [18, 61].
+To increase throughput, we perform several optimizations.
+For instance, ISAAC uses 8 crossbars per MCU, 1 ADC
+per crossbar, 12 MCUs per tile, and 168 tiles. FORMS can
+keep 1 ADC per crossbar, increase the number of crossbars
+per MCU and accordingly reduce the required MCUs and
+tiles. This helps us to reduce power and energy, but it cannot
+increase throughput. On the other side, FORMS increases the
+number of ADCs per crossbar to increase the throughput and
+yet reduce power and energy. To have an iso-area comparison
+with ISAAC, we increase the number of ADCs per crossbar
+by 4×. The architecture design of the MCU is shown in
+Figure 11. Thus, each ADC is responsible for 32 columns
+instead of 128 columns in ISAAC and they work in parallel,
+which increases the throughput by 4× compared with having
+1 ADC per crossbar.
+Most importantly, in ISAAC, 1 8-bit ADC should switch
+between 128 columns in 1 cycle (100 ns), which is infeasible
+in practice. FORMS architecture solves this problem by adding
+more but smaller ADCs with a higher sampling rate in the isoarea fashion. In addition, due to the small fragment size, the
+buffer size required for storing intermediate results between
+layers is decreased. The ISAAC 8-bit ADC operates at 1.2GHz
+and is shared by 128 columns. As a result, processing one
+1
+= 106.6ns).
+bit of all active inputs requires (128 × 1.2GHz
+Instead, FORMS employs four 4-bit ADCs (within the same
+area of an 8-bit ADC but 1.8× times higher frequency) to
+compute 128 dot-products, which results in a cycle time of
+1
+128
+4 × 2.1GHz = 15 ns. As a result, FORMS improves the cycle
+time that assists to increase the throughput. Please note that
+we cannot scale down the ADC resolution continuously and
+keep improving the lower area, power, and better frequency.
+Doing so will lead to a significant system throughput drop.
+Moreover, the overhead of orchestrating the results of all small
+ADCs would be considerable.
+Figure 12 shows the proposed pipeline for FORMS. Like
+
+zero-skip
+control logic
+zero-skip
+control logic
+
+input shift reg
+
+sub-array
+
+sub-array
+
+sub-array
+
+sub-array
+
+sub-array
+
+sub-array
+
+sub-array
+
+sub-array
+
+sub-array
+
+sub-array
+
+sub-array
+
+sign indicator
+
+input shift reg
+
+sub-array
+
+DAC
+
+input shift reg
+
+DAC
+
+input shift reg
+
+input shift reg
+
+DAC
+
+input shift reg
+
+zero-skip
+control logic
+
+global driver
+input shift reg
+
+reg
+adder
+
+mux
+input shift reg
+input shift reg
+
+crossbar array
+
+controller
+
+sub-array decoder
+8
+
+ADC
+
+ADC
+
+ADC
+
+ADC
+
+acc block
+
+acc block
+
+acc block
+
+acc block
+
+inv
+accumulation
+block
+
+Fig. 11: FORMS MCU Architecture Design.
+
+ADC
+
+ISAAC, the pipeline has 22 stages (26 stages for layers that
+need pooling). We design a skipping logic circuit that detects
+the number of required cycles for shifting inputs on-the-fly.
+Considering that inputs are 16(8) bits, normally a total of 16(8)
+cycles are necessary to feed all the inputs to the crossbar array.
+However, FORMS does not need to wait for the whole 16(8)
+cycles since usually most significant bits are zeros. In most
+cases, we can finish feeding inputs to the crossbar early and
+start computation faster. In addition, feeding zero bits wastes
+power and energy. The inputs are fed into a crossbar using a
+shift register with the parallel-in, serial-out property. To detect
+the number of required cycles to shift inputs to a fragment,
+for the zero skipping logic, we NOR all the bits in each shift
+register every cycle. The results of the NOR operations per
+each fragment are AND-ed and used to trigger ADC to start the
+computation. As soon as contents of all shift registers become
+zero, the output of the AND is “1”, shifting the 8-bit values
+stops and the ADC starts computing the results of the dotproduct. In contrast to ISAAC, the number of iterations for
+inputs is variable as FORMS skips some cycle of execution
+if all the input bits are zero, which happens frequently due to
+the small size of the fragment, The results of the ADC logic
+is delivered to the “Shift and ADD” units for accumulation in
+the output registers. They are fed into the activation function
+and results are stored into an eDRAM, which are inputs for
+the next layer. When we perform pooling, eDRAM is read in
+cycles 23-36 to perform max-pooling. In this case, the max of
+4 values is computed and written back into eDRAM.
+V. E VALUATION R ESULTS
+In this section, we first evaluate our proposed FORMS
+optimization framework in terms of model accuracy and
+ReRAM crossbar reduction achieved by combining crossbaraware structured pruning, polarization, and quantization techniques. And we compare our results with several representative
+pruning works. Then, we analyze our FORMS accelerator
+architecture design in terms of area, power, throughput, and
+performance rate, and compare the results with the stateof-the-art accelerator designs. At the end of this section,
+we analyze the impact of variation from both the software
+and hardware perspective. All the results of FORMS are
+based on 16-bit inputs/activations and 8-bit weights, and 2-bit
+ReRAM cells are used. The detailed experimental setups for
+the software and hardware results are illustrated in Section V-A
+and Section V-B.
+A. Comparing Model Compression Methods
+We evaluate our method using several representative benchmark networks, including LeNet-5, ResNet-18/50, and VGG16, and using MNIST, CIFAR-10/100, and ImageNet datasets.
+The crossbar reduction results are from our crossbar-aware
+structured pruned, polarized, and quantized models comparing
+to the original baseline model using a splitting mapping
+scheme [41]. All models are trained on an 8× NVIDIA Quadro
+RTX 6000 GPU server by PyTorch API.
+MNIST & CIFAR-10. Table I shows, on MNIST dataset
+using LeNet5, FORMS achieves 185.44× crossbar reduction,
+where 23.18× reduction comes from crossbar-aware structured
+pruning, 4× reduction comes from quantization, and 2× reduction from polarization by eliminating half of the crossbars
+to represent positive/negative weights. When fragment size is
+
+=== page 9 ===
+Cycle 1
+
+Cycle 2
+
+Cycle 3
+
+Cycle 4~16
+
+Cycle 17
+
+eDRAM
+Read Parametters
+
+Crossbar
+Array
+ADC
+
+Crossbar
+Array
+ADC+shift+ADD
+
+Crossbar
+Array
+ADC+shift+ADD
+
+Crossbar
+Array
+ADC+shift+ADD
+
+Cycle 18
+
+Cycle 19
+
+ADC
+
+Shift
+ADD
+
+shift+ADD
+
+Cycle 20 Cycle 21 Cycle 22
+Shift
+ADD
+
+AF
+
+eDRAM
+Write
+
+Potentially Skipped Cycles
+
+Fig. 12: Pipeline of the FORMS Architecture.
+TABLE I: The experimental results of FORMS on multi-layer
+network on small to medium datasets.
+Method
+
+Original
+Acc.
+(32-bit)
+
+Prune
+Ratio
+
+GroupScissor [62]
+LeNet5
+
+99.15%
+
+4.2×
+
+-
+
+23.18×
+
+4
+8
+16
+
+0.01%
+(32-bit)
+-0.02%
+-0.01%
+0.14%
+
+Fragment
+Size
+
+Acc.
+Drop
+(8-bit)
+
+Crossbar
+Reduction
+
+MNIST
+
+our
+LeNet5
+
+99.17%
+
+4.2×
+185.44×
+
+CIFAR-10
+IterativePrune [2]
+VGG16
+TinyButAcc [47]
+VGG16
+our
+VGG16
+AMC [63]
+ResNet18
+TinyButAcc [47]
+ResNet18
+our
+ResNet18
+
+92.50%
+
+2×
+
+-
+
+0.3%
+(32-bit)
+
+2×
+
+93.70%
+
+44.67×
+
+-
+
+0.66%
+
+164.8×
+
+93.70%
+
+41.2×
+
+4
+8
+16
+
+90.5%
+
+2×
+
+-
+
+0.61%
+0.64%
+0.77%
+0.3%
+(32-bit)
+
+94.14%
+
+52.07×
+
+-
+
+0.35%
+
+203.4×
+
+94.14%
+
+50.85×
+
+4
+8
+16
+
+0.35%
+0.47%
+0.92%
+
+406.8×
+
+329.6×
+2×
+
+TABLE II: The experimental results of FORMS on multi-layer
+network on medium to large datasets. Top-5 accuracy is used
+for ImageNet dataset.
+Method
+
+Original
+Acc.
+(32-bit)
+
+FPGM [64]
+ResNet20
+
+67.62%
+
+Prune
+Ratio
+
+Fragment
+Size
+
+Acc.
+Drop
+(8-bit)
+
+Crossbar
+Reduction
+
+CIFAR-100
+
+our
+ResNet50
+
+77.35%
+
+9.18×
+
+Network Slim [65]
+VGG16
+
+73.26%
+
+2×
+
+-
+
+8.15×
+
+4
+8
+16
+
+0.76%
+(32-bit)
+-0.06%
+-0.03%
+0.17%
+1.75%
+(32-bit)
+0.10%
+0.31%
+0.61%
+-0.22%
+(32-bit)
+-0.01%
+0.10%
+0.37%
+
+1.73×
+
+4
+8
+16
+
+our
+ResNet18
+
+76.37%
+
+6.65×
+
+FPGM [64]
+ResNet56
+
+71.41%
+
+2.11×
+
+4
+8
+16
+
+our
+VGG16
+
+73.32%
+
+1.73×
+53.2×
+2.11×
+73.44×
+2×
+65.20×
+
+ImageNet
+DCP [66]
+ResNet18
+TinyButAcc [47]
+ResNet18
+
+88.98%
+
+1.42×
+
+-
+
+0.12%
+(32-bit)
+
+1.42×
+
+89.07%
+
+3.33×
+
+-
+
+0.6%
+
+12.4×
+
+4
+8
+16
+4
+8
+16
+4
+8
+16
+4
+8
+16
+
+0.03%
+0.27%
+1.19%
+0.34%
+0.62%
+1.73%
+0.13%
+0.34%
+1.17%
+0.37%
+0.70%
+1.62%
+
+1.67×
+our
+ResNet18
+
+89.08%
+2.0×
+2.15×
+
+our
+ResNet50
+
+92.34%
+3.67×
+
+13.36×
+16.0×
+17.2×
+29.36×
+
+4 or 8, there is no accuracy degradation (in fact, the accuracy
+is higher than the original model since the pruning may reduce
+the overfitting), where there is a minor accuracy loss for the
+fragment size of 16. FORMS achieves a much higher crossbar
+reduction ratio than G ROUP S CISSOR [62]. On CIFAR-10
+dataset, we compare our results with several reference works.
+T INY B UTACC [47] is a state-of-the-art ReRAM-based pruning
+work using ADMM. By taking the crossbar size into account,
+we achieve a similar crossbar reduction ratio from the pruning
+
+TABLE III: FORMS MCU hardware specification and comparison with ISAAC.
+FORMS (Fragment size 8)
+ISAAC [18]
+Parameter Spec Power(mW ) Area(mm2) Spec Power(mW ) Area(mm2)
+4-bit
+8-bit
+resolution
+15.2
+0.0091
+16
+0.0096
+ADC
+1.2GHz
+frequency 2.1GHz
+32
+8
+number
+resolution
+1-bit
+1-bit
+4
+0.00017
+4
+0.00017
+DAC
+8×128
+8×128
+number
+S&H
+number
+8×128
+0.0055
+0.000023
+8×128
+0.01
+0.00004
+number
+8
+8
+crossbar array
+2.44
+0.00024 128×128
+2.43
+0.00023
+size
+128×128
+bit/cell
+2
+2
+S+A
+number
+4
+0.2
+0.000024
+4
+0.2
+0.000024
+Skipping Logic
+0.01
+0.0000001
+–
+–
+Sign Indicator
+0.012
+0.0000031
+–
+–
+Component
+
+part as T INY B UTACC, with a lower pruning ratio. This helps
+FORMS avoid unnecessary accuracy drop. By combining the
+fragment polarization and quantization, our overall crossbar
+reduction ratio is 2× higher than T INY B UTACC with similar
+accuracy.
+CIFAR-100 & ImageNet. Compared to CIFAR-10 dataset,
+the classification task on CIFAR-100 and ImageNet dataset
+is more complicated. Especially for ImageNet, there are
+fewer redundant weights. Thus, it is common to have a
+much smaller pruning ratio on CIFAR-100 and Imagenet
+dataset. As shown in Table II, on CIFAR-100 dataset, without accuracy loss or with minor accuracy loss, we achieve
+6.65×(53.2×), 9.18×(73.44×) and 8.15×(65.20×) weight
+pruning ratio (crossbar reduction) on ResNet-18, ResNet-50
+and VGG-16, respectively.
+On ImageNet, we compare our results with references on
+ResNet-18. Since model accuracy is more sensitive to pruning
+ratio on ImageNet dataset, to achieve a higher overall crossbar
+reduction ratio and maintain model accuracy, we use a less
+aggressive pruning strategy. Compared to T INY B UTACC, we
+achieve higher overall crossbar reduction (13.36× and 16×)
+with higher or similar accuracy when using fragment size of 4
+or 8. In summary, compared to state-of-the-art works, FORMS
+achieves high crossbar reduction with no or little accuracy loss.
+B. Area and Power
+We develop an in-house simulator to model access latency,
+energy, and area of all buffers, on-chip interconnects and
+crossbar arrays as well as the performance of FORMS. The
+back-end of the tool utilizes CACTI 7.0 [68], NVSIM, and
+NVSIM-CAM [69, 70] to provide a unified platform that can
+support both volatile and non-volatile memories with multibanking properties. It can also model process variations of the
+size and the threshold voltage of transistors. We conservatively
+choose a 10% process variation for evaluations. We use the
+VTEAM ReRAM model [71]. The zero skipping logic is
+modeled in Verilog HDL and synthesized using Synopsys Design Compiler at 45nm technology and scaled down to 32nm.
+We follow the methodology of ISAAC paper to model maxpooling, shift-and-add, ADC, DACs, and activation functions.
+The energy and area of the max-pool and shift-and-add are
+adapted from ISAAC [18] while for ReLU activation function
+circuits we use the information provided in PRIME [17]. A
+
+=== page 10 ===
+TABLE IV: Comparison of FORMS hardware characteristics with ISAAC and DaDianNao
+
+Dig unit
+12 MCUs per tile
+1 Tile (12 MCUs + Dig unit)
+168 Tiles
+HyperTransport freq
+HyperTransport bw
+Chip Total
+
+FORMS (Fragment size 8)
+Spec
+Power(mW ) Area(mm2 )
+53.05
+0.25
+280.05
+0.152
+333.1
+0.39
+55960.8
+66.27
+4/1.6GHz
+10400
+22.88
+6.4GB/s
+66360.8
+89.15
+
+Spec
+
+4/1.6GHz
+6.4GB/s
+
+Total
+ISAAC [18]
+Power(mW )
+40.85
+288.96
+329.81
+55408.08
+10400
+
+Area(mm2 )
+0.213
+0.1580
+0.370
+62.21
+22.88
+
+65808.08
+
+85.09
+
+TABLE V: Comparison the effective peak nominal throughput
+per area unit and power unit of different architectures normalized to ISAAC.
+Architecture
+
+GOP s
+s×mm2
+
+GOP s
+W
+
+ISAAC
+DaDianNao
+PUMA
+TPU
+WAX[74]
+SIMBA[75]
+FORMS (polarization only, 8)
+FORMS (polarization only, 16)
+Pruned/Quantized-ISAAC
+Pruned/Quantized-PUMA
+FORMS (full optimization, 8)
+FORMS (full optimization, 16)
+
+1
+0.13
+0.70
+0.08
+0.33
+0.34
+0.54
+0.77
+26.4
+18.67
+36.02
+39.48
+
+1
+0.45
+0.79
+0.48
+2.3
+0.08-2.5
+0.61
+0.84
+26.61
+21.07
+27.73
+51.26
+
+charge pump circuit [72] is used to provide higher voltage as
+ReRAM cells require a write voltage more than the supply
+Vdd. The off-chip links are the same HyperTransport serial
+link used by ISAAC [18] and DaDianNao [67]. Also, the
+power and area of 1-bit DAC (a simple inverter) are adopted
+from [60]. The ADC energy and area are taken from [59]. To
+get power and area of the same style ADC used in ISAAC,
+but with 4-bit resolution, we scale down the power and area of
+the memory, clock, and vref buffer linearly, and the capacitive
+DAC exponentially [60]. The same scaling has been used in
+other works like ISAAC. We utilize a 4-bit ADC with 2.1
+GSps [73]. We choose this methodology to model peripheral
+circuitry and make a fair comparison at 32 nm with stateof-the-art works. We also compare the results with the fully
+digital DaDianNao [67], after scaling from 28nm to 32nm.
+To make a fair ISO-area comparison on throughput and
+frame processing rate with ISAAC, we build FORMS to have
+similar power and area to ISAAC. We compare the power and
+area of the proposed building blocks in Table III. Table IV
+shows the area and power of the main components of FORMS,
+ISAAC and DaDianNao (digital design) without incorporating
+the pruning, and quantization, while the fragment is set to 8.
+Specifically, FORMS needs sign indicator arrays, and a few
+interconnects, which connect ADCs to fragments. It is noteworthy to mention that polarization help to accommodate more
+weights in the same crossbar than existing techniques. In addition, since FORMS performs more computations than ISAAC,
+it needs higher bandwidth (512-bit versus 256-bit in ISAAC)
+and larger eDRAM to store the results(128KB vs. 64KB in
+ISAAC). However, since an ADC in FORMS generates 16
+levels compared with 256 levels generated in ISAAC (due to
+using small fragment sizes), the required sample&hold circuit
+is smaller and faster. Overall, the sample&hold circuit in
+FORMS is almost 2× smaller than ISAAC. In addition, Zeroskipping logic saves dynamic power consumption by feeding
+fewer input bits (useless 0s) to the crossbar. In summary,
+we build FORMS to have almost the same power and area
+
+Spec
+NFU
+EDRAM
+Global Bus
+HyperTransport freq
+HyperTransport bw
+Chip Total
+
+16
+4/tile 36 MB
+128 bits
+4/1.6GHz
+6.4 GB/s
+
+DaDianNao [67]
+Power(mW )
+Area(mm2 )
+4886
+4760
+12.8
+10400
+
+16.09
+33.12
+15.66
+22.88
+
+19856
+
+86.2
+
+as ISAAC. The difference is negligible (0.08% more power
+and 4.5% more area). Like ISAAC and PUMA, in return for
+consuming more area and power compared with DaDianNao,
+the throughput of FORMS is increased significantly.
+C. Throughput
+Table V compares the peak nominal area-, power-efficiency
+of FORMS that uses the fragment size of 8 and 16 with
+state-of-the-art DNN accelerators in terms of the number of
+operations performed per second per mm2 and the number
+GOP s
+GOP s
+of operations performed per watt (i.e. s×mm
+2 and
+w ).
+GOP s
+The results are normalized to the ISAAC in terms of s×mm
+2
+s
+and GOP
+,
+respectively.
+As
+results
+demonstrate,
+by
+taking
+w
+advantage of the proposed pruning and quantization methods, the throughput of the ISAAC and PUMA are increased
+considerably. This potential increase can be achieved if interconnects can provide enough bandwidth for the processing
+crossbars. By only considering the polarization, the effective
+peak throughput of FORMS with the fragment size of 8 is
+4.15×(1.36×) and 6.75×(1.27×) over DaDianNao and TPU,
+respectively. By increasing the fragment size, the throughput
+is increased. For example, when we increase the fragment
+size to 16, the throughput of FORMS with the polarization
+only is increased by 42%(29%). FORMS can outperform
+existing architectures when we apply all of the proposed
+methods including pruning, quantization, polarization, and
+GOP s
+zero-skipping logic. In terms of s×mm
+2 , FORMS with the
+fragment size of 16, outperforms the original non-pruned
+ISAAC and Pruned/Quantized ISAAC by 39× and 1.5×,
+s
+respectively. These results in terms of GOP
+are 51× and
+w
+1.9×. Overall, the peak throughput of the FORMS is higher
+than the existing designs. Note that WAX and SIMBA tradeoff throughput for power efficiency by reducing voltage and
+frequency. For instance, in SIMBA, the voltage is 0.48V and
+frequency is 0.52GHz, whereas, in WAX, the frequency is
+0.2GHz while the voltage is not mentioned.
+D. Frame Processing Rate
+Reaching the higher throughput per area unit and power
+unit is not the only goal of an acceleration design [75, 76].
+For instance, the throughput per area efficiency of commercial
+GOP s
+TPU [21, 76] is only 41 s×mm
+2 . Moreover, many DNNbased applications take advantage of a higher frame per second
+(fps) speed up or end to end throughput. For examples, object
+detection [77], GoTurn [78], self-driving cars[79], virtual and
+augmented reality applications [80] tend to have higher fps
+processing rate rather than higher throughput per area or power
+efficiency. This makes the high fps another crucial property for
+DNN accelerators.
+We compare the frame per second speed up of different
+architectures when we apply assorted proposed techniques.
+
+=== page 11 ===
+TABLE VI: Accuracy degradation caused by device variation
+for ResNet18 on different dataset under lognormal distribution
+with 0 mean and 0.1 standard deviation.
+
+Frame Per Second Speed UP Normalized
+to ISAAC-32
+
+Fig. 13: Speed up results in terms of frame per second on
+CIFAR-10 when various techniques proposed in FORMS are
+applied.
+59.28
+53.23
+
+50.54
+
+55.48
+
+35.14
+
+34.30
+30.665
+
+25.875
+
+27.26
+
+24.85
+20.08
+
+18.30
+
+19.18
+
+14.12
+
+23.79
+
+21.69
+
+25.27
+21.09
+17.76
+
+16.74
+10.72 11.20 11.18
+7.485
+
+VGG16 CIFAR-100
+
+ResNet18 CIFAR-100
+
+ResNet50 CIFAR-100
+
+10.67
+
+5.29 4.09 5.81
+
+5.91 7.10
+
+ResNet18 ImageNet
+
+ResNet50 ImageNet
+
+Pruned and Quantized-ISAAC
+Pruned and Quantized-PUMA
+FORMS-8 Without ( Zero skipping ), With( Quantization, Prunning, Polarization)
+FORMS-16 Without ( Zero skipping ), With( Quantization, Prunning, Polarization)
+FORMS-8 With( Prunning, Quantization, Polarization, Zero skipping)
+FORMS-16 With( Prunning, Quantization, Polarization, Zero skipping)
+
+Fig. 14: Speed up results in terms of frame per second on
+CIFAR-100 and ImageNet when various techniques proposed
+in FORMS are applied.
+Figure 13 and Figure 14 show the results on CIFAR-10,
+CIFAR-100, and ImageNet dataset, respectively. All the results
+are normalized to the non-pruned ISAAC architecture when
+the weights are 32-bit. These results demonstrate that existing
+architectures like ISAAC and PUMA can enjoy the proposed
+pruning/quantization techniques since structured pruning and
+quantization are architecture agnostic. Depending upon the
+neural network design and dataset, applying pruning will speed
+up the frame processing rate of ISAAC by 7.5× to 200.8×. For
+the PUMA, these results vary from 5.3× up to 142×. These
+results also illustrate how much each proposed technique in
+FORMS can contribute to the frame processing rate speeding
+up. The model optimizations, including pruning, quantization,
+and polarization, will increase FORMS speed up by 4× to
+109.6× when the fragment size is 8. When the fragment size
+is 16, the speed up benefits are between 5.8× up to 155.8×.
+As we discussed in IV-B, existing mixed-signal designs cannot
+take advantage of zero-skipping logic. FORMS utilizes this
+novel optimization to reach higher fps. By applying zeroskipping on top of model optimizations, with a fragment size
+of 8, the speed-up of FORMS is between 10.7× to 377.9×.
+These results are between 11.2× up to 336.9× when FORMS
+uses fragment size of 16. As demonstrated, FORMS can
+process frames (images) much faster than all current mixedsignal DNN accelerators.
+E. Variation Analysis
+Variation is a challenge in building in-situ accelerators [81].
+We evaluate the impact of device variation of ReRAM device
+caused by the imperfection in fabrication technology. We
+
+Dataset
+
+Original
+Model
+
+Polarization
+Only
+
+Pruning
+Only
+
+Full
+Optimization
+
+Cifar10
+Cifar100
+ImageNet
+
+0.35%
+0.72%
+2.87%
+
+0.37%
+0.68%
+2.86%
+
+1.82%
+1.86%
+4.24%
+
+1.80%
+1.89%
+4.21%
+
+model the device variation as a log-normal distribution [82].
+Table VI shows the accuracy degradation of ResNet18 (other
+networks have similar results) on different datasets, when
+introducing a device variation with 0 mean and 0.1 standard
+deviation. The accuracy degradation is based on the accuracy
+results shown in Table I and II, and it is the average value of
+50 runs. The classification task on ImageNet is much harder
+than CIFAR10/100. It is more sensitive to the hardware variation [83]. For instance, the original model (without adopting
+any compression) has around a 2.8% accuracy degradation.
+As shown in Table VI, our polarization, quantization, and
+zero-skipping techniques do not decrease the network robustness, while the pruning introduces a certain degradation of
+robustness (an extra 1.3% accuracy degradation). The reason
+is that when 50% of the weights are pruned (under 2× pruning
+rate), each remaining weight becomes more important and
+the network resistance to variation reduces. But it happens in
+all pruning works and is not a problem unique to FORMS.
+The accuracy degradation can be relieved by reducing the
+prune ratio. Such a trade-off depends on the demands of real
+applications. It is worth noting that the prior techniques used
+to improve robustness [29, 84, 85] can be applied to FORMS.
+VI. C ONCLUSION
+We propose FORMS, a fine-grained ReRAM-based DNN
+accelerator with algorithm/hardware co-design optimizations.
+A novel fragment polarization method is proposed to elegantly
+solve the natural challenge of representing positive/negative
+weights on ReRAM crossbars without doubling crossbar cost
+or introducing extra hardware cost for result compensation.
+Weight pruning and quantization technique are combined
+to explore a good balance between the overall hardware
+cost and performance. We design a fine-grained architecture
+that is more robust to non-idealities and noise and makes
+the ADC implementation less challenging compared to the
+coarse-grained architecture designs. Crucially, our novel zeroskipping logic significantly avoids unnecessary computations
+and reduce computation time. Putting all together, our FORMS
+optimization framework can speed up ISAAC up to 377.9×.
+When combining our optimization framework and architecture
+design, FORMS achieves 1.50× and 1.93× area and power
+GOP s
+GOP s
+over
+efficiency improvements in terms of s×mm
+2 and
+W
+an optimized ISAAC with almost the same power/area costs.
+ACKNOWLEDGEMENT
+This work is funded by the National Science Foundation Awards CCF-1750656, CCF-1919289, CCF-1937500, and
+CNS-1909172.
+
+=== page 12 ===
+R EFERENCES
+[1] I. Goodfellow, Y. Bengio, and A. Courville, Deep learning. MIT press, 2016.
+[2] S. Han, J. Pool, J. Tran, and W. Dally, “Learning both
+weights and connections for efficient neural network,” in
+NeurIPS, 2015.
+[3] W. Wen, C. Wu, Y. Wang, Y. Chen, and H. Li, “Learning
+structured sparsity in deep neural networks,” in NeurIPS,
+2016, pp. 2074–2082.
+[4] J. Wu, C. Leng, Y. Wang, Q. Hu, and J. Cheng, “Quantized convolutional neural networks for mobile devices,”
+in CVPR, 2016.
+[5] T. Chen, Z. Du, N. Sun, J. Wang, C. Wu, Y. Chen, and
+O. Temam, “Diannao: A small-footprint high-throughput
+accelerator for ubiquitous machine-learning,” in ACM
+Sigplan Notices, 2014.
+[6] Google
+supercharges
+machine
+learning
+tasks
+with
+TPU
+custom
+chip,
+https://cloudplatform.googleblog.com/2016/05/
+Google-supercharges-machine-learning-tasks-withcustom-chip.html.
+[7] X. Ma, Y. Zhang, G. Yuan, A. Ren, Z. Li, J. Han, J. Hu,
+and Y. Wang, “An area and energy efficient design of
+domain-wall memory-based deep convolutional neural
+networks using stochastic computing,” in ISQED, 2018.
+[8] C. Ding, S. Liao, Y. Wang, Z. Li, N. Liu, Y. Zhuo,
+C. Wang, X. Qian, Y. Bai, G. Yuan, X. Ma, Y. Zhang,
+J. Tang, Q. Qiu, X. Lin, and B. Yuan, “Circnn: accelerating and compressing deep neural networks using blockcirculant weight matrices,” in Proceedings of the 50th
+MICRO. ACM, 2017.
+[9] Y. Wang, C. Ding, G. Yuan, S. Liao, Z. Li, X. Ma,
+B. Yuan, X. Qian, J. Tang, Q. Qiu, and X. Lin, “Towards
+ultra-high performance and energy efficiency of deep
+learning systems: an algorithm-hardware co-optimization
+framework,” in AAAI Conference on Artificial Intelligence. AAAI, 2018.
+[10] C. Ding, A. Ren, G. Yuan, X. Ma, J. Li, N. Liu,
+B. Yuan, and Y. Wang, “Structured weight matrices-based
+hardware accelerators in deep neural networks: Fpgas
+and asics,” in Proceedings of the 2018 on Great Lakes
+Symposium on VLSI, 2018.
+[11] G. Yuan, X. Ma, S. Lin, Z. Li, and C. Ding,
+“A sot-mram-based processing-in-memory engine for
+highly compressed dnn implementation,” arXiv preprint
+arXiv:1912.05416, 2019.
+[12] M. M. Waldrop, “The chips are down for moores law,”
+Nature News, vol. 530, no. 7589, 2016.
+[13] J. L. Hennessy and D. A. Patterson, “A new golden
+age for computer architecture,” Commun. ACM, vol. 62,
+no. 2, p. 48–60, Jan. 2019. [Online]. Available:
+https://doi.org/10.1145/3282307
+[14] L. Xia, B. Li, T. Tang, P. Gu, P.-Y. Chen, S. Yu, Y. Cao,
+Y. Wang, Y. Xie, and H. Yang, “Mnsim: Simulation
+platform for memristor-based neuromorphic computing
+system,” IEEE T-CAD, 2017.
+[15] A. Thomas, “Memristor-based neural networks,” Journal
+of Physics D: Applied Physics, 2013.
+[16] L. Chua, “Memristor-the missing circuit element,” IEEE
+Transactions on circuit theory, 1971.
+
+[17] P. Chi, S. Li, C. Xu, T. Zhang, J. Zhao, Y. Liu, Y. Wang,
+and Y. Xie, “Prime: A novel processing-in-memory architecture for neural network computation in reram-based
+main memory,” in 2016 ACM/IEEE 43rd ISCA, 2016.
+[18] A. Shafiee, A. Nag, N. Muralimanohar, R. Balasubramonian, J. P. Strachan, M. Hu, R. S. Williams, and
+V. Srikumar, “Isaac: A convolutional neural network
+accelerator with in-situ analog arithmetic in crossbars,”
+ACM SIGARCH Computer Architecture News, 2016.
+[19] A. Nag, R. Balasubramonian, V. Srikumar, R. Walker,
+A. Shafiee, J. P. Strachan, and N. Muralimanohar, “Newton: Gravitating towards the physical limits of crossbar
+acceleration,” IEEE Micro, 2018.
+[20] L. Song, X. Qian, H. Li, and Y. Chen, “Pipelayer: A
+pipelined reram-based accelerator for deep learning,” in
+IEEE HPCA, 2017.
+[21] A. Ankit, I. E. Hajj, S. R. Chalamalasetti, G. Ndu,
+M. Foltin, R. S. Williams, P. Faraboschi, W.-m. W. Hwu,
+J. P. Strachan, and K. Roy, “Puma: A programmable
+ultra-efficient memristor-based accelerator for machine
+learning inference,” in Proceedings of the Twenty-Fourth
+International Conference on Architectural Support for
+Programming Languages and Operating Systems, 2019,
+pp. 715–731.
+[22] M. J. Marinella, S. Agarwal, A. Hsia, I. Richter,
+R. Jacobs-Gedrim, J. Niroula, S. J. Plimpton, E. Ipek, and
+C. D. James, “Multiscale co-design analysis of energy,
+latency, area, and accuracy of a reram analog neural
+training accelerator,” IEEE Journal on Emerging and
+Selected Topics in Circuits and Systems, 2018.
+[23] W. Li, P. Xu, Y. Zhao, H. Li, Y. Xie, and Y. Lin,
+“Timely: Pushing data movements and interfaces in pim
+accelerators towards local and in time domain,” arXiv
+preprint arXiv:2005.01206, 2020.
+[24] S. Ghodrati, H. Sharma, S. Kinzer, A. Yazdanbakhsh,
+K. Samadi, N. S. Kim, D. Burger, and H. Esmaeilzadeh,
+“Mixed-signal charge-domain acceleration of deep neural
+networks through interleaved bit-partitioned arithmetic,”
+arXiv preprint arXiv:1906.11915, 2019.
+[25] S. Choi, S. Jang, J.-H. Moon, J. C. Kim, H. Y. Jeong,
+P. Jang, K.-J. Lee, and G. Wang, “A self-rectifying tao
+y/nanoporous tao x memristor synaptic array for learning
+and energy-efficient neuromorphic systems,” NPG Asia
+Materials, vol. 10, no. 12, pp. 1097–1106, 2018.
+[26] C. Li, D. Belkin, Y. Li, P. Yan, M. Hu, N. Ge, H. Jiang,
+E. Montgomery, P. Lin, Z. Wang et al., “Efficient and
+self-adaptive in-situ learning in multilayer memristor
+neural networks,” Nature communications, vol. 9, no. 1,
+pp. 1–8, 2018.
+[27] Z. Liu, J. Tang, B. Gao, P. Yao, X. Li, D. Liu, Y. Zhou,
+H. Qian, B. Hong, and H. Wu, “Neural signal analysis
+with memristor arrays towards high-efficiency brain–
+machine interfaces,” Nature communications, vol. 11,
+no. 1, pp. 1–9, 2020.
+[28] O. Krestinskaya, B. Choubey, and A. James, “Memristive
+gan in analog,” Scientific Reports, vol. 10, no. 1, pp. 1–
+14, 2020.
+[29] G. Yuan, Z. Liao, X. Ma, Y. Cai, Z. Kong, X. Shen, J. Fu,
+Z. Li, C. Zhang, H. Peng, N. Liu, A. Ren, J. Wang, and
+Y. Wang, “Improving dnn fault tolerance using weight
+
+=== page 13 ===
+pruning and differential crossbar mapping for rerambased edge ai,” in 2021 22nd International Symposium on
+Quality Electronic Design (ISQED), 2021, pp. 135–141.
+[30] S. Boyd, N. Parikh, E. Chu, B. Peleato, and J. Eckstein,
+“Distributed optimization and statistical learning via the
+alternating direction method of multipliers,” Foundations
+and Trends® in Machine learning, vol. 3, no. 1, pp. 1–
+122, 2011.
+[31] D. A. Johns and K. Martin, Analog integrated circuit
+design. John Wiley & Sons, 2008.
+[32] W. Kester, “Adc input noise: the good, the bad, and the
+ugly. is no noise good noise?” Analog Dialogue, vol. 40,
+no. 02, pp. 1–5, 2006.
+[33] J. Izraelevitz, J. Yang, L. Zhang, J. Kim, X. Liu,
+A. Memaripour, Y. J. Soh, Z. Wang, Y. Xu, and S. R.
+Dulloor, “Basic performance measurements of the intel
+optane dc persistent memory module,” arXiv preprint
+arXiv:1903.05714, 2019.
+[34] F. T. Hady, A. Foong, B. Veal, and D. Williams, “Platform storage performance with 3d xpoint technology,”
+Proceedings of the IEEE, vol. 105, no. 9, pp. 1822–1833,
+2017.
+[35] H.-D. Trinh, C.-Y. Tsai, and H.-L. Lin, “Resistive ram
+structure and method of fabrication thereof,” May 22
+2018, uS Patent 9,978,938.
+[36] I. Kataeva, S. Ohtsuka, H. Nili, H. Kim, Y. Isobe,
+K. Yako, and D. Strukov, “Towards the development of
+analog neuromorphic chip prototype with 2.4 m integrated memristors,” in 2019 IEEE International Symposium on Circuits and Systems (ISCAS). IEEE, 2019, pp.
+1–5.
+[37] X. Sun, S. Yin, X. Peng, R. Liu, J.-s. Seo, and S. Yu,
+“Xnor-rram: A scalable and parallel resistive synaptic
+architecture for binary neural networks,” in 2018 Design,
+Automation & Test in Europe Conference & Exhibition
+(DATE). IEEE, 2018, pp. 1423–1428.
+[38] M. Imani, M. Samragh, Y. Kim, S. Gupta, F. Koushanfar, and T. Rosing, “Rapidnn: In-memory deep neural network acceleration framework,” arXiv preprint
+arXiv:1806.05794, 2018.
+[39] T.-H. Yang, H.-Y. Cheng, C.-L. Yang, I.-C. Tseng, H.-W.
+Hu, H.-S. Chang, and H.-P. Li, “Sparse reram engine:
+Joint exploration of activation and weight sparsity in
+compressed neural networks,” in Proceedings of the 46th
+ISCA, 2019.
+[40] G. Yuan, P. Behnam, Y. Cai, A. Shafiee, J. Fu, Z. Liao,
+Z. Li, X. Ma, J. Deng, J. Wang, M. Bojnordi, Y. Wang,
+and C. Ding, “Tinyadc: Peripheral circuit-aware weight
+pruning framework for mixed-signal dnn accelerators,”
+in Design, Automation and Test in Europe Conference
+(DATE), 2021.
+[41] S. Sayyaparaju, G. Chakma, S. Amer, and G. S. Rose,
+“Circuit techniques for online learning of memristive
+synapses in cmos-memristor neuromorphic systems,” in
+Proceedings of the on Great Lakes Symposium on VLSI
+2017. ACM, 2017, pp. 479–482.
+[42] M. Imani, S. Gupta, Y. Kim, and T. Rosing, “Floatpim:
+In-memory acceleration of deep neural network training
+with high precision,” in Proceedings of the 46th International Symposium on Computer Architecture, 2019, pp.
+
+802–815.
+[43] Y. Cai, H. Li, G. Yuan, W. Niu, Y. Li, X. Tang, B. Ren,
+and Y. Wang, “Yolobile: Real-time object detection on
+mobile devices via compression-compilation co-design,”
+arXiv preprint arXiv:2009.05697, 2020.
+[44] X. Ma, G. Yuan, S. Lin, Z. Li, H. Sun, and Y. Wang,
+“Resnet can be pruned 60×: Introducing network purification and unused path removal (p-rm) after weight
+pruning,” in 2019 IEEE/ACM International Symposium
+on Nanoscale Architectures (NANOARCH). IEEE, 2019.
+[45] X. Ma, S. Lin, S. Ye, Z. He, L. Zhang, G. Yuan, S. H.
+Tan, Z. Li, D. Fan, X. Qian et al., “Non-structured dnn
+weight pruning–is it beneficial in any platform?” IEEE
+Transactions on Neural Networks and Learning Systems,
+2021.
+[46] Z. Li, Y. Gong, X. Ma, S. Liu, M. Sun, Z. Zhan, Z. Kong,
+G. Yuan, and Y. Wang, “Ss-auto: A single-shot, automatic
+structured weight pruning framework of dnns with ultrahigh efficiency,” arXiv preprint arXiv:2001.08839, 2020.
+[47] X. Ma, G. Yuan, S. Lin, C. Ding, F. Yu, T. Liu, W. Wen,
+X. Chen, and Y. Wang, “Tiny but accurate: A pruned,
+quantized and optimized memristor crossbar framework
+for ultra efficient dnn implementation,” in 25th ASPDAC, 2020.
+[48] G. Yuan, X. Ma, C. Ding, S. Lin, T. Zhang, Z. S.
+Jalali, Y. Zhao, L. Jiang, S. Soundarajan, and Y. Wang,
+“An ultra-efficient memristor-based dnn framework with
+structured weight pruning and quantization using admm,”
+in 2019 IEEE/ACM ISLPED, 2019.
+[49] A. Ren, T. Zhang, S. Ye, J. Li, W. Xu, X. Qian, X. Lin,
+and Y. Wang, “Admm-nn: An algorithm-hardware codesign framework of dnns using alternating direction
+methods of multipliers,” in 24th ASPLOS, 2019.
+[50] D. P. Kingma and J. Ba, “Adam: A method for stochastic
+optimization,” arXiv preprint arXiv:1412.6980, 2014.
+[51] M. Hong, Z.-Q. Luo, and M. Razaviyayn, “Convergence
+analysis of alternating direction method of multipliers
+for a family of nonconvex problems,” SIAM Journal on
+Optimization, vol. 26, no. 1, pp. 337–364, 2016.
+[52] S. Liu, J. Chen, P.-Y. Chen, and A. Hero, “Zerothorder online alternating direction method of multipliers:
+Convergence analysis and applications,” in International
+Conference on Artificial Intelligence and Statistics, 2018.
+[53] S. Boyd, N. Parikh, E. Chu, B. Peleato, and J. Eckstein,
+“Distributed optimization and statistical learning via the
+alternating direction method of multipliers,” Foundations
+and Trends® in Machine Learning, 2011.
+[54] T. Zhang, S. Ye, K. Zhang, J. Tang, W. Wen, M. Fardad,
+and Y. Wang, “A systematic dnn weight pruning framework using alternating direction method of multipliers,”
+in ECCV, 2018.
+[55] M. N. Bojnordi and E. Ipek, “Memristive boltzmann
+machine: A hardware accelerator for combinatorial optimization and deep learning,” in 2017 Fifth Berkeley
+Symposium on Energy Efficient Electronic Systems Steep
+Transistors Workshop (E3S), 2017, pp. 1–3.
+[56] Y.-C. Chen, C. Chen, C. Chen, J. Yu, S. Wu, S. Lung,
+R. Liu, and C.-Y. Lu, “An access-transistor-free (0t/1r)
+non-volatile resistance random access memory (rram)
+using a novel threshold switching, self-rectifying chalco-
+
+=== page 14 ===
+genide device,” in IEEE International Electron Devices
+Meeting 2003. IEEE, 2003, pp. 37–4.
+[57] P. Srivastava, M. Kang, S. K. Gonugondla, S. Lim,
+J. Choi, V. Adve, N. S. Kim, and N. Shanbhag, “Promise:
+An end-to-end design of a programmable mixed-signal
+accelerator for machine-learning algorithms,” in ISCA,
+2018.
+[58] S. Ioffe and C. Szegedy, “Batch normalization: Accelerating deep network training by reducing internal covariate
+shift,” CoRR, 2015.
+[59] B. Murmann, “Adc performance survey 19972019,[online]. available: http://web.stanford.edu/ murmann/adcsurvey.html.”
+[60] M. Saberi, R. Lotfi, K. Mafinezhad, and W. A. Serdijn,
+“Analysis of power consumption and linearity in capacitive digital-to-analog converters used in successive
+approximation adcs,” IEEE Transactions on Circuits and
+Systems I: Regular Papers, 2011.
+[61] C.-X. Xue, T.-Y. Huang, J.-S. Liu, T.-W. Chang, H.-Y.
+Kao, J.-H. Wang, T.-W. Liu, S.-Y. Wei, S.-P. Huang,
+W.-C. Wei et al., “15.4 a 22nm 2mb reram computein-memory macro with 121-28tops/w for multibit mac
+computing for tiny ai edge devices,” in ISSCC, 2020.
+[62] Y. Wang, W. Wen, B. Liu, D. Chiarulli, and H. Li, “Group
+scissor: Scaling neuromorphic computing design to large
+neural networks,” in DAC. IEEE, 2017.
+[63] Y. He, J. Lin, Z. Liu, H. Wang, L.-J. Li, and S. Han,
+“Amc: Automl for model compression and acceleration
+on mobile devices,” in ECCV, 2018.
+[64] Y. He, P. Liu, Z. Wang, Z. Hu, and Y. Yang, “Filter
+pruning via geometric median for deep convolutional
+neural networks acceleration,” CVPR, 2019.
+[65] Z. Liu, J. Li, Z. Shen, G. Huang, S. Yan, and C. Zhang,
+“Learning efficient convolutional networks through network slimming,” in ICCV, 2017.
+[66] Z. Zhuang, M. Tan, B. Zhuang, J. Liu, Y. Guo, Q. Wu,
+J. Huang, and J. Zhu, “Discrimination-aware channel
+pruning for deep neural networks,” in NeurIPS, 2018.
+[67] Y. Chen, T. Luo, S. Liu, S. Zhang, L. He, J. Wang, L. Li,
+T. Chen, Z. Xu, N. Sun, and O. Temam, “Dadiannao: A
+machine-learning supercomputer,” in MICRO, 2014.
+[68] R. Balasubramonian, A. B. Kahng, N. Muralimanohar,
+A. Shafiee, and V. Srinivas, “Cacti 7: New tools for interconnect exploration in innovative off-chip memories,”
+ACM TACO, 2017.
+[69] S. Li, L. Liu, P. Gu, C. Xu, and Y. Xie, “Nvsim-cam: a
+circuit-level simulator for emerging nonvolatile memory
+based content-addressable memory,” in ICCAD, 2016.
+[70] X. Dong, C. Xu, Y. Xie, and N. P. Jouppi, “Nvsim:
+A circuit-level performance, energy, and area model for
+emerging nonvolatile memory,” IEEE T-CAD, 2012.
+[71] S. Kvatinsky, M. Ramadan, E. G. Friedman, and
+A. Kolodny, “Vteam: A general model for voltagecontrolled memristors,” IEEE Transactions on Circuits
+and Systems II: Express Briefs, 2015.
+[72] G. Palumbo and D. Pappalardo, “Charge pump circuits:
+An overview on design strategies and topologies,” IEEE
+Circuits and Systems Magazine, 2010.
+[73] C.-H. Chan, Y. Zhu, I.-M. Ho, W.-H. Zhang, U. SengPan, and R. P. Martins, “16.4 a 5mw 7b 2.4 gs/s 1-then-
+
+2b/cycle sar adc with background offset calibration,” in
+2017 IEEE International Solid-State Circuits Conference
+(ISSCC). IEEE, 2017, pp. 282–283.
+[74] S. Gudaparthi, S. Narayanan, R. Balasubramonian, E. Giacomin, H. Kambalasubramanyam, and P.-E. Gaillardon,
+“Wire-aware architecture and dataflow for cnn accelerators,” in Proceedings of the 52nd Annual IEEE/ACM
+International Symposium on Microarchitecture, 2019, pp.
+1–13.
+[75] Y. S. Shao, J. Clemons, R. Venkatesan, B. Zimmer,
+M. Fojtik, N. Jiang, B. Keller, A. Klinefelter, N. Pinckney, and P. Raina, “Simba: Scaling deep-learning inference with multi-chip-module-based architecture,” in
+Proceedings of the 52nd Annual IEEE/ACM International
+Symposium on Microarchitecture, 2019, pp. 14–27.
+[76] N. P. Jouppi, C. Young, N. Patil, D. Patterson,
+G. Agrawal, R. Bajwa, S. Bates, S. Bhatia, N. Boden,
+A. Borchers et al., “In-datacenter performance analysis
+of a tensor processing unit,” in Proceedings of the 44th
+Annual International Symposium on Computer Architecture, 2017.
+[77] J. Redmon, S. Divvala, R. Girshick, and A. Farhadi, “You
+only look once: Unified, real-time object detection,” in
+Proceedings of the IEEE conference on computer vision
+and pattern recognition, 2016, pp. 779–788.
+[78] D. Held, S. Thrun, and S. Savarese, “Learning to track
+at 100 fps with deep regression networks,” in European
+Conference on Computer Vision. Springer, 2016, pp.
+749–765.
+[79] S.-C. Lin, Y. Zhang, C.-H. Hsu, M. Skach, M. E. Haque,
+L. Tang, and J. Mars, “The architectural implications
+of autonomous driving: Constraints and acceleration,”
+in Proceedings of the Twenty-Third International Conference on Architectural Support for Programming Languages and Operating Systems, 2018, pp. 751–766.
+[80] P. Lincoln, A. Blate, M. Singh, T. Whitted, A. State,
+A. Lastra, and H. Fuchs, “From motion to photons in 80
+microseconds: Towards minimal latency for virtual and
+augmented reality,” IEEE transactions on visualization
+and computer graphics, vol. 22, no. 4, 2016.
+[81] T. Dalgaty, N. Castellani, C. Turck, K.-E. Harabi,
+D. Querlioz, and E. Vianello, “In situ learning using
+intrinsic memristor variability via markov chain monte
+carlo sampling,” Nature Electronics, pp. 1–11, 2021.
+[82] G. Charan, J. Hazra, K. Beckmann, X. Du, G. Krishnan,
+R. V. Joshi, N. C. Cady, and Y. Cao, “Accurate inference
+with inaccurate rram devices: Statistical data, model
+transfer, and on-line adaptation,” in 2020 57th ACM/IEEE
+Design Automation Conference (DAC), 2020, pp. 1–6.
+[83] S. Mittal, “A survey on modeling and improving reliability of dnn algorithms and accelerators,” Journal of
+Systems Architecture, vol. 104, p. 101689, 2020.
+[84] B. Liu, Hai Li, Yiran Chen, Xin Li, Qing Wu, and
+Tingwen Huang, “Vortex: Variation-aware training for
+memristor x-bar,” in 2015 52nd ACM/EDAC/IEEE Design Automation Conference (DAC), 2015, pp. 1–6.
+[85] Y. Long, X. She, and S. Mukhopadhyay, “Design of
+reliable dnn accelerator with un-reliable reram,” in 2019
+Design, Automation & Test in Europe Conference &
+Exhibition (DATE). IEEE, 2019, pp. 1769–1774.

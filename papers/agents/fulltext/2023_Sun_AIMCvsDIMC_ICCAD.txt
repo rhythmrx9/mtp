@@ -1,0 +1,1877 @@
+# Analog or Digital In-Memory Computing? Benchmarking Through Quantitative Modeling
+# id: W4389166767 | key: 2023_Sun_AIMCvsDIMC_ICCAD | ICCAD 2023 | card: ../cards/2023_Sun_AIMCvsDIMC_ICCAD.md
+
+
+=== page 1 ===
+Jiacong Sun
+
+Pouya Houshmand
+
+Marian Verhelst
+
+MICAS, KU Leuven
+Leuven, Belgium
+jiacong.sun@kuleuven.be
+
+MICAS, KU Leuven
+Leuven, Belgium
+pouya.houshmand@kuleuven.be
+
+MICAS, KU Leuven
+Leuven, Belgium
+marian.verhelst@kuleuven.be
+
+Weight
+
+I. I NTRODUCTION
+Recent developments of ultra-low power machine learning
+models have enabled the deployment of artificial intelligence
+on extreme edge devices. However typical embedded digital
+accelerators suffer from high data movement costs and low
+computational densities, degrading the energy efficiencies by
+up to 2×-1000× with respect to the ideal baseline of digital
+computations. To minimize the data transfer overhead, inmemory computing (IMC) has recently emerged as a promising alternative to conventional accelerators based on arrays
+of digital processing elements (PEs). By directly performing
+the operations near/in the memory cells, these architectures
+allow to greatly reduce access overheads and enable massive
+parallelization opportunities, with potential orders of magnitude improvements in energy efficiency and throughput [1].
+Most of the initial IMC designs published in the literature are
+focused on analog IMC (AIMC), where the computation is
+carried out in the analog domain [2]–[4]. While this approach
+ensures extreme energy efficiencies and massive parallelization, the analog nature of the computation and the presence
+
+C
+FY
+
+C
+IY
+
+I
+
+×
+
+I
+
+IX
+
+Output
+
+W
+FX
+
+...
+
+Input
+...
+
+Abstract—In-Memory Computing (IMC) has emerged as a
+promising paradigm for energy-efficient, throughput-efficient
+and area-efficient machine learning at the edge. However, the
+differences in hardware architectures, array dimensions, and
+fabrication technologies among published IMC realizations have
+made it difficult to grasp their relative strengths. Moreover,
+previous studies have primarily focused on exploring and benchmarking the peak performance of a single IMC macro rather
+than full system performance on real workloads. This paper aims
+to address the lack of a quantitative comparison of Analog InMemory Computing (AIMC) and Digital In-Memory Computing
+(DIMC) processor architectures. We propose an analytical IMC
+performance model that is validated against published implementations and integrated into a system-level exploration framework
+for comprehensive performance assessments on different workloads with varying IMC configurations. Our experiments show
+that while DIMC generally has higher computational density than
+AIMC, AIMC with large macro sizes may have better energy efficiency than DIMC on convolutional-layers and pointwise-layers,
+which can exploit high spatial unrolling. On the other hand,
+DIMC with small macro size outperforms AIMC on depthwiselayers, which feature limited spatial unrolling opportunities inside
+a macro.
+Index Terms—Machine learning, quantitative modeling, analog
+in-memory computing, digital in-memory computing
+
+K
+
+=
+
+K
+OY
+
+O
+O
+O
+
+OX
+
+W
+
+B
+
+O
+O
+O
+
+...
+
+arXiv:2405.14978v1 [eess.SP] 23 May 2024
+
+Analog or Digital In-memory Computing?
+Benchmarking through Quantitative Modeling
+
+B
+
+B: Input/Output batch size
+for b = 1 to B-1
+G: Group size
+for g = 1 to G-1
+OX: Output rows
+for ox = 1 to OX-1
+OY: Output columns
+for oy = 1 to OY-1
+K: Output channel
+for k = 1 to K-1
+C: Input/Weight channel
+for c = 1 to C-1
+FX: Weight columns
+for fx = 1 to FX-1
+FY: Weight rows
+for fy = 1 to FY-1
+O[b][g][k][ox][oy] += I[b][g][c][ox+fx][oy+fy] × W[g][k][c][fx][fy]
+
+Workload
+
+Batch
+size
+
+Conv2D
+Depthwise
+Pointwise
+Dense
+
+B
+B
+B
+B
+
+Group Output
+size
+rows
+
+1
+G
+1
+1
+
+OY
+OY
+OY
+1
+
+Output
+columns
+
+Output
+channel
+
+Input/Weight
+channel
+
+Weight
+rows
+
+Weight
+columns
+
+OX
+OX
+OX
+1
+
+K
+1
+K
+K
+
+C
+1
+C
+C
+
+FY
+FY
+1
+1
+
+FX
+FX
+1
+1
+
+Fig. 1. 8-nested loop DNN layer representation and workloads representation
+
+of intrinsic circuit noise and mismatches compromises the
+output accuracy. To avoid the hurdles of AIMC, digital in
+memory computing (DIMC) is lately gaining more interest as a
+valid alternative [5]–[8]. Thanks to its noise-free computation
+and more flexible spatial mapping possibilities, DIMC allows
+to realize additional flexibility and accurate computation at
+the expense of reduced peak energy efficiency. These new
+opportunities stemming from AIMC and DIMC resulted in
+many recent implementations and publications in the literature.
+However, these works vary strongly in terms of hardware
+architecture, array dimensions, and silicon technology. This
+makes it difficult to grasp their relative strengths. While several
+works assess and discuss IMC trends qualitatively, only few
+aim at quantitatively modeling or benchmarking architectural
+strategies. This paper tries to fill this gap by:
+• providing a unified analytical performance model for
+AIMC and DIMC, which is validated against several
+design points from the literature.
+• performing quantitative performance benchmarking for
+various configurations of AIMC and DIMC, in terms of
+macro-level peak performance as well as system-level
+workload performance, by integrating the proposed model
+into ZigZag [9], a system-level hardware design space
+exploration (DSE) framework.
+
+©2023 IEEE. Personal use of this material is permitted. Permission from IEEE must be obtained for all other uses, in any current or future media, including
+reprinting/republishing this material for advertising or promotional purposes, creating new collective works, for resale or redistribution to servers or lists, or
+reuse of any copyrighted component of this work in other works. DOI: 10.1109/ICCAD57390.2023.10323763.
+
+=== page 2 ===
+DRAM
+
+ADC
+DAC
+DAC
+
+Bo
+
+O
+
+OX
+
+...
+
+Do
+
+Bo
+
+O
+
+Ku, OXu
+
+(a) AIMC system-level fundamental architecture
+
+Output
+Ku
+OY
+
+O
+O
+O
+OX
+
+...
+
+...
+...
+
+Adders
+
+W2,1
+
+...
+...
+
+...
+
+...
+
+...
+
+W2,1
+
+...
+
+...
+
+...
+
+Wm,1
+
+...
+
+...
+
+...
+
+...
+...
+
+W1,1
+
+...
+...
+
+...
+
+cache Input regs
+(SRAM)
+
+...
+
+Adders
+
+I
+
+Bw
+
+Wm,1
+...
+
+...
+
+...
+
+ADC
+DAC
+DAC
+
+...
+
+Bcycle
+
+...
+
+...
+
+...
+
+...
+...
+
+...
+
+...
+
+...
+...
+
+ADC
+DAC
+DAC
+
+...
+
+Output regs O
+
+...
+
+...
+
+...
+
+...
+
+...
+...
+
+...
+...
+
+Bo
+
+Cell
+
+Di
+Bi
+
+Adders
+
+...
+
+...
+
+AIMC
+(macro-level)
+
+Cu
+FXu
+FYu
+
+×M
+
+I
+
+W1,1
+
+...
+
+... Wm,n
+
+Wm,2
+
+IX
+
+Cell
+
+Bcycle
+
+...
+
+Wm,1
+
+I
+
+I
+
+...
+
+DAC
+
+IY
+
+Bi
+
+...
+
+I
+
+... W2,n
+
+W2,2
+
+Input
+
+...
+
+W2,1
+
+Bcycle
+
+C
+
+Weight reloading
+
+...
+
+...
+
+...
+
+...
+...
+
+...
+
+...
+
+...
+
+...
+
+...
+...
+
+...
+
+Cell
+
+...
+
+O
+O
+O
+
+...
+
+DAC
+
+...
+
+OY
+
+... W1,n
+
+...
+
+Di
+Bi
+
+W1,2
+
+Bcycle
+
+...
+
+I
+
+cache Input regs
+(SRAM)
+Output
+Ku
+
+W1,1
+
+...
+
+...
+
+Cu
+FXu
+FYu
+
+Bw
+Bcycle
+
+Bi
+
+I
+IX
+
+DAC
+
+...
+
+IY
+
+I
+
+Bi
+
+...
+
+Input
+
+Input/output reloading
+
+Bcycle
+
+Bi
+
+C
+
+DRAM
+Weight reloading
+
+...
+
+Input/output reloading
+
+Accumulator
+
+DIMC
+(macro-level)
+Bo
+
+Output regs O
+
+...
+
+Bo
+
+Do
+
+O
+
+Ku, OXu
+
+(b) DIMC system-level fundamental architecture
+
+Fig. 2. Fundamental architecture for AIMC/DIMC and their mapping paradigm. ”u” in the subscript represents spatial unrolling.
+
+II. BACKGROUND AND RELATED WORKS
+A. Dataflow concepts for IMC
+Deep neural network (DNN) workloads consist of a sequence of layers. The operations in the most common layers
+can be described as a combination of 8-nested for loops, which
+iterate over the indices of an input feature map tensor I, a
+weight tensor W and that generate an output tensor O, as
+shown in Fig. 1. The tensor operations can be decomposed
+in a sequence of matrix-vector multiplications (MVM) by
+tiling the suitable loops. These MVM operations offer a
+great opportunity for in-memory acceleration, as their dense
+2D array structure aligns well with the array structure of
+the memory macros. Due to the physical properties of the
+hardware template, the spatial unrolling dimensions of the
+weight matrix are chosen so as to maximize spatial reuse
+of the activations along the columns of the memory, and
+accumulation of the partial sums along the rows of the IMC
+array, as shown in Fig. 2: The K and OX loops – (partially)
+irrelevant for the inputs – are typically unrolled across the
+columns, while the C, F X and F Y loops – irrelevant for the
+outputs – are parallelized across the rows. To further speed up
+computation and increase the reuse of operands at chip-level,
+the OX, OY or G loops can be parallelized across multiple
+IMC macros on the same die, requiring, however, duplication
+of the weights [9]. It is nevertheless necessary to carefully
+align the array dimensions and the workload parallelism to
+minimize underutilization of the computational resources.
+B. SRAM-based IMC
+SRAM is largely deployed for IMC, thanks to its robustness, large scale integration in CMOS, high endurance, and
+reliability, when compared to NVM-based solutions. SRAMbased IMC designs can be categorized into AIMC and DIMC
+based on whether the MAC computation is carried out in the
+analog or digital domain respectively.
+
+1) AIMC architectures: The AIMC architecture template
+is depicted in Fig. 2.a. To minimize data transfers between
+the compute array and the external memory levels and to
+maximize the array utilization, a weight stationary dataflow
+is commonly adopted for IMC designs. This dataflow aims
+at minimizing the data movement related to weights, maximizing their reuse at the computational array level: in IMC
+architectures this translates in pre-loading Bw -bit weights into
+the array, where M memory cells are grouped and attached
+on the local bitline to increase memory density. To execute an
+MVM, a digital input vector is provided along the wordlines
+of the memory array; the values of each element of the vector
+are converted to the analog domain with DACs – either as a
+pulse width [2] or a voltage level [3], [4] – and the resulting
+signals propagated along all wordlines in parallel. The analog
+signal on the wordlines is then combined with the value stored
+in the activated SRAM cells performing one multiplication per
+cell. The result of each multiplication will be transmitted onto
+the bitlines, where accumulation occurs in the analog domain
+across all cells connected to the same bitline. The final value
+on the bitlines is then converted back to the digital domain
+by means of ADCs, stored in output registers, after which it
+flows back to the higher level memories.
+2) DIMC architectures: In contrast to AIMC, the multiplication and accumulation operation in DIMC [5]–[8] are
+implemented with digital logic gate-based multiplier and adder
+circuitry, as shown in Fig. 2.b. IMC multiplication is done at
+SRAM cell level, where M memory cells share one multiplying NAND gate. The digital MAC results can immediately
+be offloaded to output registers after accumulating the fullprecision results in digital accumulators. The presence of extra
+logic at cell level and the adder trees in DIMC give rise to area
+overheads and lower peak energy efficiencies compared to its
+analog counterpart; yet, increased dataflow flexibility can be
+attained: the spatial loop unrolling at macro level can be made
+
+=== page 3 ===
+28nm,1b
+
+[2] 22nm,2b
+
+103
+
+65nm,1b
+28nm,1b
+65nm,1b
+7nm,4b
+65nm,2b
+65nm,4b
+
+102
+
+[3] 28nm,4b
+[5] 28nm,8b
+[7] 28nm,8b
+
+16nm,4b
+55nm,2/5b
+
+65nm, 1b
+
+5nm,4b
+
+[8] 28nm,8b
+22nm,4b
+
+65nm,1b
+
+AIMC
+DIMC
+
+[6] 28nm,8b
+
+101
+
+28nm,4/8b
+
+10-1
+
+[4] 22nm,8b
+
+100
+
+101
+
+102
+
+Fig. 3. Peak performance benchmarking on AIMC/DIMC architectures. Each
+point reports the used technology node and weight bit precision.
+
+reconfigurable by means of multiplexers in the accumulation
+trees with low energy and area overheads. A further benefit
+of DIMC lies in its robustness against noise and variability,
+enabling high operand precision. Thanks to its purely digital
+signal processing, DIMC computes deterministically, while the
+energy and area cost of DIMC scale proportionally with the
+operand precision. However, in literature the trade-off between
+efficiency and increased flexibility is not quantified on actual
+workloads and a back-to-back comparison of these two IMC
+paradigms is necessary to identify the optimal design choice.
+C. IMC design benchmarking
+Numerous implementations for AIMC and DIMC exist in
+literature, however they differ in their hardware architectures,
+array dimensions, and fabrication technologies, making it
+challenging to grasp their relative strengths [1], [10]–[14].
+More importantly, a fundamental concern in the reported performance metrics is that IMC chips are mostly benchmarked
+according to their peak performance for a single IMC macro,
+as summarized in Fig. 3. However, these performance assessments unrealistically suppose that the (in-memory) computing
+logic is fully utilized at all times: to evaluate the performances
+on actual workloads, DSE frameworks and cost models have
+been implemented to explore the design space and design the
+hardware based on the target network model.
+D. DSE framework and modeling tools
+In order to evaluate the two IMC design paradigms at system
+level on target workloads design space exploration at the
+system level can be done through analytical models for IMC.
+Published models however primarily focus on AIMC designs
+[1], [15]–[21], while there is a lack of DIMC modeling efforts.
+Similarly, for mapping space explorations, most of the focus
+has been dedicated to AIMC designs, while lacking DIMC
+assessment [18], [19], [22], [23]. In particular, the work in [15]
+offers analytical energy and area modeling of AIMC ADCs
+and DACs, but the model is only validated on standalone
+ADCs and DACs rather than actual IMC implementations. An
+
+alternative energy model is proposed in [16], however, the
+energy cost of each component is separately extracted from
+different papers, and has not been validated against a complete
+taped-out chip.
+Fully digital ML processors, in contrast, have been the
+subject of many system-level design space explorations: dedicated DSE frameworks supporting hardware-mapping cooptimization have emerged over the last years [9], [24],
+[25], with different levels of supported parametrization of
+the hardware architecture space. Yet, so far none of these
+frameworks have been deployed to extensively assess AIMC
+as well as DIMC topologies, due to a lack of dedicated cost
+modeling efforts. To address this gap, we present an analytical
+IMC cost model in the following section.
+III. U NIFIED ANALYTICAL IMC PERFORMANCE MODEL
+The fundamental structure of an IMC accelerator is constant
+across different implementations: a computational memory
+array with an interface to read and write data from. However,
+large variability exists in the implementation details of each
+work. While it is a daunting task to develop an accurate unified
+analytical cost model that matches all designs from literature,
+it is possible to create a model within an acceptable mismatch
+for system-level evaluation, enabling us to identify the main
+bottlenecks and the benefits of various architectural choices.
+To describe the granularity of the computational parallelization options in the IMC array, the presented model represents
+the array along a set of dimensions, as depicted in Fig. 2: Di
+refers to the parallelism of the input activation vector, while
+Do refers to the parallelism of the output vector generated after
+each MVM operation. Each element along Do is further split
+into separate cells based on the weight bitwidth Bw ; similarly,
+each element along the Di dimension corresponds to M cells,
+both in AIMC [3], [27], [28] and DIMC [6]–[8]. Moreover,
+the MVM operation can be temporally split in multiple cycles,
+in which Bcycle bits are processed per cycle per input.
+To estimate area, energy and delay for both DIMC and
+AIMC macros, a unified analytical cost model is developed
+for these architectures, to enable performance evaluation at
+the system level for different design points. The model takes
+into account memory instances, analog peripherals, and digital
+peripherals for the energy, area and latency estimation, while
+the cost of each component is shown in Table I, together
+with its calibration parameters for 28nm. The cost models for
+AIMC and DIMC for each of these components will be further
+detailed in the next subsections.
+A. Memory instances: IMC cell array and registers
+Memory instances refer to the set of storage elements in
+the IMC macro: these are the weight memory cells in the
+computational array, as well as the input and output registers.
+Assuming that the weight memory elements in the macro are
+based on 6T SRAM cells, CACTI [26] is utilized to estimate
+the area, delay and energy per access of the IMC cell array.
+The CACTI model, based on an RC model, is further validated
+with synthesized memory macros via a memory compiler.
+
+=== page 4 ===
+TABLE I
+C OST SUMMARY FOR COMPONENTS IN A SINGLE IMC MACRO
+
+Agate
+AFA · #F A
+(AFA + ADFF )Bacc
+
+0
+
+ADFF
+
+S[0]
+
+S[3]
+Cout
+
+FA
+
+NAND2
+
+NAND2
+
+Cout
+
+E
+
+h
+
+NAND2
+
+Di
+
+Badds_in+1
+
+Badds_in+log2Di
+
+F
+G
+H
+
+Fig. 5. Badds in -bit adder tree topology for A/DIMC (right). Badds in =
+ADCres for AIMC and Badds in = Bw for bit-serial DIMC. The structure
+of each node (single-stage adder) assuming RCA type is shown in the top
+left. The gate-level circuit for 1b FA is shown in the bottom left.
+
+Ccell
+tset
+
+S[0]
+
+XOR2
+
+Cin
+
+Di
+...
+
+bitline
+
+XOR2
+
+D
+
+at
+
+A[0]
+B[0]
+
+Vin
+
+Ccell
+
+B
+C
+
+tp
+
+R
+Ccell
+
+Vin
+
+Value
+1.206
+50 fF
+2
+6Cgate VDD
+4.8Dgate
+2Dgate
+7.8Agate
+2
+3Cgate VDD
+6Agate
+
+rs
+
+Vin
+
+Parameter
+k6
+k7
+EFA
+DFAS
+DFAC
+AFA
+EDFF
+ADFF
+
+...
+
+Value
+0.7 fF
+47.8 ps
+0.614 µm2
+100 fF [1]
+1 aF [1]
+6.53 ps
+640 ps
+0.0369
+
+Badds_in
+A
+
+wo
+
+TABLE II
+PARAMETERS IN PROPOSED COST MODEL @ 0.9V, 28 NM
+Parameter
+Cgate
+Dgate
+Agate
+k1
+k2
+k3
+k4
+k5
+
+–
+–
+
+Bi , Bw , Bo : input, weight, output precision in bit
+ADCres , DACres : ADC resolution, DAC resolution
+EFA , DFAS , DFAC , AFA , #FA: energy/sum-delay/carry-delay/area of FA,
+number of FA in an adder tree
+
+FA
+
+EDFF
+
+Dgate
+DFAS log2 Di + DFAC Badds out
+DFAC (Bacc − Badds out )
+
+Cin
+
+1b register
+
+Cgate , Dgate , Agate : capacitance, delay, area of single NAND2 gate
+VDD , Di , Do : supply voltage, size of input dimension, output dimension
+Badds in , Badds out , Bacc : input precision of an adder tree, output precision
+of an adder tree, output precision of an accumulator
+
+10−k5 ADCres +k6 · 2ADCres
+0
+
+–
+–
+
+A[0]
+B[0]
+
+2
+0.5Cgate VDD
+EFA · #FA
+(EFA + EDFF )Bacc
+
+S[1]
+
+1b multiplier
+Adder tree
+Accumulator
+
+(k3 · Di + k4 )ADCres
+0
+
+FA
+
+–
+–
+
+DIMC
+
+CACTI [26]
+
+A[1]
+B[1]
+
+2
+(k1 ADCres + k2 4ADCres )VDD
+2
+k7 · DACres VDD
+
+S[2]
+
+ADC
+DAC
+
+0
+
+FA
+
+0
+
+Area (µm2 )
+AIMC
+
+DIMC
+
+A[2]
+B[2]
+
+2 B ·D ·D
+0.5Cgate VDD
+w
+o
+i
+
+Cell array
+
+Delay
+AIMC
+
+DIMC
+
+FA
+
+Energy
+AIMC
+
+A[3]
+B[3]
+
+Component
+
+ADC
+
+tconv
+
+Fig. 4. Equivalent worst case scenario for ADC in AIMC macro. The
+transistor or transmission gate in each IMC cell connected to the bitline can
+be treated as a resistor and a capacitor. The worst case happens when only
+one cell is charging or discharging all capacitors.
+
+However the CACTI model does not correctly cover the
+MVM computation in IMCs since multiple wordlines activate
+simultaneously for AIMC and there is no significant bitline
+activity for DIMC during the computation, behaviours that
+do not correspond to normal SRAM operation. Given this, a
+separate model is adopted for IMC MVM array computation.
+For AIMC, assuming that energy is mostly consumed in the
+charge and discharge phases of the bitlines, the total energy
+cost on bitline switching (Ecell array ) is expressed as:
+2
+Ecell array = Ccell VDD
+Bw · Di · Do
+
+(1)
+
+Two transistors seen by the bitline for each bitcell, Ccell
+is normalized to 0.5Cgate , where Cgate represents the gate
+capacitance of a four-transistor NAND2/NOR2 gate. In DIMC,
+with its very short bitlines, this cost is negligible.
+The delay of the signal traversal on the bitline is merged
+
+into the ADC delay for AIMC. As DIMC has negligible delay
+on the local bitline, the delay cost attached to the cell array can
+be approximated to 0 for the MAC computation. The energy
+and area cost of input and output registers are modeled as D
+Flip-Flop (DFF) standard cells, using the relative cost ratio of
+a DFF to a NAND2 gate (Table I). The clock-to-Q delay DDFF
+is negligible compared to other peripheral contributions.
+B. Analog peripherals: ADCs and DACs
+AIMC requires DACs and ADCs to interface with the
+computational array to initiate/terminate the array operation.
+Their contributions are described in this section.
+1) ADC model: The largest cost in AIMC designs are
+usually associated with ADCs and is strongly dependent on
+the ADC resolution. Following [1] and assuming uncorrelated
+and uniformly distributed activation and weights, the required
+ADC resolution is determined by the activation precision Bi
+and the amount of accumulation terms Di :
+ADCres = Bi + log2 (k · FS ·
+
+p
+
+Di )
+
+(2)
+
+with FS= 0.5 (as in [1]) representing the ADC’s normalized
+full-scale range occupying 50% of the entire voltage range; the
+empirical constant k = 2 represents the ADC noise deviation
+
+=== page 5 ===
+at the output to be k times smaller than the accumulation
+error variance on the bitline. Using the resolution of Eq. (2) an
+energy, latency, and area model is developed assuming a SARADC topology, the most common ADC topology deployed for
+AIMC designs thanks to its small area footprint and low energy
+consumption. The energy model, based on [1], is defined as:
+2
+EADC = (k1 ADCres + k2 4ADCres )VDD
+
+(3)
+
+with constants k1 and k2 obtained by fitting to the most energy
+efficient ADC designs, dominated by SAR-ADCs [29]. The
+ADC delay cost is expressed as the sum of 1) the settling
+time of the analog value on the bitline tset and 2) the time
+required for the ADC conversion tconv . The first contribution
+can be described as the delay of a parallel RC network at the
+ADC input node (Fig. 4). The time required for the signal on
+the bitline to settle within 1 LSB of the ADC is given in Eq.
+(4), with the RC time constant τ = Di · Rcell Ccell . The model
+assumes the worst case scenario for tset , where only one cell
+is active on the entire bitline.
+VDD (1 − e−tset /τ ) < VDD (1/2ADCres )
+⇒ tset > 0.69τ ADCres
+
+(5)
+
+(6)
+
+Based on [15], the ADC area is estimated as:
+AADC = 10−k5 ADCres +k6 · 2ADCres
+
+(7)
+
+2) DAC model: The delay and area costs of the DACs are
+neglected, as they have relatively small latency overheads and
+area [2]. The DAC energy cost is modeled using Eq. (8), where
+k7 is a technology constant that represents the capacitance
+associated with each bit conversion.
+2
+EDAC = k7 DACres VDD
+
+Di
+(Badds in + n − 1) n
+2
+n=1
+X
+
+(9)
+
+The delay of the adder tree Dadds depends on the number of
+FA on the critical path, as shown in Fig. 5. This component
+can be modeled as in Eq. (10), where the output precision of
+the adder tree Badds out = Badds in + log2 Di .
+Dadds = DFAS log2 Di + DFAC Badds out
+
+By combining Eq. (4) and Eq. (5), the ADC delay can be
+modeled in Eq. (6), where k3 = 0.69Rcell Ccell reflects the
+impact of the number of cells attached to the bitline and k4 =
+tconv/bit represents the intrinsic conversion delay per bit for
+SAR ADC. Table I lists the used parameters k, fitted for 28nm
+technology.
+DADC = (k3 · Di + k4 ) · ADCres
+
+log2 Di
+
+#FA =
+
+(4)
+
+The second contribution, the time required for the ADC
+conversion, is defined as in Eq. (5), where the delay for a
+single bit conversion tconv/bit is a constant that depends on the
+technology node.
+tconv = tconv/bit · ADCres
+
+2) Digital accumulation: Both AIMC and DIMC use adder
+trees to combine digital outputs and get eventually partial sums
+across separate cycles. In the proposed model, these partial
+sum adder trees and accumulators are modeled assuming
+ripple-carry adders (RCA) (Fig. 5). The input precision Badds in
+equals weight resolution Bw , ADCres for DIMC, AIMC respectively (Fig. 2). The cost of the adder trees is expressed as
+a function of its basic unit, the Full Adder (FA). The circuit of
+a standard FA is shown in Fig. 5, consisting of three NAND2
+gates and two XOR2 gates, with its cost computed as listed
+in Table I. The total energy and area of an adder tree depends
+on the number of FA, which can be expressed as below:
+
+(8)
+
+C. Digital peripherals
+1) Digital multiplication: In both AIMC and DIMC, the
+multiplication operation is modeled at the cell level as (one
+or more) 1-bit operation(s) using a NAND gate between the
+1-bit input and 1-bit weight stored in the cell. Hence, the cost
+of such 1-bit multiplier is equivalent to the cost of a single
+gate, as listed in Table I.
+
+(10)
+
+Finally, the cost of the accumulator can be derived from
+the cost of the FA and a group of DFFs. The costs of the
+RCA-based adder trees and accumulators for both AIMC and
+DIMC macros are all summarized in Table I.
+IV. M ACRO - LEVEL MODEL VALIDATION
+The model presented in Section III is validated against
+the area, delay, and energy consumption reported of a collection of taped-out IMC chips for both AIMC and DIMC
+architectures (Fig. 6). To decouple the impact of the chosen
+technology node from the performance and efficiency metrics,
+only published IMC implementations in 22nm and 28nm
+technology, have been considered. Table III lists the considered
+implementations, together with their hardware configuration.
+The following paragraphs will analyze the validation results
+in more detail.
+A. AIMC macro-level model validation
+The validation of the model against 22-28nm AIMC designs
+was carried out on [2]–[4]. The IMC arrays of these works all
+consist of 6T SRAM cells followed by SAR ADCs.
+For the area validation the model shows a good match, except for [2], which extensively uses repeaters in their memory
+banks. This results in a significantly larger(4.5×) SRAM array
+compared to the CACTI estimation. With the extracted Eq. (6),
+the delay validations match well. And finally, for the energy
+estimation a maximum mismatch of 11% is achieved, except
+for [3], which is believed to be caused by difference in sparsity
+used in model and in their chip measurements. Unfortunately,
+the used sparsity is not reported in [3].
+
+=== page 6 ===
+[2]
+
+[5]
+
+[6]
+
+[8]
+
+DACs
+
+[2]
+
+[3]
+
+[4]
+
+[5]
+
+[6]
+
+[7]
+
+7.3 fJ/MAC
+
+102.6 fJ/MAC
+
+91 fJ/MAC
+
+54.6 fJ/MAC
+
+89% 703% 101% 101% 139% 98% 1597%
+107.0 fJ/MAC
+
+2.5 ns
+
+[7]
+
+100%
+80%
+60%
+40%
+20%
+
+133 fJ/MAC
+
+95%
+
+ADCs
+
+1.9 fJ/MAC
+
+98%
+
+pipelined
+
+3 ns
+
+[4]
+
+pipelined
+
+[3]
+
+5.1 ns
+
+2.8 ns
+
+[8]
+
+7.2 ns
+
+[7]
+
+100% 105% 102% 83%
+
+5.5 ns
+
+131%
+
+pipelined
+
+[6]
+
+100%
+80%
+60%
+40%
+20%
+
+44.4 ns
+
+[5]
+
+Normalized delay
+
+[4]
+
+0.269 mm2
+
+0.941 mm2
+
+[3]
+
+0.146 mm2
+
+1.88 mm2
+
+[2]
+
+79% 100%
+0.03 mm2
+
+0.468 mm2
+
+51% 98% 104% 94%
+1.943 mm2
+
+Normalized area
+
+100%
+80%
+60%
+40%
+20%
+
+regs for pipeline
+
+cell array
+
+123%
+
+Normalized energy
+
+accumulators
+
+adder trees
+
+multipliers
+
+[8]
+
+- [2]: reported area includes repeaters, decap, et.al.
+- [2], [4]: area and energy estimation has been linearly scaled from 28nm to 22nm.
+- [3], [6], [8]: pipeline inserted before or in the middle of the adder tree, which decreases the delay by 0.5×.
+- 50% input toggle rate and 50% weight sparsity are assumed in model validation. These values are clearly reported in [2], [4], [5], [7], yet sparsity is
+not reported in other papers.
+Fig. 6. Macro-level validation of proposed IMC cost model against 28nm/22nm implementations. Gray bars: published metrics; Colored bar: model estimation.
+
+TABLE III
+H ARDWARE CONFIGURATIONS OF THE VALIDATION WORKS
+Index
+
+IMC
+
+Bi /Bw /Bcycle
+
+Di
+
+Do
+
+M
+
+#macros
+
+[2]
+
+AIMC
+
+7/2/7
+
+1024
+
+512
+
+1
+
+1
+
+[3]
+
+AIMC
+
+8/8/2
+
+16
+
+12
+
+32
+
+1
+
+[4]
+
+AIMC
+
+8/8/1
+
+64
+
+256
+
+1
+
+8
+
+[5]
+
+DIMC
+
+8/8/2
+
+32
+
+6
+
+1
+
+64
+
+[6]
+
+DIMC
+
+8/8/1
+
+32
+
+1
+
+16
+
+2
+
+[7]
+
+DIMC
+
+8/8/2
+
+128
+
+8
+
+8
+
+8
+
+[8]
+
+DIMC
+
+8/8/1
+
+128
+
+8
+
+2
+
+4
+
+B. DIMC macro-level model validation
+The validation of the model against DIMC designs was
+carried out on [5]–[8], which are all implemented in 28nm
+technology with 6T SRAM cells and all employ the digital addition operation with conventional RCA structures. Although
+different configurations are adopted in these implementations
+(i.e., different M and #macros), the model shows a good
+area estimation for [5] and [7], while it underestimates [6],
+which contains additional logic to support adder tree configurability, and overestimate [8], which introduces approximate
+multipliers for increased efficiency. In terms of delay, the
+model matches well, with some mismatch for [5], due to
+delay in its unmodeled Booth Encoder, and for [6], due to its
+configurable adder tree topology. For the energy validation, the
+model estimation excellently fits the design of [5], [7] which
+clearly reported their sparsity in the publication. [6], [8] did
+not report the used sparsity in their measurements. Our 50%
+sparsity assumption seems to be significantly off from their
+unreported measurement settings.
+Although mismatches can be observed whenever special approximate computing or extreme sparsity techniques are used,
+the mismatch is limited to 20% for standard implementations.
+It can therefore serve as an excellent vehicle to assess the
+impact of various architectural parameters on system-level
+performance under peak/actual workloads in the next section.
+V. S YSTEM - LEVEL BENCHMARKING FOR IMC
+The developed IMC analytical cost model can now be used
+to perform a set of architecture explorations to aid in design
+
+decisions. In this section, this will be pursued in the context
+of IMC architectures for edge devices. The focus will first be
+at macro level, where peak IMC efficiency will be assessed,
+together with its scalability with array dimensions. This will be
+contrasted with peak system performance – i.e. also taking data
+transfers and activation memory area into account – causing a
+shift in the optimal hardware configurations (Subsection V.A).
+In the second subsection, actual workload system performance
+will be analyzed on MLPerf Tiny benchmark models [30],
+studying how it differs from peak system performance across
+various workloads and the resulting optimal hardware configurations (Subsection V.B). For these system-level assessments,
+the derived cost models are integrated into a modified version
+of the system-level design space exploration tool ZigZag [9].
+We perform this study based on a single IMC macro as shown
+in Fig. 2, with M = 1 and assuming a 256 KB on-chip
+cache, which is equipped with a bandwidth fitting with IMC
+dimension and whose cost is estimated by CACTI [26]. All
+assessments are carried out assuming INT8 operations, being
+the preferred quantization scheme in MLPerf Tiny models [30]
+with zero sparsity. Bcycle is fixed to 2 and 1 for AIMC and
+DIMC, respectively, in light of their popularity in literature.
+A. Peak performance assessment for A/DIMC designs
+Peak performance is the starting metric for evaluation as it
+provides a roofline for the computational capabilities of the
+design. In literature this is often the preferred way to quantify
+the efficiency of an IMC architecture, even though it does not
+provide a clear overview of the actual workload efficiency
+of the design [31] (see Subsection V.B). All assessments
+in this section assume dense GeMM workloads filling the
+complete array with infinite weight reuse (weights remain
+always stationary).
+a) Macro efficiency: Fig.7 shows the peak macro performance (excluding the cost of on-chip memories and off-chip
+DRAM) in function of IMC array size. The peak energy efficiency of AIMC is clearly depending on the amortization of its
+peripherals. An order of magnitude improvement is achieved
+by going from a 32×32 array to a 1024×1024 array, thanks
+to the reduction of the contribution of ADC/DAC conversions
+(Fig.8.a). However, to preserve SNR at the analog output
+for these larger array sizes, ADCs with higher resolution
+
+=== page 7 ===
+(a)
+(b)
+IMC size (#rows: Di, #columns: Do⋅Bw)
+Fig. 7. Peak macro performance and peak system performance with scaling
+IMC sizes
+
+Fig. 8. Peak system cost breakdown with scaling IMC sizes
+FC
+
+are required, which in turn require longer conversion times
+and larger area overheads. This leads to degraded throughput
+and area, which affect the computational density in terms of
+TOP/s/mm2 (Fig.8.b). DIMC energy efficiency, on the other
+hand, does not benefit from larger array sizes, since the cost
+of the adder trees and multipliers scale proportionally with
+the array size. While DIMC with a smaller size (≤ 64 × 64)
+outperforms AIMC in terms of TOP/s/W this is no longer true
+for larger IMC arrays, in which the ADC overhead is better
+amortized. The peak macro computational density for DIMC
+marginally decrease with array size due to the logarithmic
+increase of the depth of the adder trees. In general, DIMC
+consistently outperforms AIMC in terms of computational
+density, as the delay of the ADCs is worse than that of digital
+adder trees, enabling it to operate at a higher clock speed.
+b) System efficiency: Fig.8 displays, next the the peak
+macro efficiency, also the peak system efficiency, including
+the cost of feeding data to/from on-chip feature memories and
+off-chip DRAM. For the 32×32 scenario, the system energy
+efficiency is at least 2× below the macro efficiency. The gap
+between system and macro efficiency, however, diminishes
+when the array size increases thanks to the memory access cost
+amortization from multicasting the input and output operands
+across a larger array. Computational intensity (TOP/s/mm2 )
+is even more affected: for smaller IMC sizes, the cache area
+dominates the total system area and reduces the TOP/s/mm2
+by more than one order of magnitude. These trends can
+also clearly be observed from the energy, delay and area
+breakdowns at system level in Fig. 8.
+The takeaway might seem that larger arrays lead to overall
+better system efficiency. Yet, a massive array is useless if only
+a small portion of it is effectively utilized by actual workloads,
+since it leads to the nullification of any peripheral amortization.
+It is therefore necessary to study the efficiency under actual
+workload scenarios, as done in the next subsection.
+
+Fig. 9. Operator breakdown of MLPerf Tiny [30] benchmark models
+
+nice range of different layer topologies (Fig. 9).
+While for peak performance the main concern is to amortize the overhead of the peripherals, here the efficiency will
+strongly depend on 1) the effective workload utilization of
+the IMC array; 2) the amount of spatial reuse (multicasting)
+of the activations; and 3) the cost of loading the weights
+into the weight stationary array (from DRAM @3.7 pJ/bit
+[32]), which is no longer neglected in this workload study.
+All these factors depend on the applied spatial and temporal
+mapping. The ZigZag mapper [9] is utilized to optimize the
+deployed dataflow for each assessed architecture and workload
+combinations.
+To dissect the actual workload efficiencies, the assessment
+starts by evaluating how individual layer types impact hard-
+
+B. Actual workload performance for A/DIMC
+Efficiency and performance metrics are estimated at system
+level on the MLPerf Tiny benchmark models, which exhibit a
+
+Fig. 10. Single layer system performance with scaling IMC sizes
+
+=== page 8 ===
+TABLE IV
+L AYER PARAMETERS
+Type (source)
+fc (AutoEncoder)
+pw (MobileNet v1)
+dw (DS-CNN)
+conv (ResNet8)
+
+G
+1
+1
+64
+1
+
+OX
+1
+12
+25
+32
+
+OY
+1
+12
+5
+32
+
+K
+128
+64
+1
+16
+
+C
+640
+64
+1
+16
+
+FX
+1
+1
+3
+3
+
+FY
+1
+1
+3
+3
+
+(a)
+(a)
+
+(b)
+
+(b)
+
+Fig. 12. Workload system performance with scaling IMC sizes
+
+(c)
+
+(d)
+
+IMC size (#rows: Di, #columns: Do⋅Bw)
+Fig. 11. Single layer energy breakdown with scaling IMC sizes
+
+ware efficiency. Fig. 10 compares the energy and throughput
+efficiencies of various layer types, specified in Table IV,
+against peak system efficiency. Energy efficiency is higher
+for those layers that exhibit layer shapes that can best be
+spatially unrolled along the array dimensions and do not
+require frequent weight updates. This is the case for pointwise
+(pw) and convolutional layers (conv). Depthwise (dw) and
+fully connected (fc) layers, in contrast, are less well suited
+for IMC operation, as visualized in the energy breakdowns of
+Fig. 11: fc layers lack weight reuse, requiring a costly weight
+update after each MVM operation. dw layers operate with a
+single kernel on a single input channel, resulting in limited
+unrolling possibilities, even when assuming OX unrolling
+along the Do dimension [33]. To identify the most energy
+efficient array size on a layer-basis, we can look at the in/out
+unrolling ratio, which indicates the fraction of the spatial
+reuse of the in/outputs of a layer, compared to the maximum
+reuse possible for that layer. This is visualized in Fig. 11,
+clearly illustrating the most efficient configuration as the first
+point where the maximum ratio is achieved. Larger array
+sizes exceed the requirement of the workload, increasing the
+fJ/MAC, Tclk and area without increasing effective throughput.
+Finally, the evaluation is broadened to cover entire networks
+from the MLPerf Tiny suite, as shown in Fig. 12. The results
+reflect the previous conclusions: those models that majorly
+consist of conv and pw layers perform better than those
+dominated by dw and fc layers. A distribution of the workload
+
+types for each model can be found in Fig. 9. Resnet8, entirely
+consisting of convolutional layers, has the highest weight
+reuse opportunity and therefore achieves a TOP/s/W closest
+to the peak TOP/s/W. The fc-heavy Autoencoder suffers from
+frequent weight reloading, while MobileNet and DS-CNN
+suffer from severe macro under-utilization for big macro sizes.
+Ultimately, a geometric mean of the performance across all 4
+MLPerf Tiny models is provided. Compared to AIMC, DIMC
+has a higher workload TOP/s/mm2 on average, while its energy
+efficiency is similar at the system level.
+VI. C ONCLUSION
+The wide diversity in AIMC and DIMC architectures and
+silicon technologies published in literature makes it hard to
+fairly assess their optimal configurations and relative strengths.
+To this end, this paper proposed a modeling approach for
+SRAM-based IMC and conducted a comprehensive performance evaluation across various array sizes. The performance
+was assessed at macro level and at system level, both for
+peak and actual workloads. Though sparsity impact on the
+energy is not considered, we clearly show the importance of
+evaluating IMC system-level performance on real workloads,
+as higher peak performance does not always lead to higher
+effective performance. Our model allows further quantitative
+comparisons across a broad set of AIMC and DIMC processor system architectures, aiding designers in making more
+informed decisions during the early phase of IMC architecture
+selection for their applications. The derived cost models and
+system level benchmarking framework are provided open
+source at https://github.com/KULeuven-MICAS/zigzag-imc.
+VII. ACKNOWLEDGEMENTS
+We want to thank Boris Murmann for his suggestions on
+AIMC modeling. This project has been partly funded by the
+European Research Council (ERC) under grant agreement No.
+101088865, the European Union’s Horizon 2020 programme
+under grant agreement No. 101070374, the Flanders AI Research Program and KU Leuven.
+
+=== page 9 ===
+R EFERENCES
+[1] B. Murmann, “Mixed-signal computing for deep neural network inference,” IEEE Transactions on Very Large Scale Integration (VLSI)
+Systems, vol. 29, no. 1, pp. 3–13, 2021.
+[2] I. A. Papistas, S. Cosemans, B. Rooseleer, J. Doevenspeck, M.-H. Na,
+A. Mallik, P. Debacker, and D. Verkest, “A 22 nm, 1540 top/s/w,
+12.1 top/s/mm2 in-memory analog matrix-vector-multiplier for dnn
+acceleration,” in 2021 IEEE Custom Integrated Circuits Conference
+(CICC), 2021, pp. 1–2.
+[3] J.-W. Su, Y.-C. Chou, R. Liu, T.-W. Liu, P.-J. Lu, P.-C. Wu, Y.-L. Chung,
+L.-Y. Hong, J.-S. Ren, T. Pan, C.-J. Jhang, W.-H. Huang, C.-H. Chien,
+P.-I. Mei, S.-H. Li, S.-S. Sheu, S.-C. Chang, W.-C. Lo, C.-I. Wu, X. Si,
+C.-C. Lo, R.-S. Liu, C.-C. Hsieh, K.-T. Tang, and M.-F. Chang, “A 8-bprecision 6t sram computing-in-memory macro using segmented-bitline
+charge-sharing scheme for ai edge chips,” IEEE Journal of Solid-State
+Circuits, vol. 58, no. 3, pp. 877–892, 2023.
+[4] P. Chen, M. Wu, W. Zhao, J. Cui, Z. Wang, Y. Zhang, Q. Wang, J. Ru,
+L. Shen, T. Jia, Y. Ma, L. Ye, and R. Huang, “7.8 a 22nm delta-sigma
+computing-in-memory (δσcim) sram macro with near-zero-mean outputs
+and lsb-first adcs achieving 21.38tops/w for 8b-mac edge ai processing,”
+in 2023 IEEE International Solid- State Circuits Conference (ISSCC),
+2023, pp. 140–142.
+[5] F. Tu, Y. Wang, Z. Wu, L. Liang, Y. Ding, B. Kim, L. Liu, S. Wei,
+Y. Xie, and S. Yin, “A 28nm 29.2tflops/w bf16 and 36.5tops/w int8
+reconfigurable digital cim processor with unified fp/int pipeline and
+bitwise in-memory booth multiplication for cloud deep learning acceleration,” in 2022 IEEE International Solid- State Circuits Conference
+(ISSCC), vol. 65, 2022, pp. 1–3.
+[6] B. Yan, J.-L. Hsu, P.-C. Yu, C.-C. Lee, Y. Zhang, W. Yue, G. Mei,
+Y. Yang, Y. Yang, H. Li, Y. Chen, and R. Huang, “A 1.041-mb/mm2
+27.38-tops/w signed-int8 dynamic-logic-based adc-less sram computein-memory macro in 28nm with reconfigurable bitwise operation for ai
+and embedded applications,” in 2022 IEEE International Solid- State
+Circuits Conference (ISSCC), vol. 65, 2022, pp. 188–190.
+[7] A. Guo, X. Si, X. Chen, F. Dong, X. Pu, D. Li, Y. Zhou, L. Ren,
+Y. Xue, X. Dong, H. Gao, Y. Zhang, J. Zhang, Y. Kong, T. Xiong,
+B. Wang, H. Cai, W. Shan, and J. Yang, “A 28nm 64-kb 31.6tflops/w digital-domain floating-point-computing-unit and double-bit 6tsram computing-in-memory macro for floating-point cnns,” in 2023
+IEEE International Solid- State Circuits Conference (ISSCC), 2023, pp.
+128–130.
+[8] J. Yue, C. He, Z. Wang, Z. Cong, Y. He, M. Zhou, W. Sun, X. Li,
+C. Dou, F. Zhang, H. Yang, Y. Liu, and M. Liu, “A 28nm 16.9300tops/w computing-in-memory processor supporting floating-point nn
+inference/training with intensive-cim sparse-digital architecture,” in 2023
+IEEE International Solid- State Circuits Conference (ISSCC), 2023, pp.
+1–3.
+[9] L. Mei, P. Houshmand, V. Jain, S. Giraldo, and M. Verhelst, “Zigzag:
+Enlarging joint architecture-mapping design space exploration for dnn
+accelerators,” IEEE Transactions on Computers, vol. 70, no. 8, pp. 1160–
+1174, Aug 2021.
+[10] N. R. Shanbhag and S. K. Roy, “Comprehending in-memory computing
+trends via proper benchmarking,” in 2022 IEEE Custom Integrated
+Circuits Conference (CICC), 2022, pp. 01–07.
+[11] R. Sehgal and J. P. Kulkarni, “Trends in analog and digital intensive
+compute-in-sram designs,” in 2021 IEEE 3rd International Conference
+on Artificial Intelligence Circuits and Systems (AICAS), 2021, pp. 1–4.
+[12] G. W. Burr, S. Lim, B. Murmann, R. Venkatesan, and M. Verhelst,
+“Fair and comprehensive benchmarking of machine learning processing
+chips,” IEEE Design & Test, vol. 39, no. 3, pp. 18–27, 2022.
+[13] S. Rai, M. Liu, A. Gebregiorgis, D. Bhattacharjee, K. Chakrabarty,
+S. Hamdioui, A. Chattopadhyay, J. Trommer, and A. Kumar, “Perspectives on emerging computation-in-memory paradigms,” in 2021 Design,
+Automation & Test in Europe Conference & Exhibition (DATE), 2021,
+pp. 1925–1934.
+[14] B. Taylor, Q. Zheng, Z. Li, S. Li, and Y. Chen, “Processing-in-memory
+technology for machine learning: From basic to asic,” IEEE Transactions
+on Circuits and Systems II: Express Briefs, vol. 69, no. 6, pp. 2598–
+2603, 2022.
+[15] H. Kim, Y. Kim, S. Ryu, and J.-J. Kim, “Algorithm/hardware co-design
+for in-memory neural network computing with minimal peripheral circuit overhead,” in 2020 57th ACM/IEEE Design Automation Conference
+(DAC), 2020, pp. 1–6.
+
+[16] B. Patrick, R. Guy, R. Nir, P. Bruno, H. Edward, and C. Yiran,
+“Analog, in-memory compute architectures for artificial intelligence,”
+cs, vol. cs/2302.06417, 2023, arXiv: 2302.06417. [Online]. Available:
+https://arxiv.org/abs/2302.06417
+[17] G. Fernando, B. Ali, V. Kanishkan, C. Henk, and D. Shidhartha, “Saca:
+System-level analog cim accelerators simulation framework: Accurate
+simulation of non-ideal components,” in 2022 37th Conference on
+Design of Circuits and Integrated Circuits (DCIS), 2022, pp. 01–06.
+[18] D. Bhattacharjee, N. Laubeuf, S. Cosemans, I. Papistas, A. Maliik,
+P. Debacker, M. H. Na, and D. Verkest, “Design-technology space
+exploration for energy efficient aimc-based inference acceleration,” in
+2021 IEEE International Symposium on Circuits and Systems (ISCAS),
+2021, pp. 1–5.
+[19] S. Spetalnick and A. Raychowdhury, “A practical design-space analysis
+of compute-in-memory with sram,” IEEE Transactions on Circuits and
+Systems I: Regular Papers, vol. 69, no. 4, pp. 1466–1479, 2022.
+[20] C.-J. Jhang, C.-X. Xue, J.-M. Hung, F.-C. Chang, and M.-F. Chang,
+“Challenges and trends of sram-based computing-in-memory for ai edge
+devices,” IEEE Transactions on Circuits and Systems I: Regular Papers,
+vol. 68, no. 5, pp. 1773–1786, 2021.
+[21] U. Saxena, I. Chakraborty, and K. Roy, “Towards adc-less compute-inmemory accelerators for energy efficient deep learning,” in 2022 Design,
+Automation & Test in Europe Conference & Exhibition (DATE), 2022,
+pp. 624–627.
+[22] S. Yang, D. Bhattacharjee, V. B. Y. Kumar, S. Chatterjee, S. De,
+P. Debacker, D. Verkest, A. Mallik, and F. Catthoor, “Aero: Design
+space exploration framework for resource-constrained cnn mapping on
+tile-based accelerators,” IEEE Journal on Emerging and Selected Topics
+in Circuits and Systems, vol. 12, no. 2, pp. 508–521, 2022.
+[23] X. Peng, R. Liu, and S. Yu, “Optimizing weight mapping and data flow
+for convolutional neural networks on rram based processing-in-memory
+architecture,” in 2019 IEEE International Symposium on Circuits and
+Systems (ISCAS), 2019, pp. 1–5.
+[24] A. Parashar, P. Raina, Y. S. Shao, Y.-H. Chen, V. A. Ying, A. Mukkara,
+R. Venkatesan, B. Khailany, S. W. Keckler, and J. Emer, “Timeloop:
+A systematic approach to dnn accelerator evaluation,” in 2019 IEEE
+International Symposium on Performance Analysis of Systems and
+Software (ISPASS), 2019, pp. 304–315.
+[25] H. Kwon, P. Chatarasi, V. Sarkar, T. Krishna, M. Pellauer, and
+A. Parashar, “Maestro: A data-centric approach to understand reuse,
+performance, and hardware cost of dnn mappings,” IEEE Micro, vol. 40,
+no. 3, pp. 20–29, 2020.
+[26] R. Balasubramonian, A. B. Kahng, N. Muralimanohar, A. Shafiee,
+and V. Srinivas, “Cacti 7: New tools for interconnect exploration in
+innovative off-chip memories,” ACM Trans. Archit. Code Optim., vol. 14,
+no. 2, jun 2017. [Online]. Available: https://doi.org/10.1145/3085572
+[27] P.-C. Wu, J.-W. Su, Y.-L. Chung, L.-Y. Hong, J.-S. Ren, F.-C. Chang,
+Y. Wu, H.-Y. Chen, C.-H. Lin, H.-M. Hsiao, S.-H. Li, S.-S. Sheu, S.-C.
+Chang, W.-C. Lo, C.-C. Lo, R.-S. Liu, C.-C. Hsieh, K.-T. Tang, C.-I. Wu,
+and M.-F. Chang, “A 28nm 1mb time-domain computing-in-memory 6tsram macro with a 6.6ns latency, 1241gops and 37.01tops/w for 8b-mac
+operations for edge-ai devices,” in 2022 IEEE International Solid- State
+Circuits Conference (ISSCC), vol. 65, 2022, pp. 1–3.
+[28] B. Wang, C. Xue, Z. Feng, Z. Zhang, H. Liu, L. Ren, X. Li, A. Yin,
+T. Xiong, Y. Xue, S. He, Y. Kong, Y. Zhou, A. Guo, X. Si, and
+J. Yang, “A 28nm horizontal-weight-shift and vertical-feature-shiftbased separate-wl 6t-sram computation-in-memory unit-macro for edge
+depthwise neural-networks,” in 2023 IEEE International Solid- State
+Circuits Conference (ISSCC), 2023, pp. 134–136.
+[29] B. Murmann, “Adc performance survey 1997-2022.” [Online]. Available:
+https://web.stanford.edu/∼murmann/adcsurvey.html
+[30] C. Banbury, V. J. Reddi, P. Torelli, J. Holleman, N. Jeffries, C. Kiraly,
+P. Montino, D. Kanter, S. Ahmed, D. Pau et al., “Mlperf tiny benchmark,” Proceedings of the Neural Information Processing Systems Track
+on Datasets and Benchmarks, 2021.
+[31] V. Sze, Y.-H. Chen, T.-J. Yang, and J. S. Emer, “How to evaluate deep
+neural network processors: Tops/w (alone) considered harmful,” IEEE
+Solid-State Circuits Magazine, vol. 12, no. 3, pp. 28–41, 2020.
+[32] “Memory energy,” https://my.eng.utah.edu/∼cs7810/pres/14-7810-02.
+pdf.
+[33] P. Houshmand, G. M. Sarda, V. Jain, K. Ueyoshi, I. A. Papistas, M. Shi,
+Q. Zheng, D. Bhattacharjee, A. Mallik, P. Debacker, D. Verkest, and
+M. Verhelst, “Diana: An end-to-end hybrid digital and analog neural
+
+=== page 10 ===
+network soc for the edge,” IEEE Journal of Solid-State Circuits, vol. 58,
+no. 1, pp. 203–215, 2023.

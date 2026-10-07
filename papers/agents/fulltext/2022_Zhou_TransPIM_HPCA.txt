@@ -1,0 +1,2793 @@
+# TransPIM: A Memory-based Acceleration via Software-Hardware Co-Design for Transformer
+# id: W4280496502 | key: 2022_Zhou_TransPIM_HPCA | HPCA 2022 | card: ../cards/2022_Zhou_TransPIM_HPCA.md
+
+
+=== page 1 ===
+2022 IEEE International Symposium on High-Performance Computer Architecture (HPCA) | 978-1-6654-2027-3/22/$31.00 ©2022 IEEE | DOI: 10.1109/HPCA53966.2022.00082
+
+*&&&*OUFSOBUJPOBM4ZNQPTJVNPO)JHI1FSGPSNBODF$PNQVUFS"SDIJUFDUVSF )1$"
+
+TransPIM: A Memory-based Acceleration via Software-Hardware Co-Design for
+Transformer
+Minxuan Zhou§ , Weihong Xu§ , Jaeyoung Kang, and Tajana Rosing
+Department of Computer Science and Engineering
+University of California, San Diego
+La Jolla, CA, United States
+{miz087, wexu, j5kang, tajana}@ucsd.edu
+
+Abstract—Transformer-based models are state-of-the-art for
+many machine learning (ML) tasks. Executing Transformer
+usually requires a long execution time due to the large memory
+footprint and the low data reuse rate, stressing the memory
+system while under-utilizing the computing resources. Memorybased processing technologies, including processing in-memory
+(PIM) and near-memory computing (NMC), are promising
+to accelerate Transformer since they provide high memory
+bandwidth utilization and extensive computation parallelism.
+However, the previous memory-based ML accelerators mainly
+target at optimizing dataﬂow and hardware for computeintensive ML models (e.g., CNNs), which do not ﬁt the
+memory-intensive characteristics of Transformer. In this work,
+we propose TransPIM, a memory-based acceleration for
+Transformer using software and hardware co-design. In the
+software-level, TransPIM adopts a token-based dataﬂow to
+avoid the expensive inter-layer data movements introduced by
+previous layer-based dataﬂow. In the hardware-level, TransPIM
+introduces lightweight modiﬁcations in the conventional high
+bandwidth memory (HBM) architecture to support PIMNMC hybrid processing and efﬁcient data communication for
+accelerating Transformer-based models. Our experiments show
+that TransPIM is 3.7× to 9.1× faster than existing memorybased acceleration. As compared to conventional accelerators,
+TransPIM is 22.1× to 114.9× faster than GPUs and provides
+2.0× more throughput than existing ASIC-based accelerators.
+Keywords-Processing in-memory; Near-data processing;
+Transformer; Domain-speciﬁc acceleration; Software-hardware
+co-design.
+
+I. I NTRODUCTION
+Attention mechanism has emerged as a powerful tool
+to model long-term dependencies in sequential data [41].
+Attention-based models, such as Transformer [41] and its
+enhanced variants [10], [36], have dramatically improved the
+accuracy of important machine learning tasks, like natural
+language processing [30], computer vision [6], [11], and
+video analysis [5]. However, these beneﬁts come at the cost
+of long execution time due to the large memory footprint and
+low computation to memory ratio. Existing CNN-oriented
+accelerators are designed for compute-intensive operations
+(e.g., convolution), making them sub-optimal for processing
+Transformers [15], [42]. To accelerate Transformer models,
+§ Equal contribution
+
+ 
+   
+%0*)1$"
+
+there have been several domain-speciﬁc accelerators, such
+as SpAtten [42] and A3 [15], that ofﬂoad either the key
+operation (i.e., self-attention) or the whole Transformer from
+conventional systems (e.g., GPU). However, these ASICbased accelerators still suffer from the constrained parallelism
+and limited off-chip memory bandwidth that bound the
+performance of acceleration.
+Memory-based acceleration, including processing inmemory (PIM) and near-memory computing (NMC), is
+promising to accelerate Transformer models as it supports
+extensive parallelism, low data movement cost, and scalable
+memory bandwidth [1], [12], [14], [18], [29], [47], [49],
+[50]. Although there have been many memory-based neural
+network accelerators [12], [17], [27], [29], [37], their dataﬂow
+and hardware are mainly optimized for compute-intensive
+CNNs, which may be incompatible with memory-intensive
+Transformers. Speciﬁcally, the dataﬂows of existing memorybased accelerators [12], [17], [29] are determined in a
+layer-level granularity, such that either utilize the whole
+memory to process one layer at a time [12], [29] or allocate
+mutually exclusive memory resources to different layers [17].
+Such layer-based dataﬂows introduce large non-compute
+overhead in Transformers because of the large amount of
+input data and weights that need to be loaded or transferred
+between layers. On the hardware side, Transformer’s complex
+operations (such as reduction and Softmax), which require
+both parallel computation and ﬁne-grained intra-memory
+data reorganization, would be the performance bottleneck for
+memory-based accelerators. Our experiments (Section II-C)
+show that the layer-based dataﬂows spend over 60% of
+execution time on data movements when accelerating a
+widely-used Transformer using an in-memory bit-serial
+accelerator on emerging high bandwidth memory (HBM).
+Furthermore, the reductions using bit-serial row-parallel PIM
+operations take around 30% of execution time, exhibiting a
+much lower compute throughput than other PIM arithmetic
+operations. The results show both software and hardware
+issues can signiﬁcantly limit the efﬁciency of memory-based
+Transformer acceleration.
+In this work, we propose TransPIM, a software-hardware
+co-design based on an emerging commodity memory, high
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 2 ===
+2XWSXW
+
+$GG 1RUP
+
+$GG 1RUP
+
+))1
+$WWHQWLRQ2XW
+
+(QFRGHU
+
+$GG 1RUP
+
+$GG 1RUP
+
+6HOI$WWHQWLRQ
+
+6î9
+
+(QF'HF
+$WWHQWLRQ
+
+6RIWPD[
+4î.7
+
+4
+
+Figure 1.
+
+.
+
+))1
+
+'HFRGHU
+
+bandwidth memory (HBM), that utilizes memory-based
+acceleration technology to accelerate Transformers. In the
+software, instead of allocating memory for different layers,
+TransPIM adopts a token-based dataﬂow that assigns memory
+resources for computations across different layers based on
+the input tokens. With the token-based dataﬂow, each memory
+bank processes and stores the intermediate results related to a
+speciﬁc set of tokens. By doing so, TransPIM can signiﬁcantly
+reduce the amount of data loaded or transferred across layers
+because the increased locality of intermediate data from
+different layers improves data reuse rate. TransPIM only
+requires data movement for computing the cross-memory
+(i.e., between different sets of tokens) information which
+can be handled efﬁciently by exploiting the large internal
+memory bandwidth of HBM.
+Even though the token-based dataﬂow signiﬁcantly improves the throughput by reducing the data movement
+overhead, the software-level solution cannot resolve the
+inefﬁciency of complex operations in Transformer. Existing memory-based accelerators supports either PIM [2] or
+NMC [16], [27]. However, different key operations in Transformers do not share similar patterns that can be efﬁciently
+processed by a single type of memory-based technology.
+Furthermore, the original data path in HBM heavily relies
+on the shared bus. Therefore, the resource conﬂict on the
+shared bus for transferring data may become the bottleneck
+for applications requiring high internal bandwidth. To solve
+these issues, we propose an integrated set of hardware in
+HBM, including near-memory auxiliary computing units
+(ACUs) and an optimized data communication architecture.
+Speciﬁcally, the ACUs enable the memory to exploit the
+beneﬁts of both PIM and NMC to efﬁciently accelerate
+different operations. The optimized data communication
+architecture adds buffers and specialized links in the HBM
+hierarchy to ofﬂoad a large number of data movements from
+the global shared data path, delivering signiﬁcantly higher
+memory bandwidth utilization than the original HBM.
+In summary, the contributions of this work include:
+
+$GG 1RUP
+9
+
+KHDG
+
+6HOI$WWHQWLRQ
+
+)&
+
+)&
+
+,QSXW7RNHQV
+
+3UHYLRXV2XWSXW
+
+Operations of encoder and decoder blocks in Transformers.
+
+• TransPIM introduces lightweight hardware components in
+
+the conventional HBM architecture to support efﬁcient computing and memory operations for Transformers, without
+impacting the memory density. Our experiments show that
+TransPIM signiﬁcantly improves the performance by 3.7×
+and 9.1× over PIM-only and NMC-only architectures.
+II. BACKGROUND AND M OTIVATION
+This section ﬁrst introduces the background for Transformer and PIM acceleration. Then, this section analyzes
+the issues in existing memory-based technologies with
+accelerating Transformer-based models, which motivate a
+new software-hardware co-design.
+A. Transformer
+Transformer has an encoder-decoder architecture [41], as
+shown in Figure 1. Both the encoder and the decoder are
+constructed by stacking identical blocks. Each encoder block
+has three sub-layers including a fully-connected layer (FC),
+a self-attention layer (SA), and a feed-forward layer (FFN).
+For an input sequence with L tokens, the FC layer gets
+an embedding matrix of dimension L × de and generates a
+query matrix Q of dimension L × dq and a key matrix K
+of dimension N × dk , and a value matrix V of dimension
+L × dv by multiplying the embedding matrix with different
+weight matrices. For simplicity, we use D to denote dk , dq
+and dv . Each D-dimension vector in the Q, K and V matrices
+corresponds to an input token. The encoder block then feeds
+the Q, K, and V matrices to the SA layer. The key operation in
+a SA layer is the scaled dot-product attention which computes
+T
+√ )V ,
+dependencies between input tokens as Softmax( QK
+D
+
+• Compared to existing accelerators [15], [42] dedicated to
+
+attention, TransPIM is the ﬁrst end-to-end memory-based
+accelerator that speeds up the entire Transformer inference
+by exploiting the emerging memory-based acceleration.
+• The proposed software-hardware co-design signiﬁcantly
+outperforms existing platforms, including GPU, TPU, and
+ASIC-based accelerators. Speciﬁcally, TransPIM is 22.1
+× to 114.9 × faster than GPUs on various widely-used
+Transformers. As compared to ASIC-based accelerators,
+TransPIM provides 2.0× higher throughput.
+• We propose a token-based dataﬂow for general
+Transformer-based models to reduce unnecessary data
+loading by exploiting holistic data reuse. Our results show
+that the proposed dataﬂow is 4.6× faster than the previous
+method on various memory-based accelerator architectures.
+
+T
+
+√
+where Softmax(·) denotes the Softmax function. The QK
+D
+is deﬁned as the score matrix S. The encoder block feeds
+the attention output to the FFN layer to generate the block
+output, which can be used as an input to the next block
+(either encoder or decoder) or to a task-speciﬁc output layer
+(e.g., classiﬁcation). Each decoder block also has the FC
+layer, the SA layer, and the FFN layer to process the output
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 3 ===
+%DQN
+
+,2
+
+,2
+
+%DQN
+
+%DQN
+
+%DQN
+
+%DQN
+
+%DQN
+
+%DQN
+
+%DQN
+
+%DQN
+
+1 
+
+2*L*de*(dq+dk+dv)
+values
+
+ඹ)&
+Q=Emb.ൈWq
+K=Emb.ൈWk
+V=Emb.ൈWv
+
+*OREDO%XV 769V
+
+E +LHUDUFKLFDO DUFKLWHFWXUH RIRQHFKDQQHO
+
+Figure 2.
+
+1 
+
+1 
+
+D /DWHQF\EUHDNGRZQRID%(57SUHWUDLQHGPRGHORQ3,0 17RNHQV
+
+3VHXGRFKDQQHO
+
+3VHXGRFKDQQHO
+
+1 
+
+))1
+
+%DQN
+
+,2
+
+7RWDO
+
+%DQN
+
+,2
+
+6RIWPD[
+
+%DQN
+
+,2
+
+$WWQ2XW
+
+%DQN
+
+,2
+
+)&
+
+%DQN
+
+,2
+
+$WWQ6FRUH
+
+%DQN
+
+,2
+
+))1
+
+%DQN
+
+7RWDO
+
+%DQN
+
+6RIWPD[
+
+,2
+
+%DQN
+
+$WWQ2XW
+
+,2
+
+%DQN
+
+)&
+
+,2
+
+%DQN
+
+$WWQ6FRUH
+
+,2
+
+%DQN
+
+))1
+
+,2
+
+%DQN
+
+7RWDO
+
+,2
+
+%DQN
+
+6RIWPD[
+
+,2
+
+%DQN
+
+
+$WWQ2XW
+
+%DQN
+
+
+)&
+
+%DQN
+
+2WKHU
+
+
+
+$WWQ6FRUH
+
+%DQN
+
+5HGXFH
+
+
+
+))1
+
+%DQN
+
+$ULWK 1RQ5HGXFH
+
+
+
+7RWDO
+
+%DQN
+
+'DWD0RYHPHQW
+
+
+
+6RIWPD[
+
+%DQN
+
+%DQN
+*URXS
+,2
+
+%DQN
+
+$&7 35(
+6HQVH$PS
+
+%LWVHULDO
+,QVLWXFRPSXWLQJ
+
+1HDUPHPRU\
+SURFHVVLQJ
+
+D 0XOWLVWDFN+%0DQG+%0GLHV
+%DQN
+
+*OREDO6$
+
+Θ
+
+$WWQ2XW
+
++%0
+6WDFN
+
+«
+
+6XEDUUD\
+
+D
+E
+F
+
+)&
+
++%0
+6WDFN
+
+6XEDUUD\
+
+$WWQ6FRUH
+
++RVW
+&38*38
+
+6XEDUUD\
+
+1RUPDOL]HG([HFXWLRQ7LPH
+
+&+ &+
+&+ &+
+&+ &+
+&+ &+
+%DVH'LH
+
+/RFDOURZGHF
+
++%0
+6WDFN
+
+*OREDOURZGHF
+
++%0
+6WDFN
+
+3,0
+0HPRU\
+
+ය$WWHQWLRQ
+S=sm.(QKT)V
+
+2*L2*(dq+dv)
+values
+3,0
+0HPRU\
+
+ර))1
+O=SൈWffn
+
+2*L*dv*do
+values
+3,0
+0HPRU\
+
+E 'DWDORDGLQJRYHUKHDG 'LPHQVLRQ(PE՚ ‫ܮ‬ǡ ݀݁ 4.92՚ ሺ‫ܮ‬ǡ GTNYRሻ
+
+Memory-based computing on HBM architectures.
+
+Figure 3.
+
+of the preceding layer. Unlike encoder blocks, the input and
+output of decoder blocks usually contain only one or a few
+tokens. In addition, the decoder inserts another attention layer
+that performs attention over previous blocks. Transformer
+performs many memory-intensive operations [15], [20], [42],
+which make it suitable for in- and near-memory acceleration.
+
+Challenges of PIM acceleration for Transformers.
+
+limited set of operations with high latency (because of bitserial processing). NMC supports more general operations but
+the throughput is limited by the number of NMC processing
+elements as well as the bandwidth of the data link.
+C. Motivation of Software-hardware Co-Design
+
+B. PIM Acceleration for Transformers
+
+Many previous works show that both the software-level
+scheduling (a.k.a., dataﬂow) and the hardware design play
+important roles in neural network acceleration [26], [35],
+[43]. To maximize the parallelism, existing memory-based
+DNN accelerators [2], [12], [17], [29] adopt a layer-based
+dataﬂow which allocates sufﬁcient memory resources to
+parallelize computations for different output elements in a
+layer. The layer-based dataﬂow requires a whole data loading
+before processing each layer. We conduct an investigation
+on the efﬁciency of existing memory-based acceleration for
+Transformers. We evaluate the latency breakdown of a text
+classiﬁcation task using RoBERTa Transformer model on an
+HBM-based PIM-only system which has 8 8GB HBM stacks.
+The PIM-only system processes all computations using
+bit-serial row-parallel operations inside memory subarrays.
+Figure 3(a) shows the proﬁling results. Figure 3(b) shows
+the size of loaded data for each layer in Transformer when
+using layer-based dataﬂow.
+Our experiments show that the data movement of the
+layer-based dataﬂow takes the majority (around 60%) of
+the execution time, which is the time for loading and
+reorganizing data. The long data movement time results
+from two aspects. First, to maximize the parallelism, the
+layer-based dataﬂow needs data duplication in the memory
+for parallel computations, increasing the amount of loaded
+data. Second, most parallel data layouts do not exploit the
+data reuse between neighboring layers. In this case, we need
+to load all data for the intermediate layers (e.g., the attention
+layer). As shown in Figure 3(b), the size of computation data
+for the attention layer grows quadratically with the sequence
+length. Therefore, minimizing the amount of loaded data is
+critical to reducing the overall execution time of Transformer.
+
+Memory-based computing has been widely used for
+various memory-intensive and compute-intensive applications
+due to its extensive parallelism and ability to minimize
+data movements. The baseline memory architecture used
+in this work is the Samsung’s high-bandwidth memory
+(HBM) [27], [33] which has become the state-of-the-art
+memory solution for various emerging platforms [8], [23],
+[28], [51]. Figure 2 shows the overall architecture of 4 HBM
+stacks. All stacks are connected to the host CPU/GPU for
+cross-stack communication. Each HBM stack is a 4-high
+HBM chip with multiple DRAM slices on the top of the
+base die, connected with many through-silicon vias (TSVs),
+providing much higher bandwidth and lower access latency
+than the conventional DRAM.
+There are two ways to process data in HBM. The ﬁrst one
+is near-memory computing (NMC), where compute logic is
+integrated either in the near-bank I/O or, more aggressively,
+in the near-subarray circuits inside the memory bank. For
+example, Samsung recently proposed a new type of HBM
+called function in-memory DRAM (FIMDRAM) [27], that
+integrates programmable computing units (PCUs) in the I/O
+circuits of the memory banks. These non-trivial PCUs take up
+the chip area for some memory banks, decreasing the memory
+density. The second technology is processing in-memory
+(PIM) which supports computing in the DRAM banks (or
+subarrays) by specialized sequences of activate and precharge commands [14] or modiﬁed subarray structures [2],
+[29]. PIM usually requires data to be placed column-wisely
+and follows a bit-serial row-parallel scheme to process the
+computation. PIM provides a higher level of parallelism with
+fewer data movements than NMC, but can only support a
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 4 ===
+
+
+)XOO\&RQQHFWHG/D\HUV
+
+
+
+,QWUDVKDUG/RFDO$WWHQWLRQ
+
+
+
+,QWHUVKDUG&URVV$WWHQWLRQ
+
+
+
+2XWSXW&DOFXODWLRQ
+
+4
+
+.
+
+9
+
+,
+,
+,
+
+4
+4
+4
+
+.
+.
+.
+
+9
+9
+9
+
+
+
+%DQN
+
+
+,QSXW7RNHQV
+
+%DQN
+
+)XOO\&RQQHFWHG/D\HUV
+
+,
+
+:4.9
+
+,
+
+:4.9
+
+,
+
+:4.9
+
+2XWSXW
+
+4
+
+.
+
+4
+
+.
+
+4
+
+.
+
+9
+
+
+
+$WWHQWLRQ0DWUL[
+
+%DQN
+
+,QSXW
+
+9
+
+4
+
+.
+
+9
+
+4
+
+6
+
+.
+
+9
+
+.
+
+6
+
+.
+
+6
+
+9
+
+.
+
+9
+
+4
+
+.
+
+6
+
+6
+
+6
+
+9
+
+.
+4
+
+.
+
+9
+
+6
+
+.
+
+9
+
+6
+
+6
+
+6
+
+9
+
+36XP
+
+9
+
+36XP
+
+9
+
+36XP
+
+5LQJ%URDGFDVW &RPSXWH
+66
+
+9
+
+KHDG
+
+6
+
+.
+
+9
+
+9
+
+6
+
+9
+
+6
+
+6
+
+36XP
+
+66
+66
+6666
+
+
+9
+
+6
+
+9
+
+.
+
+6
+
+9
+
+36XP
+
+9
+
+
+
+36XP
+
+5LQJ%URDGFDVW &RPSXWH
+
+
+
+6
+
+666
+66
+
+
+
+KHDG
+9
+
+.
+4
+
+6
+
+6
+
+666666
+666666
+
+
+
+
+9
+
+9
+
+6
+
+2
+
+
+
+6
+
+66666
+66
+
+
+
+5LQJ%URDGFDVW &RPSXWH
+
+Figure 4.
+
+%DQN
+
+.
+4
+
+.
+4
+
+%DQN
+
+66
+
+5LQJ%URDGFDVW &RPSXWH
+
+
+
+$WWHQWLRQ
+
+
+
+%DQN
+
+66
+
+6
+
+.
+4
+
+4
+
+
+
+2
+2
+2
+
+9
+
+KHDG
+
+
+
+$WWHQWLRQ2XW
+
+4 u .T
+6RIWPD[
+u 9 
+D
+
+9
+
+9
+
+6
+
+2
+
+9
+
+2
+
+5LQJ%URDGFDVW &RPSXWH
+
+KHDG
+
+Token-based data sharding scheme and the dataﬂow of Transformer encoder in TransPIM. Banks = 3.
+
+In this work, we exploit the fact that all operations in different
+Transformer layers are related to tokens in the input sequence,
+making it possible to improve the data locality by reusing
+token-related data during the execution.
+In addition to the data loading issue, the evaluated PIMonly accelerator does not perform well for some complex Transformer computation primitives, like reduction
+operations, due to the costly intra-bank (or subarray) data
+movements for long vectors in Transformer (e.g., D = 512).
+For example, the reduction takes 23% to 32% of time for
+different sequence lengths, which is signiﬁcantly larger than
+other arithmetic operations (4% to 10%). This is because the
+reduction requires data movements to reorganize the data in
+the memory for accumulation, degrading the efﬁciency of
+PIM operations. Such intra-array data movements introduce
+more overhead in Transformers than CNNs because the length
+of vectors for reduction is much longer in Transformers (e.g.,
+512 for Transformer vs. 9 for convolution with 3×3 kernels).
+D. Key Ideas of TransPIM
+Our investigation shows that existing technologies introduce large overhead on Transformers, requiring speciﬁc modiﬁcations on both software dataﬂow and hardware support.
+Therefore, this work proposes to accelerate Transformer via
+a software-hardware co-design.
+Dataﬂow: TransPIM adopts an efﬁcient dataﬂow which
+maps Transformer computation to the memory-based architecture using a token-based sharding mechanism. TransPIM
+divides the input tokens into different shards and allocates
+these shards to different memory partitions. In this work,
+we use memory bank as the basic memory partition for
+
+shard allocation. During acceleration, each memory partition
+processes its associated token shard independently across
+different layers. As compared to layer-based dataﬂow, the
+token-based dataﬂow avoids the memory trafﬁc for reused
+data. We also propose an efﬁcient broadcasting algorithm to
+speed up data movements for dependent data by exploiting
+the large internal memory bandwidth of HBM.
+Hardware acceleration: In the hardware, TransPIM
+adds lightweight modiﬁcations to the conventional HBM
+architecture, which not only accelerate various Transformer
+operations but also efﬁciently support the proposed dataﬂow.
+Speciﬁcally, TransPIM architecture implements multiple
+auxiliary computing units (ACUs) within each memory
+bank to perform vector reduction and Softmax function that
+cannot be efﬁciently processed by bit-serial row-parallel
+PIM operations. TransPIM exploits the beneﬁts of both
+PIM and NMC to achieve high efﬁciency and throughput.
+Furthermore, TransPIM enhances the original HBM data
+path with specialized data buffers and communication links
+to support various data manipulations and movements for
+Transformers.
+III. T RANS PIM DATAFLOW
+In this section, we introduce the detailed process of
+TransPIM dataﬂow. The underlying architecture is based
+on compute-enabled HBM as shown in Figure 2.
+A. Token-based Data Sharding
+The key of TransPIM dataﬂow is token-based data sharding,
+which allocates HBM banks based on input tokens. The main
+beneﬁts provided by the token-based data sharding come from
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 5 ===
+the data reuse across different layers by keeping computations
+of tokens in the same memory location. We can reduce the
+data movement cost while exploiting more memory-level
+parallelism because different banks can handle computations
+and data movements for allocated tokens independently. After
+the token sharding, each bank handles computations for its
+shards throughout the end-to-end Transformer inference. The
+token-based data sharding is applied to the input tokens
+before the fully-connected layers of the ﬁrst encoder block.
+As introduced in Section II, the input tokens form a matrix
+with size L × D, where L is the number of tokens and D is the
+embedding vector dimension. The input tokens are uniformly
+divided into “shards” along the token dimension and allocated
+to different memory banks. In the case of N memory banks,
+L
+N tokens are assigned to each bank. Therefore, each bank
+receives an input matrix with size NL × D. Figure 4 shows an
+example of distributing 3 tokens into 3 memory banks.
+B. Encoder Blocks
+During the Transformer inference, each memory bank
+performs the computations of FC, attention, and FFN layers
+for its allocated tokens.
+1) Fully-Connected Layer: The FC layer generates the
+query (Q), key (K), and value (V ) matrices from the input
+tokens. It involves three matrix multiplications between the
+input tokens and three weight matrices (WQ , WQ , and WQ ).
+In TransPIM, all weights of the three FC weight matrices
+are loaded into each memory bank before FC computation.
+And each bank multiplies the assigned NL × D sub-matrix Ii
+with D × D weight matrices as illustrated in 1 of Figure
+4. Then, each bank generates three NL × D sub-matrices, Qi ,
+Ki , and Vi . The Qi , Ki , and Vi matrices are retained in each
+memory bank and used for the following attention layers.
+2) Attention Layer: The computation of attention layer in
+TransPIM involves three steps: (1) Intra-shard local attention,
+(2) Inter-shard cross attention, and (3) Softmax.
+Intra-shard local attention: The attention scores S are
+computed by S = Q × K T . In TransPIM, Q and K matrices
+are distributed in memory banks. With the local sub-matrices,
+each memory bank ﬁrst computes the attention scores
+between local tokens, as shown in 2 of Figure 4). Each
+memory bank computes the NL × NL partial attention scores in
+the diagonal of attention score matrix using the local Qi and
+Ki from the FC layer. During the intra-shard local attention,
+each bank i can independently compute the partial attention
+score matrix Si,i without communicating with other banks.
+Inter-shard cross attention: After computing all local
+attention scores, TransPIM computes other attention scores by
+moving partial K matrices between different banks. As shown
+in 3 of Figure 4, the inter-shard cross attention consists of
+multiple ring broadcast and compute steps. To improve the
+bandwidth utilization, we propose a ring broadcast scheme
+to transfer K j data between banks, where each K j sub-matrix
+is sent to all banks step by step through an abstract ring of
+
+banks (e.g., 0→1→2 ... N→0). In each broadcast step, each
+bank multiplies local Qi with the received K j from a remote
+bank, generating an NL × NL partial attention scores in the i-th
+row and j-column of the blocked attention matrix. A total of
+N ring broadcast and compute steps are required to obtain
+the entire attention score matrix S. Each bank preserves NL
+rows of the attention score matrix, Si , with shape NL × L. The
+performance of inter-shard cross attention heavily depends
+on the speed of the ring broadcast phase. In Section IV-B,
+we provide an efﬁcient hardware design and a scheduling
+scheme to fully exploits the internal memory bandwidth of
+HBM for ring broadcast-based data transfer.
+Softmax: The Softmax layer normalizes the exponential of
+attention scores related to each token. Each bank calculates
+the Softmax using its local NL rows of attention scores. There
+is no data movement between banks thanks to the data locality
+of attention scores. For multi-head attention with h heads,
+there are h attention matrices to calculate. Therefore, the
+Softmax should be repeated h times to obtain all the results.
+The naive Softmax requires complex exponential function,
+reduction, and division. Thus, we design an efﬁcient approach
+in Section IV-A2 for calculating Softmax function in the
+TransPIM hardware.
+3) Self-attention Output and Feed-forward Network: The
+ﬁnal step of the self-attention is to multiply the attention score
+matrix S after Softmax by the V matrix. With the token-based
+data sharding, each bank stores the partial attention scores
+and partial Vi matrix. The calculation of self-attention output
+( 4 of Figure 4) is similar to inter-shard cross attention. The
+partial Vi matrix is broadcasted through banks and each bank
+computes the NL × D partial attention out Oi . Feed-forward
+network (FFN) consists of two consecutive FC layers. In the
+last step of Figure 4 4 , the attention out (input of FFN) has
+the same token sharding as input FC layers ( 1 ). Therefore,
+each FFN-FC layer has a similar process to the input FC
+layers.
+C. Decoder Blocks
+The key difference between the decoder block and the
+encoder block is that each decoder block only needs to
+calculate one new token and attention operations between the
+new token and the old tokens. Figure 5 shows the processing
+ﬂow for decoder layers which is slightly different from the
+encoder blocks. In each decoder block, we keep using the data
+sharding of the preceding block, which can be either the last
+encoder or the previous decoder. We allocate the last bank to
+process the FC layers for the new Q, K, and V vectors. In 1
+of Figure 5, we allocate Bank 2 to process Qnew , Knew , and
+Vnew . At the end of FC layers, TransPIM sends the generated
+Qnew to all other banks to compute attention scores. Besides,
+Knew and Vnew are concatenated to the old Ki and Vi of last
+bank. At 2 , each bank performs intra-shard local attention
+using local Qnew , Ki , and Vi . At the end of 2 , each block
+obtains and preserves NL columns ( NL + 1 for the last bank) of
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 6 ===
+)URP(QFRGHU
+
+[
+
+9
+
+.
+
+6
+
+&RQFDW.9
+
+9
+
+6
+
+6
+
+36XP
+
+9
+
+&RQFDW.9
+
+36XP
+
+6
+
+36XP
+
+36XP
+
+36XP
+
+5HGXFWLRQ
+
+
+Figure 5.
+
+
+
+6
+
+,QWUDVKDUG/RFDO$WWHQWLRQ
+
+9
+
+$&8
+
+6 6 6 6
+
+6
+
+
+
+36XP
+
+
+
+Figure 7.
+
+$WWHQWLRQ
+2XW
+
+2XWSXW&RPSXWH 6XPPDWLRQ
+
+Dataﬂow of TransPIM for Transformer decoder.
+5RZ'HF
+
+%DQN*URXS%XV
+
+,2
+
+$&8
+
+%DQN
+
+6XEDUUD\
+%DQN$UUD\
+6HQVH$PSOLILHU
+
+%DQN
+
+&ROXPQ'HFRGHU
+
+%DQN JURXS
+
+'DWD%XIIHU
+
+&WUO
+
+Detailed design of ACU and data buffer.
+
+A. Auxiliary Computing Unit
+
+
+
+5LQJ%URDGFDVW8QLW
+
+«
+
+«
+
+«
+
+«
+
+«
+
+«
+
+«
+
+«
+
+*OREDO%XV
+
+Figure 6.
+
+
+
+Ă
+
+:4.9
+
+)& &RQFDW
+
+
+
+'DWD%XIIHU
+
+9
+,
+
+.
+
+$WWHQWLRQ0DWUL[
+
+ORJ1
+
+.
+
+9
+
+Ă
+
+
+
+.
+
+$WWHQWLRQ
+
+ 
+
+%DQN
+
+%LWVHULDO
+$GGHU
+
+
+
+%DQN
+
+ELW%LWVHULDO
+$GGHU7UHH
+
+
+
+)& &RQFDW
+
+%DQN
+
+
+
+
+
+
+
+$WWHQWLRQ2XW
+
+
+
+4QHZ
+
+9
+9
+9
+9
+9QHZ
+
+
+
+4
+
+,
+
+)URP5RZ%XIIHU
+
+.
+.
+.
+.
+.QHZ
+
+
+
+,QSXW7RNHQ
+
+Overview of TransPIM hardware based on HBM.
+
+the new score matrix. In the output compute and summation
+( 3 ), each bank uses its local Si and Vi vectors to compute
+partial sum PSumi of the new attention output Onew . This
+scheme requires one reduction step to generate the correct
+output. In Section IV-B, we introduce how to efﬁciently
+process such reduction in a modiﬁed HBM architecture. The
+decoder scheme supports both encoder-decoder and decoderonly Transformers. The only difference between these two
+types is whether memory banks pre-store “context” vectors
+which are K and V vectors from encoder blocks. For each
+new token, we allocate the bank with the minimum number
+of tokens to balance computation.
+IV. T RANS PIM H ARDWARE ACCELERATION
+We propose a new memory-based hardware acceleration
+to address the challenges of accelerating Transformer models.
+Figure 6 shows the hardware customization in the standard
+HBM2 structure [19], which has two parts – 1) in-bank
+auxiliary computing units (ACUs), 2) a data communication
+architecture with near-bank data buffer and ring broadcast
+units integrated into the original HBM data path.
+
+TransPIM adds ACUs to support operations that are not
+friendly for in-memory bit-serial operations.
+1) ACU Design: Unlike previous near-bank processing
+units [16], [27] for conventional row-wise data layout, the
+proposed ACU works on column-wise bit-serial data in order
+to support in-memory operations. As compared to previous
+PIM-only work [29], which modiﬁes the cell array structure
+and adds extra shifters, the ACU ofﬂoads reduction, Softmax,
+and data broadcast with a more light-weight design.
+As shown in Figure 7, each ACU is concatenated after
+the subarray to receive the 256-bit data from the row buffer
+because it is too expensive to employ arithmetic units to
+simultaneously process the data of the entire row buffer (e.g.,
+8Kb). Therefore, the same bit of 256 different numbers in a
+row is accessed from the row buffer for each memory access
+to support the bit-serial data layout for in-memory operations.
+A total of Padd 256-bit adder trees are implemented within
+each ACU to fully exploit the internal bandwidth of memory
+bank and reduce the DRAM’s row activation overhead. Each
+adder tree is composed of area-efﬁcient 255 bit-serial adders
+[3] to support the bit-serial data organization and reduce
+overhead. Besides, the bit-serial adder tree is stage-pipelined.
+A register and a divisor are implemented to latch intermediate
+partial sums and compute the reciprocal of row accumulation
+in Softmax function. Similar to [29], Psub subarrays in each
+bank are activated simultaneously to increase the computation
+parallelism. Thus Psub ACUs are implemented for each
+memory bank.
+When the vector length of point-wise vector multiplication
+results is less than the width of the adder tree, the ACU
+reduction can be computed using a single bit-serial adder
+tree. For b-bit data, a total of b row accesses are required to
+compute the reduction results. However, the reduced vector
+length is generally larger than the width of the adder tree.
+N
+ row accesses,
+In this case, ACU needs to issue b ×  256
+where N is the vector length (> 256). To speed up the ACU
+reduction and save energy dissipation, we implement Padd
+bit-serial adder trees in parallel within each ACU. Before
+precharging and activating a new row, ACU performs Padd -
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 7 ===
+6RIWPD[
+
+î
+b
+
+9HF
+
+9HF
+
+9HF
+
+b
+
+&RO
+
+&RO
+
+&RO
+
+b
+
+
+
+
+
+
+6
+
+Softmax function as
+
+
+e6
+e6 
+
+0XOW 0XOW 0XOW
+5HVHUYHG0HPRU\&HOO
+
+6RIWPD[
+5HVHUYHG0HPRU\&HOO
+
+$&8
+
+$&8
+
+
+
+
+
+e6 
+
+'DWD%XIIHU
+
+
+
+'DWD%XIIHU
+
+
+
+e6 
+
+D 9HFWRU0XOWLSOLFDWLRQ
+
+Figure 8.
+
+E 6RIWPD[&DOFXODWLRQ
+
+The data path of different computations in TransPIM.
+
+time column accesses in the same row and consecutively
+feeds the data into Padd adder trees. Considering that the
+interval tCCD for DRAM to issue column access commands
+is much less than row access tRC (i.e. 20× less), the row
+activation time and latency of reduction decrease to around
+1
+Padd compared to the case with just one adder tree. Moreover,
+the proposed design trades excessive row activation energy
+by the register energy. The energy consumed by reduction
+operation is signiﬁcantly reduced.
+2) TransPIM Computing: TransPIM supports all computing operations for Transformer by adopting a hybrid inmemory and near-memory computing paradigm with ACUs
+and data buffers. Speciﬁcally, point-wise vector operations
+are performed in the memory cells since DRAM natively
+supports such operations with very high parallelism [14], [39].
+TransPIM ofﬂoads the vector reduction and part of Softmax
+function from subarray to ACU to improve the efﬁciency.
+Vector Computation: Figure 8 (a) shows the data path of
+vector multiplication in TransPIM. The vectors are organized
+in a bit-serial format, where b rows of the same bit line are
+allocated for each b-bit data. For vector multiplication, it
+includes two steps: point-wise multiplication and reduction.
+TransPIM calculates the point-wise multiplication in the
+memory array using existing schemes [2], [14], [39]. We
+adopt the Boolean majority functions [2] to reduce the
+computing latency. These PIM operations utilize DRAM
+timing violations to perform bulk bit-wise operations in the
+standard DRAM architecture [19]. The vector has three copies
+in b rows to parallelize the computation ( 1 ). The point-wise
+multiplications between the replicated vectors and columns
+of the matrix are computed simultaneously. After point-wise
+multiplication, a vector reduction is required to obtain the
+results. The concatenated ACU to the subarray calculates
+the reduction of point-wise multiplication results ( 2 ). The
+ACU continuously receives data in bit-serial format from the
+row buffer and temporarily store the reduction results in the
+data buffer. The ﬁnal reduction results will be written back
+to the memory cell as 3 .
+Softmax Calculation: PIM is unable to directly support
+the complicated exponential and division operations of
+Softmax. We resolve this limitation in TransPIM by rewriting
+
+1
+Si, j , where the reciprocal of row
+Si, j e
+∑N
+l=1 e
+
+accumulation is moved out of the point-wise exponent. In
+this case, Softmax becomes the multiplication between the
+point-wise exponent and the reciprocal of the associated row.
+The point-wise exponent of attention score matrix S should
+be ﬁrst calculated. Then the ﬁnal Softmax output is the pointwise division between the exponents and the accumulation in
+the associated row. As shown in 1 of Figure 8 (b), the pointwise exponent is approximated using ﬁve-order Taylor series
+expansion, which is computed by PIM multiplication and
+addition. Then row accumulation is ofﬂoaded to ACU using
+vector reduction. Meanwhile, the divider in ACU computes
+the reciprocal of row reduction ( 2 ). The single reciprocal
+value for a row will be replicated 256 copies and written
+back the memory cell array by the data buffer ( 3 and 4 ).
+Finally, the point-wise multiplication between reciprocal and
+exponent is computed in memory by PIM operations ( 5 ).
+B. Data Communication Architecture
+TransPIM dataﬂow exploits the internal memory bandwidth
+to reduce the data movement overhead caused by data loading.
+However, the standard HBM is still insufﬁcient to match the
+high data parallelism and the internal bandwidth requirement.
+Even though we can use the bulk in-memory data movement
+approach like RowClone [38], the internal bandwidth is still
+limited by the shared data bus. Furthermore, the memory
+system needs frequent intra-bank and inter-bank data movements for memory-based computations, where data copy and
+re-organization may signiﬁcantly downgrade the performance.
+Thus, we propose a data communication architecture to
+accelerate various data movements in TransPIM.
+1) Customized Hardware Components: TransPIM introduce two customized hardware components in the HBM
+architecture for data communication.
+Data Buffer: For most intra-bank and inter-bank data
+movements, we can use the fast parallel mode (FPM) of
+RowClone [38] to perform fast row copy. However, this
+approach has two defects. First, it is unable to provide a
+ﬁne-grained partial copy for a row. Second, the FPM requires
+the source and destination rows to be located within the same
+subarray. To overcome the two constraints, we implement a
+re-conﬁgurable data buffer in each bank to manipulate data
+from ACU or row buffer as in Figure 7, realizing more ﬂexible
+data movement. The data buffer is a conﬁgurable 8 × 256b
+buffer, consisting of 8 256-bit shift registers, supporting data
+copy and re-organization. The data buffer can either receive
+8-bit (from ACU) or 256-bit data (from sense ampliﬁer).
+Ring Broadcast Unit: As illustrated in Section III,
+TransPIM adopts a ring-based data broadcast to reduce the
+data loading overhead for processing attention scores and
+self-attention output. However, the original HBM cannot
+efﬁciently support such ring-based data broadcast because all
+data transfers in a channel need to use the shared data bus
+and controller. TransPIM effectively decouples data transfers
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 8 ===
+,2
+G%XI
+
+%DQN
+
+%DQN
+G%XI
+,2
+
+U%
+
+G%XI
+
+%DQN
+
+%DQN
+G%XI
+U%
+
+,2
+
+EJ%XV
+
+U%
+
+%DQN*URXS%
+
+G%XI
+
+EJ%XV
+
+%DQN*URXS$
+
+%DQN
+
+G%XI
+
+Table I
+A RCHITECTURAL PARAMETERS FOR T RANS PIM
+
+%DQN
+G%XI
+,2
+
+U%
+
+HBM Organization
+
+G%XI
+
+%DQN
+
+%DQN
+HBM Timing (ns)
+
+J%XV
+D 0HPRU\+LHUDUFK\LQ7UDQV3,0
+7LPH6WHS
+
+
+
+
+
+
+
+%DQN*URXS%XV$
+
+ė
+
+ė
+
+ė
+
+%DQN*URXS%XV%
+
+ė
+
+ė
+
+ė
+idle
+
+5LQJ%URDGFDVW%XIIHU ėė ėė
+
+HBM Energy (pJ)
+ACU
+
+Buffer
+
+Channels/die = 8, Banks/channel = 32, Banks/Group = 4,
+Rows = 32k, Row Size = 1KB, Subarray size = 512 × 512,
+DQ size = 256
+tRC = 45, tRCD = 16, tRAS = 29, tCL = 16, tRRD = 2, tWR = 16,
+tCCDS = 2, tCCDL = 4
+eACT = 909, ePre-GSA = 1.51, ePost-GSA = 1.17, eI/O = 0.80
+Clock = 500 MHz, Psub = 16 ACUs/bank, Padd = 4 Pipelined
+Bit-serial Adder Tree/ACU, Adder tree width = 256, 3-stage
+pipelined divider
+Data buffer: 8 × 256b, Ring broadcast width = 256
+
+E 7LPHOLQHIRU5LQJEDVHG%URDGFDVW
+
+Figure 9. The optimizations for ring-based broadcast in the TransPIM
+hardware. The example shows the data transfers between two bank groups
+(4 banks per bank group).
+
+between different bank groups (or even different banks) by
+per-bank broadcast units and direct 256-bit link between
+broadcast units of two neighboring banks, as shown in
+Figure 9(a).
+2) Optimization for TransPIM Data Movement: With the
+proposed communication architecture, we can accelerate
+various data movement patterns when running TransPIM
+dataﬂow.
+Fine-grained data movement: Each data buffer, with
+the help of its controller, supports ﬁne-grained data copy
+and duplication in a bank. When ﬁne-grained partial copy
+is needed (such as 3 and 4 in Figure 8 (b)), the data
+buffer reads data from ACU through 8-bit input and performs
+data replication. The replicated data is written back to the
+sense ampliﬁer through 256-bit output in a bit-serial manner.
+Another advantage of data buffer is its ability to move data
+between different subarrays without using the shared bus.
+The data buffer supports parallel accesses by reading 256-bit
+data from the sense ampliﬁer for each column access cycle.
+It can cache at most 2Kb data and copy each 256-bit data
+into the sense ampliﬁer located in a different subarray.
+Ring-based data broadcast: Figure 9 shows the data
+movements of ring-based data broadcast (Section III-B2) in
+two bank groups of the TransPIM architecture. As illustrated
+in Section III, each step of the ring-based broadcast requires
+all banks to copy data to their next banks in the ring (e.g.,
+1→2→3 ... 7→0 in the ﬁgure). If we assume the time of
+a data copy between two banks is T , the original HBM
+architecture requires 8T because each data copy requires the
+global bus and controller. For TransPIM architecture, such
+ring-based broadcast consumes a time of 3T as shown in
+Figure 9. In the ﬁrst step, we use the bank group bus (both
+BankGroup A and BankGroup B) to perform bank 3→4
+transfer. At the same time, we can also copy data from bank
+0→1 and 6→7 using ring broadcast links between broadcast
+buffers. In the second step, we use the bank group bus to
+transfer 7→0, while using the ring broadcast buffers for 2→3
+and 4→5. The two remaining transfers, 1→2 and 5→6 can
+be processed in parallel during the third step. The algorithm
+
+can scale to more bank groups with the same time complexity,
+which is signiﬁcantly lower than that of the non-optimized
+architecture.
+Token reduction in decoder blocks: As introduced in
+Section III-C, the output token of each decoder block requires
+a global reduction for all partial sums distributed in different
+banks. TransPIM can efﬁciently reduce all the partial sums in
+a multi-step parallel way. Speciﬁcally, in each reduction step,
+we separate banks with partial sums into multiple two-bank
+reduction groups and reduce partial sums of each reduction
+group by moving partial sums from one bank to another.
+All reduction groups process the reduction in parallel with
+PIM operations. TransPIM can efﬁciently support such data
+movements by exploiting the internal bandwidth provided
+by inter-ACU links, bank group bus, and channel bus.
+V. E XPERIMENTS
+In this section, we describe our experiments that evaluate
+the beneﬁts of proposed design.
+A. Evaluation Methodology
+The hardware characteristics for TransPIM are summarized
+in Table I. The memory is standard HBM2 [19]. The timing
+and energy parameters are extracted from the previously
+published work [34]. Hardware components of TransPIM
+keep the same area and power constraints as the original
+HBM. The HBM area is estimated using the analytical tool
+CACTI-3DD [7] on 22nm technology node. We assume up
+to 8 HBM stacks are connected to a host CPU through the
+silicon interposer. The host-HBM bandwidth is 256GB/s [34].
+We implement TransPIM using Verilog HDL and synthesize the design on Synopsys Design Compiler using 65nm
+library. The synthesized design is placed and routed using
+Synopsys IC Compiler. Moreover, clock gating is applied to
+save energy dissipation. Padd = 4 bit-serial adder trees are
+implemented in each ACU. The constant divider to calculate
+1/x is three-stage pipelined to satisfy the timing constraints.
+In order to match the rate of column access time tCCD = 2 ns,
+the ACU is conﬁgurated to run at 500 MHz clock frequency.
+The obtained area and power data of ACU are scaled to
+22nm to match the memory technology. We consider the
+process difference between logic and DRAM using the similar
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 9 ===
+summarization tasks have both encoder and decoder blocks.
+We also evaluate a decoder-only task, language modeling
+(LM), using GPT-2-medium model [36]. All workloads are
+implemented using TensorFlow 2 with XLA.
+
+Table II
+OVERHEAD BREAKDOWN OF T RANS PIM.
+Unit/Bank
+Adder Tree
+Divider
+Data Buffer
+Ring Broadcast
+Others
+
+Area (um2 )
+59432.1
+3055.6
+2660.4
+337.9
+828.5
+
+Power (mW)
+25.1
+0.7
+3.8
+0.2
+2.9
+
+TransPIM
+8GB HBM2
+Overhead
+Memory Access
+ACU
+Buffers
+
+Area (mm2 )
+53.15
+2.15
+Energy (pJ/op)
+0.384
+0.869
+
+B. TransPIM Performance
+
+method in previous work [29], where DRAM process incurs
+around 50% additional area overhead to the logic process.
+The implementation results of TransPIM are given in Table
+II. The 4-parallel bit-serial adder tree takes up 88% of the
+overall area. Each memory bank of TransPIM is equipped
+with Psub = 16 ACUs. The total 512 ACUs consume about
+2.15 mm2 , incurring 4.0% area overhead to the original
+DRAM architecture, far less than the 25% threshold of area
+overhead [16], hence avoiding DRAM density loss.
+1) Simulation: We implement an in-house simulator to
+model the detailed performance and energy characteristics
+for TransPIM and all PIM baselines. The front-end of the
+simulator utilizes the TensorFlow interface which extracts the
+workload formation for the simulation. The backend simulator
+is a modiﬁed version of Ramulator [24]. We insert additional
+commands to the simulator for TransPIM to simulate the runtime behaviors of workloads for a given DRAM conﬁguration.
+The architectural conﬁguration of HBM and timing/energy
+parameters are shown in Table I.
+2) Hardware Baselines: GPU&TPU: The GPU platform
+is Nvidia RTX 2080Ti. We measure the GPU power using
+nvidia-smi. We also include a single Google Cloud
+TPUv3 with eight cores [22] as a baseline. We used JITcompiled TensorFlow models and calculated the average
+latency from the second iteration to neglect graph compilation
+overhead.
+Near-bank processing (NBP): Newton [16] is used as
+the near-memory baseline which is a near-bank processing
+technology in HBM2E-like DRAM ofﬂoading most operations for machine learning model to the near-bank logic.
+Since the NBP baseline already modiﬁes the bank-level logic,
+we enable the broadcast buffer, which handles intra-memory
+data movements, in the NBP baseline for a fair comparison.
+We assume the same HBM architecture for the NBP baseline
+as the one used by TransPIM.
+Original PIM: The original PIM architecture is the basic
+HBM architecture with only the support for in-memory bitserial operations using the specialized memory controller
+with modiﬁcations to the subarray as suggested by previous
+works [2]. We also assume the same HBM architecture for
+the PIM baseline as TransPIM.
+3) Workloads: In this work, we evaluate two widely used
+Transformer models, RoBERTa [31] and Pegasus [46], for
+various important NLP tasks including text classiﬁcation
+(IMDB) [32], summarization (Pubmed [9] and Arxiv [9]), and
+question-answering (TraviaQA [21]). The classiﬁcation and
+question-answering tasks only have encoder blocks while the
+
+We evaluate the efﬁciency of TransPIM by comparing it
+with GPU and various memory-based architectures with either
+layer-based or token-based dataﬂow. We denote each system
+as “dataﬂow”-“architecture” (e.g., Token-TransPIM). For
+sensitive analysis, we test one more architecture conﬁguration
+of TransPIM which disables broadcast units and data buffers
+for communication – denoted by “NB”, while “Buf” denotes
+architectures with broadcast units and data buffers. Figure 10
+shows the performance and the energy efﬁciency of all
+architectures as compared to the GPU baseline. All memorybased systems use 8 HBM stacks with a total capacity of
+64GB. The performance is measured as the execution time
+per batch because workloads with short token lengths (e.g.,
+IMDB and TriviaQA) may not fully utilize the memory for
+just a single batch. The GPU system runs with the maximum
+batch size supported for each workload. The energy efﬁciency
+is measured as GOP/J of different systems. All values are
+normalized to the GPU baseline. All baselines run with a
+precision of 8-bit for FC and FFN layers which is sufﬁcient
+for Transformer models [44]. We use 16-bit for Softmax to
+support a range of exponential.
+Comparison to GPU/TPU: The proposed system
+(Token-TransPIM) is 22.1× (8.7×) to 114.9× (57.4×)
+faster than GPU (TPU). TransPIM shows less signiﬁcant
+performance improvement on IMDB because the number of
+tokens is too small for the PIM system to fully exploit the parallelism because the token-based sharding requires each bank
+to process at least one token. For the workloads with more
+tokens, the token-based scheduling can saturate the compute
+capability of PIM system, fully exploiting the parallelism of
+PIM operations. As for the energy efﬁciency, TransPIM is
+138.1× (39.5×) to 666.6× (376.7×) more energy efﬁciency
+than the GPU (TPU). Similar to the performance results,
+TransPIM achieves much better efﬁciency when running
+workload with long token sequence. The energy efﬁciency
+improvements result from the fast execution and the reduction
+of data movements.
+Comparison to previous memory-based acceleration:
+As compared to previous PIM-only acceleration (layerallocation), TransPIM with the token-sharding is 9.6× faster.
+If the PIM-only acceleration also uses the token-sharding
+processing, TransPIM is still 3.7 × faster. Furthermore,
+TransPIM is 4.2 × and 1.3× more energy efﬁcient than the
+PIM-only acceleration with layer-based dataﬂow and tokensharding respectively. Such results show that TransPIM improves the performance and the energy efﬁciency of previous
+PIM acceleration by both software-side and hardware-side
+customization.
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 10 ===
+7RNHQ7UDQV3,01%
+/D\HU7UDQV3,0
+738
+
+D
+
+
+
+
+
+$ULWK 1RQ5HGXFH
+
+5HGXFH
+
+2WKHU
+
+
+
+
+
+
+
+,0'%
+
+3XE0HG
+
+$U[LY
+
+7ULYLD4$
+
+,0'%
+
+5R%(57D
+
+3XE0HG
+
+$U[LY
+
+7ULYLD4$
+
+3HJDVXV
+
+/0
+*37
+
+E
+
+
+
+
+,0'%
+
+3XE0HG
+
+$U[LY
+
+5R%(57D
+
+Figure 10.
+
+7ULYLD4$
+
+,0'%
+
+3XE0HG
+
+$U[LY
+
+7ULYLD4$
+
+3HJDVXV
+
+/0
+*37
+
+       
+
+       
+
+       
+
+       
+
+       
+
+,0'%
+
+3XE0HG
+
+$U[LY
+
+7ULYLD4$
+
+/0
+
+
+
+1RUPDOL]HG7LPH
+
+
+
+1RUP*23-
+
+'DWD0RYHPHQW
+
+
+
+
+
+3XE0HG
+
+1RUPDOL]HG7LPH
+
+6SHHGXS
+
+
+
+/D\HU2ULJLQDO3,0
+7RNHQ7UDQV3,0
+/D\HU1%3%XI
+
+1RUPDOL]HG7LPH
+
+7RNHQ2ULJLQDO3,0
+/D\HU7UDQV3,01%
+7RNHQ1%3%XI
+
+
+
+
+
+
+
+
+
+
+
+
+
+)&
+
+Performance and energy efﬁciency result.
+
+ 7RNHQ2ULJ3,0
+ 7RNHQ7UDQV3,0
+
+As compared to the NBP architecture, TransPIM is 9.1×
+and 6.4× faster with token-sharding and layer-based dataﬂow
+respectively. However, TransPIM is not more energy-efﬁcient
+than the NBP baseline with the same dataﬂow (around 0.2%
+less). This is due to the large amount of energy consumed
+by bit-serial in-situ operations which require a lot of parallel
+row activation and pre-charge operations for all memory
+subarrays.
+Comparison to ASIC: The previous ASIC designs,
+A3 [15] and SpAtten [42], adopt pruning techniques to
+reduce the computation complexity and mostly focus on
+accelerating the self-attention layers. TransPIM targets lower
+data movement overhead and higher computing efﬁciency
+for the end-to-end execution of Transformer models. Since
+previous ASIC counterparts neglect the area of memory,
+we assume all systems use the 8GB HBM as the memory.
+The additional area of TransPIM is 2.15mm2 for each
+8GB HBM chip, which is close to A3 (2.08mm2 ) and
+SpAtten1/8 (1.55mm2 ). SpAtten [42] reports a 35× end-toend performance improvement for generative stage (decoder)
+in GPT-2 model as compared to GPU. As a comparison,
+TransPIM achieves 83.9× and 114.9× speedup on two similar
+workloads (PubMed and Arxiv with Pegasus). Furthermore,
+TransPIM yields an average throughput of 734 GOP/s which
+is around 2.0 − 3.3× of the peak throughput of A3 (221
+GOP/s) and SpAtten (360 GOP/s). The gain comes from
+three aspects. The token-based data sharding avoids redundant
+data movement, thus improving the computation efﬁciency.
+Moreover, the high data parallelism of in-memory and nearmemory computing provides higher peak performance. The
+optimized data path of TransPIM exploits the large internal
+bandwidth of HBM to reduce the data movement overhead.
+In comparison, the performance of ASIC is constrained by
+limited computing resources and off-chip memory bandwidth.
+Decoder-only model: For decoder-only workload (GPT2LM), TransPIM is 1.4× faster and 2.1× more energy-efﬁcient
+than the second-best system (Layer-TransPIM). Both
+speedup and energy efﬁciency improvement of TransPIM over
+other systems become less than other workloads. This results
+from the fact that the decoder-only model only processes 1
+token in each iteration, requiring much less data loading for
+
+.
+
+$WWHQWLRQ
+
+
+
+))1
+
+ /D\HU2ULJ3,0
+ /D\HU7UDQV3,0
+
+)&
+
+ 7RNHQ7UDQV3,01%
+ 7RNHQ1%3%XI
+
+$WWHQWLRQ
+
+))1
+
+ /D\HU7UDQV3,01%
+ /D\HU1%3%XI
+
+Figure 11.
+Performance breakdown of different systems: (a) overall
+breakdown, and (b) layer-wise breakdown.
+
+in-memory computations than encoder-based models.
+C. Detailed Performance Analysis
+We also investigate the detailed breakdown of operations
+for all memory-based systems, as shown in Figure 11. The
+ﬁgure shows the breakdown of four important categories of
+operations including the data movement (loading and intramemory copy), non-reduction arithmetics, reduction, and
+other operations including reads and stores.
+Improvements over previous acceleration: As compared
+to the PIM-only system, TransPIM signiﬁcantly reduces
+the overhead of data movement because of the efﬁcient
+data path (18.2× and 4.1× improvements for layer-based
+or token-sharding dataﬂow). Furthermore, the customized
+ACU of TransPIM effectively accelerates the costly reduction
+operations, where TransPIM spends 35.3× and 56.1× less
+time on reduction than PIM- and NBP-only systems. As
+compared to the NBP baseline, the performance improvement
+of reduction operation becomes even larger because the NBP
+baseline has a much lower degree of parallelism. The limited
+parallelism of the NBP baseline signiﬁcantly increases the
+latency of other arithmetic operations as compared to the
+PIM implementation which is 13.2× faster.
+Effect of token-sharding: The breakdown also sheds
+light on the performance beneﬁts of token-sharding. For all
+systems, adopting token-sharding reduces the data movement
+latency by 4.8×, 4.5×, and 4.5× respectively. Such improvements depend on the workloads, where we observe 1.3×,
+10.1×, 5.0× and 1.9× improvement on IMDB, PubMed,
+Arxiv, and TriviaQA respectively. Such results show that
+the token-sharding works better in large workloads (longer
+sequence) than small workloads because the data loading
+time of layer-allocation schemes increases quadratically with
+the sequence length for the attention layers. For the tokensharding, the size of moved data only increases linearly.
+Effect of data movement optimization: While the
+token-sharding dataﬂow can signiﬁcantly reduce the data
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 11 ===
+/D\HU2ULJLQDO3,0
+7RNHQ7UDQV3,0
+/D\HU1%3%XI
+
+7RNHQ7UDQV3,01%
+/D\HU7UDQV3,0
+
+
+
+
+1RUP9DOXH
+
+7RNHQ2ULJLQDO3,0
+/D\HU7UDQV3,01%
+7RNHQ1%3%XI
+
+
+
+/DWHQF\
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+,0'%
+
+3XE0HG
+
+$U[LY
+
+5R%(57D
+
+Figure 12.
+
+7ULYLD4$ ,0'%
+
+3XE0HG
+
+$U[LY
+
+3HJDVXV
+
+7ULYLD4$
+
+/0
+*37
+
+Average bandwidth usage.
+
+movement overhead, TransPIM can further reduce it through
+the customized data path with broadcast and copy buffers.
+As compared to TransPIM without buffers, such customized
+data path provides a 4.1× reduction on the data movement.
+Layer-wise breakdown: Figure 11(b) shows the layerwise breakdown results of summarization using Peagasus for
+two workloads – PubMed ( 4K) and a synthetic data with
+32K sequence length. All results are normalized to the total
+time of the proposed Token-TransPIM system. Tokenbased data sharding reduces the data movement overhead in
+FC and FFN layers because it requires less data duplication
+for computation (but less parallelism) than layer-allocation
+dataﬂow. In attention layers, TransPIM signiﬁcantly reduces
+the data movement overhead because of the high bandwidth
+utilization of ring-based broadcast as well as reduced data
+movement using token-sharding.
+Resource Utilization: We use the percentage of time
+spent on computations to measure the utilization of memory
+banks. As shown in Figure 11, Token-TransPIM has
+an average 45.8% utilization, which is 1.5× higher than
+Layer-TransPIM (30.8%) because token-based dataﬂow
+signiﬁcantly reduces overhead of data movement. However,
+Token-OriginalPIM and Token-NBP provides higher
+compute utilization, which are 47.7% and 89.5% respectively.
+This results from the extremely slow computation in PIMonly and NBP-only solutions. Figure 12 shows the average
+bandwidth utilization, which is the size of reading and
+writing data divided by the latency. The systems using layerbased dataﬂow consume more bandwidth than systems with
+token-based dataﬂow. For example, Layer-TransPIM
+has up to 1699 GB/s average bandwidth usage while
+Token-TransPIM only has up to 762 GB/s. Considering
+the overall latency, the result shows that layer-based dataﬂow
+requires much more data movements than token-based
+dataﬂow. Even though our 8-stack HBM system provides
+enough bandwidth (BWaggregated = 8 × 256 = 2T B/s), layerbased dataﬂow may become bandwidth-bound when increasing the workload size or decreasing the system bandwidth.
+On the hardware side, the usage of data buffer and ring
+broadcast in TransPIM increases the bandwidth usage of
+a speciﬁc dataﬂow because of low latency, showing that
+TransPIM’s buffer architecture is always effective.
+D. Hardware Customization Exploration
+The parallelism of bit-serial adder tree and data buffer
+size are the two design parameters of ACU. We need
+
+1RUP9DOXH
+
+
+
+
+(QHUJ\
+
+
+
+$UHD
+
+
+
+
+
+
+  
+
+ 
+
+ 
+
+
+
+
+
+
+
+
+
+
+D $GGHU7UHH3DUDOOHOLVP
+
+
+
+1RUPDOL]HG([HFXWLRQ7LPH
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+2YHUKHDG
+
+
+
+
+
+
+
+
+
+
+Figure 13.
+
+ 
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+E 6XEDUUD\3DUDOOHOLVP
+
+
+
+Design space exploration results for ACU.
+
+
+
+3RZHU :
+
+$YJ%:8VDJH *%V
+
+
+
+&RQYHQWLRQDO'5$03RZHU%XGJHW
+
+
+
+
+,0'%
+
+3XE0HG
+
+$U[LY 7ULYLD4$ ,0'%
+
+5R%(57D
+
+Figure 14.
+
+3XE0HG
+
+$U[LY 7ULYLD4$
+
+3HJDVXV
+
+Power consumption of TransPIM on various sequence lengths.
+
+to explore different parameters to ﬁnd the best tradeoff
+between additional overhead and resulting performance. We
+conduct a design space exploration on BERT model by
+varying the parallelism of adder tree Padd from 1 to 16.
+The results are depicted in Figure 13. The increased adder
+tree parallelism increases the accessed columns per row
+activation, thus reducing the number of repeated activated
+rows during vector reduction. As a result, the latency and
+energy consumed by vector reduction decrease by at most
+10.8× and 5.7×, respectively. Besides, ACU reduces a large
+part of DRAM access energy by register access energy as
+shown in Figure 13(a). Finally, we choose Padd = 4 as the
+optimal parallelism for the adder tree in ACU since it keeps a
+good balance between additional ACU area and performance.
+We can enable higher parallelism by simultaneously
+activating Psub subarrays in a bank, where each subarray
+contains one independent ACU. However, adding more ACUs
+in a bank increases the area overhead. Figure 13(b) shows
+the execution time and area overhead when adding different
+ACU numbers in a bank. Adding one ACU for each subarray
+(parallelism = Psub = 64) only increases the performance by
+5.4 × while introducing 15.8% area overhead. We choose
+Psub = 8 to well balance overhead and performance.
+E. Power Analysis
+We estimate the power consumption of TransPIM for tested
+workloads, as depicted in Figure 14. Pegasus models on
+TransPIM dissipate around 2% more power than RoBERTa
+models under the same sequence length. As the input
+sequence increases from 128 (IMDB) to 4096 (PubMed),
+the power of these two models increases about 4W, which
+is resulted from more computations. Overall, the consumed
+power of TransPIM is still below the 60W power budget of
+conventional DRAM system [34]. Thus, TransPIM satisﬁes
+the thermal constraints of conventional and TransPIM can be
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 12 ===
+6SHHGXS
+
+*%
+
+
+
+
+
+
+.
+
+.
+
+.
+
+*%
+
+.
+
+.
+
+*%
+
+.
+
+*%
+
+.
+
+5R%(57D
+
+Figure 15.
+
+.
+
+.
+
+.
+
+3HJDVXV
+
+Scalability of TransPIM when increasing the sequence length.
+
+integrated into existing commercial DRAM system without
+additional modiﬁcations in terms of power and cooling.
+F. Scalability
+As shown in previous work [4], [25], [45], Transformer
+would become signiﬁcantly challenging for longer sequences.
+Memory-based acceleration is promising to provide scalability by simultaneously increasing the memory bandwidth (with
+low memory access latency) and the compute parallelism.
+Figure 15 shows the speedup when using more HBM stacks
+for processing workloads with different sequence lengths.
+The speedup is averaged across all workloads. The result
+shows that TransPIM provides good scalability (almost linear)
+for long sequence workloads which saturate the compute
+capability of HBM. As the GPU-based solution is bounded by
+the sequence length due to the limited memory capacity, our
+experiments indicate that TransPIM is a promising solution
+to extend the applicability of transformer models for longsequence applications.
+VI. R ELATED W ORK
+Transformer accelerators: A GPU-based serving system
+and runtime called TurboTransformer is proposed in [13] to
+process long sequences through maximizing the utilization
+of computing and memory resources. But the scalability
+of TurboTransformer is poor since it is unable to support
+multiple GPUs. In contrast, TransPIM can be easily scaled
+up by stacking multiple HBM chips to yield larger memory
+space and support longer sequence lengths. SpAttn [42], A3
+[15], and GOBO [44] are state-of-the-art ASIC processors
+dedicated for the acceleration of attention module. Both
+A3 [15] and SpAttn [42] implement sorting units to prune
+redundant heads and shrink the memory footprint, thus
+adapting to the limited on-chip buffer size. SpAttn [42] and
+GOBO [44] propose low-precision quantization and pipelined
+architectures to improve the efﬁciency. Besides, approximate
+Softmax computation is used in [15]. But GOBO and A3
+are unable to natively support the end-to-end acceleration
+of the entire Transformer. Moreover, they need to load data
+from off-chip memory before computation. The off-chip
+memory bandwidth would become the bottleneck for memoryintensive layers of the Transformer. Instead, TransPIM avoids
+costly off-chip data transfer by keeping all the data in
+memory.
+PIM accelerators: Various PIM accelerators [16], [17],
+[27], [29], [37], [40] have been proposed to reduce the
+overhead of massive data movement as well as support
+high data parallelism. Newton [16], FIMDRAM [27], and
+
+McDRAM [40] adopt the similar near memory architectures and horizontal data organization in memory banks.
+They cascade bit-parallel arithmetic units to the DRAM
+bank to perform matrix-vector multiplication. However,
+the complicated bit-parallel and bulky buffer incur large
+overhead and decrease memory density [27]. To reduce
+the overhead of arithmetic units near memory, BFree [37]
+stores lookup tables that are compatible for computation in
+memory cells. However, the lookup table requires ﬁne-grained
+optimization to save the consumed space. Previous in-memory
+accelerators [12], [17], [29] also optimize the complex
+reduction. Drisa [29] adds extra shifters in the subarray
+while NeuralCache [12] relies on the cache I/O peripheral to
+reorganize data multi-step hierarchical reduction. These two
+methods either signiﬁcantly increase the area overhead or
+introduce large I/O latency. FloatPIM [17] supports reduction
+by organizing reduction data in a bit-serial way to avoid
+extra data movement. But this scheme sacriﬁces parallelism
+in Transformer which usually has long vectors for reduction.
+Different from the previous work, TransPIM combines the
+advantages of in-memory and near-memory computing. The
+proposed ACU is bit-serial to minimize the overhead of
+peripheral circuits. Compared to existing PIM accelerators,
+the proposed PIM-NMC combined computing paradigm
+provides better efﬁciency without affecting the memory
+density. MAT [48] is a PIM-based processing framework for
+attention-based machine learning models on long-sequence
+input. It breaks the long-sequence input into segments with
+various sizes and processes segment in a pipeline manner.
+However, MAT only targets a single encoder block, different
+from TransPIM which accelerates the whole Transformer.
+VII. C ONCLUSION
+In this work, we propose, TransPIM, an end-to-end acceleration for Transformer based on emerging HBM architectures.
+TransPIM adopts a software-hardware co-design principle
+to accelerate various Transformer models. As compared to
+previous accelerators, TransPIM signiﬁcantly reduces the
+overhead of data loading by exploiting the data locality
+in computations associated with input tokens. TransPIM
+also includes lightweight hardware modiﬁcations in HBM
+to improve the hardware efﬁciency of computation and
+data communication. With evaluation on various workloads,
+TransPIM achieves signiﬁcantly better performance and
+energy efﬁciency than various platforms including GPU,
+TPU, ASIC, and state-of-the-art memory-based accelerators.
+VIII. ACKNOWLEDGEMENT
+This work was supported in part by CRISP, one of six
+centers in JUMP, a Semiconductor Research Corporation
+(SRC) program, sponsored by DARPA. This work was also
+funded by NSF grants (#1730158, #2100237, #1911095,
+#2112167, #2052809, #1826967).
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 13 ===
+R EFERENCES
+[1] J. Ahn, S. Hong, S. Yoo, O. Mutlu, and K. Choi, “A
+scalable processing-in-memory accelerator for parallel graph
+processing,” in Proceedings of the 42nd Annual International
+Symposium on Computer Architecture, 2015, pp. 105–117.
+[2] M. F. Ali, A. Jaiswal, and K. Roy, “In-memory low-cost
+bit-serial addition using commodity dram technology,” IEEE
+Transactions on Circuits and Systems I: Regular Papers,
+vol. 67, no. 1, pp. 155–165, 2019.
+[3] K. E. Batcher, “Bit-serial parallel processing systems,” IEEE
+Computer Architecture Letters, vol. 31, no. 05, pp. 377–384,
+1982.
+[4] I. Beltagy, M. E. Peters, and A. Cohan, “Longformer: The
+long-document transformer,” arXiv preprint arXiv:2004.05150,
+2020.
+[5] G. Bertasius, H. Wang, and L. Torresani, “Is space-time
+attention all you need for video understanding?” arXiv preprint
+arXiv:2102.05095, 2021.
+
+[13] J. Fang, Y. Yu, C. Zhao, and J. Zhou, “Turbotransformers:
+an efﬁcient gpu serving system for transformer models,” in
+Proceedings of the ACM SIGPLAN Symposium on Principles
+and Practice of Parallel Programming, 2021, pp. 389–402.
+[14] F. Gao, G. Tziantzioulis, and D. Wentzlaff, “Computedram: Inmemory compute using off-the-shelf drams,” in Proceedings
+of the 52nd annual IEEE/ACM international symposium on
+microarchitecture, 2019, pp. 100–113.
+[15] T. J. Ham, S. J. Jung, S. Kim, Y. H. Oh, Y. Park, Y. Song, J.-H.
+Park, S. Lee, K. Park, J. W. Lee et al., “A3̂ : Accelerating
+attention mechanisms in neural networks with approximation,” in EEE International Symposium on High Performance
+Computer Architecture (HPCA), 2020, pp. 328–341.
+[16] M. He, C. Song, I. Kim, C. Jeong, S. Kim, I. Park,
+M. Thottethodi, and T. Vijaykumar, “Newton: A drammaker’s accelerator-in-memory (aim) architecture for machine
+learning,” in Annual IEEE/ACM International Symposium on
+Microarchitecture (MICRO), 2020, pp. 372–385.
+
+[6] N. Carion, F. Massa, G. Synnaeve, N. Usunier, A. Kirillov, and
+S. Zagoruyko, “End-to-end object detection with transformers,”
+in European Conference on Computer Vision (ECCV), 2020,
+pp. 213–229.
+
+[17] M. Imani, S. Gupta, Y. Kim, and T. Rosing, “Floatpim: Inmemory acceleration of deep neural network training with
+high precision,” in 2019 ACM/IEEE 46th Annual International
+Symposium on Computer Architecture (ISCA). IEEE, 2019,
+pp. 802–815.
+
+[7] K. Chen, S. Li, N. Muralimanohar, J. H. Ahn, J. B. Brockman,
+and N. P. Jouppi, “Cacti-3dd: Architecture-level modeling
+for 3d die-stacked dram main memory,” in 2012 Design,
+Automation & Test in Europe Conference & Exhibition (DATE).
+IEEE, 2012, pp. 33–38.
+
+[18] M. Imani, S. Pampana, S. Gupta, M. Zhou, Y. Kim, and
+T. Rosing, “Dual: Acceleration of clustering algorithms using
+digital-based processing in-memory,” in 2020 53rd Annual
+IEEE/ACM International Symposium on Microarchitecture
+(MICRO), 2020, pp. 356–371.
+
+[8] Y.-k. Choi, Y. Chi, W. Qiao, N. Samardzic, and J. Cong,
+“Hbm connect: High-performance hls interconnect for fpga
+hbm,” in The 2021 ACM/SIGDA International Symposium on
+Field-Programmable Gate Arrays, 2021, pp. 116–126.
+
+[19] “JEDEC Standard JESD235: High Bandwidth Memory (HBM)
+DRAM,” JEDEC Solid State Technology Association, Virginia,
+USA, Standard, 2013.
+
+[9] A. Cohan, F. Dernoncourt, D. S. Kim, T. Bui, S. Kim,
+W. Chang, and N. Goharian, “A discourse-aware attention
+model for abstractive summarization of long documents,” in
+Proceedings of the 2018 Conference of the North American
+Chapter of the Association for Computational Linguistics:
+Human Language Technologies, Volume 2 (Short Papers).
+New Orleans, Louisiana: Association for Computational
+Linguistics, Jun. 2018, pp. 615–621. [Online]. Available:
+https://www.aclweb.org/anthology/N18-2097
+[10] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “Bert:
+Pre-training of deep bidirectional transformers for language
+understanding,” arXiv preprint arXiv:1810.04805, 2018.
+[11] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn,
+X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer,
+G. Heigold, S. Gelly et al., “An image is worth 16x16 words:
+Transformers for image recognition at scale,” arXiv preprint
+arXiv:2010.11929, 2020.
+[12] C. Eckert, X. Wang, J. Wang, A. Subramaniyan, R. Iyer,
+D. Sylvester, D. Blaaauw, and R. Das, “Neural cache: Bitserial in-cache acceleration of deep neural networks,” in 2018
+ACM/IEEE 45th Annual International Symposium on Computer
+Architecture (ISCA). IEEE, 2018, pp. 383–396.
+
+[20] H. Jang, J. Kim, J.-E. Jo, J. Lee, and J. Kim, “Mnnfast: A
+fast and scalable system architecture for memory-augmented
+neural networks,” in Proceedings of the 46th International
+Symposium on Computer Architecture, 2019, pp. 250–263.
+[21] M. Joshi, E. Choi, D. Weld, and L. Zettlemoyer, “TriviaQA:
+A large scale distantly supervised challenge dataset for
+reading comprehension,” in Proceedings of the 55th Annual
+Meeting of the Association for Computational Linguistics
+(Volume 1: Long Papers). Vancouver, Canada: Association for
+Computational Linguistics, Jul. 2017, pp. 1601–1611. [Online].
+Available: https://www.aclweb.org/anthology/P17-1147
+[22] N. P. Jouppi et al., “In-datacenter performance analysis of a
+tensor processing unit,” in ISCA’17, 2017, pp. 1–12.
+[23] K. Kara, C. Hagleitner, D. Diamantopoulos, D. Syrivelis,
+and G. Alonso, “High bandwidth memory on fpgas: A data
+analytics perspective,” in 2020 30th International Conference
+on Field-Programmable Logic and Applications (FPL). IEEE,
+2020, pp. 1–8.
+[24] Y. Kim, W. Yang, and O. Mutlu, “Ramulator: A fast and
+extensible dram simulator,” IEEE Computer Architecture
+Letters, vol. 15, no. 1, pp. 45–49, 2016.
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 14 ===
+[25] N. Kitaev, L. Kaiser, and A. Levskaya, “Reformer: The
+efﬁcient transformer,” in International Conference on Learning
+Representations, 2020.
+[26] H. Kwon, P. Chatarasi, M. Pellauer, A. Parashar, V. Sarkar, and
+T. Krishna, “Understanding reuse, performance, and hardware
+cost of dnn dataﬂow: A data-centric approach,” in Proceedings
+of the 52nd Annual IEEE/ACM International Symposium on
+Microarchitecture, 2019, pp. 754–768.
+[27] Y.-C. Kwon, S. H. Lee, J. Lee, S.-H. Kwon, J. M. Ryu, J.-P.
+Son, O. Seongil, H.-S. Yu, H. Lee, S. Y. Kim et al., “25.4
+a 20nm 6gb function-in-memory dram, based on hbm2 with
+a 1.2 tﬂops programmable computing unit using bank-level
+parallelism, for machine learning applications,” in 2021 IEEE
+International Solid-State Circuits Conference (ISSCC), vol. 64.
+IEEE, 2021, pp. 350–352.
+[28] C.-C. Lee, C. Hung, C. Cheung, P.-F. Yang, C.-L. Kao, D.L. Chen, M.-K. Shih, C.-L. C. Chien, Y.-H. Hsiao, L.-C.
+Chen et al., “An overview of the development of a gpu with
+integrated hbm on silicon interposer,” in 2016 IEEE 66th
+Electronic Components and Technology Conference (ECTC).
+IEEE, 2016, pp. 1439–1444.
+[29] S. Li, D. Niu, K. T. Malladi, H. Zheng, B. Brennan, and
+Y. Xie, “Drisa: A dram-based reconﬁgurable in-situ accelerator,” in Annual IEEE/ACM International Symposium on
+Microarchitecture (MICRO), 2017, pp. 288–301.
+[30] Z. C. Lipton, J. Berkowitz, and C. Elkan, “A critical review
+of recurrent neural networks for sequence learning,” arXiv
+preprint arXiv:1506.00019, 2015.
+[31] Y. Liu, M. Ott, N. Goyal, J. Du, M. Joshi, D. Chen, O. Levy,
+M. Lewis, L. Zettlemoyer, and V. Stoyanov, “Roberta: A
+robustly optimized bert pretraining approach,” arXiv preprint
+arXiv:1907.11692, 2019.
+[32] A. L. Maas, R. E. Daly, P. T. Pham, D. Huang, A. Y. Ng, and
+C. Potts, “Learning word vectors for sentiment analysis,” in
+Proceedings of the 49th Annual Meeting of the Association for
+Computational Linguistics: Human Language Technologies Volume 1, ser. HLT ’11. USA: Association for Computational
+Linguistics, 2011, p. 142–150.
+[33] C. Oh, K. C. Chun, Y. Byun, Y. Kim, S. Kim, Y. Ryu, J. Park,
+S. Kim, S. Cha, D. Shin, J. Lee, J. Son, B. Ho, S. Cho,
+B. Kil, S. Ahn, B. Lim, Y. Park, K. Lee, M. Lee, S. Baek,
+J. Noh, J. Lee, S. Lee, S. Kim, B. Lim, S. Choi, J. Kim,
+H. Choi, H. Kwon, J. J. Kong, K. Sohn, N. S. Kim, K. Park,
+and J. Lee, “22.1 a 1.1v 16gb 640gb/s hbm2e dram with a
+data-bus window-extension technique and a synergetic on-die
+ecc scheme,” in 2020 IEEE International Solid- State Circuits
+Conference - (ISSCC), 2020, pp. 330–332.
+[34] M. O’Connor, N. Chatterjee, D. Lee, J. Wilson, A. Agrawal,
+S. W. Keckler, and W. J. Dally, “Fine-grained dram: Energyefﬁcient dram for extreme bandwidth systems,” in 2017 50th
+Annual IEEE/ACM International Symposium on Microarchitecture (MICRO). IEEE, 2017, pp. 41–54.
+
+[35] A. Parashar, P. Raina, Y. S. Shao, Y. Chen, V. A. Ying,
+A. Mukkara, R. Venkatesan, B. Khailany, S. W. Keckler,
+and J. Emer, “Timeloop: A systematic approach to dnn
+accelerator evaluation,” in 2019 IEEE International Symposium
+on Performance Analysis of Systems and Software (ISPASS),
+2019, pp. 304–315.
+[36] A. Radford, J. Wu, R. Child, D. Luan, D. Amodei, and
+I. Sutskever, “Language models are unsupervised multitask
+learners,” OpenAI blog, vol. 1, no. 8, p. 9, 2019.
+[37] A. K. Ramanathan, G. S. Kalsi, S. Srinivasa, T. M. Chandran,
+K. R. Pillai, O. J. Omer, V. Narayanan, and S. Subramoney,
+“Look-up table based energy efﬁcient processing in cache
+support for neural network acceleration,” in IEEE/ACM
+International Symposium on Microarchitecture (MICRO), 2020,
+pp. 88–101.
+[38] V. Seshadri, Y. Kim, C. Fallin, D. Lee, R. Ausavarungnirun,
+G. Pekhimenko, Y. Luo, O. Mutlu, P. B. Gibbons, M. A.
+Kozuch et al., “Rowclone: Fast and energy-efﬁcient in-dram
+bulk data copy and initialization,” in Proceedings of the Annual
+IEEE/ACM International Symposium on Microarchitecture,
+2013, pp. 185–197.
+[39] V. Seshadri, D. Lee, T. Mullins, H. Hassan, A. Boroumand,
+J. Kim, M. A. Kozuch, O. Mutlu, P. B. Gibbons, and T. C.
+Mowry, “Ambit: In-memory accelerator for bulk bitwise
+operations using commodity dram technology,” in Annual
+IEEE/ACM International Symposium on Microarchitecture
+(MICRO). IEEE, 2017, pp. 273–287.
+[40] H. Shin, D. Kim, E. Park, S. Park, Y. Park, and S. Yoo, “Mcdram: Low latency and energy-efﬁcient matrix computations
+in dram,” IEEE Transactions on Computer-Aided Design of
+Integrated Circuits and Systems, vol. 37, no. 11, pp. 2613–
+2622, 2018.
+[41] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones,
+A. N. Gomez, L. Kaiser, and I. Polosukhin, “Attention is all
+you need,” arXiv preprint arXiv:1706.03762, 2017.
+[42] H. Wang, Z. Zhang, and S. Han, “Spatten: Efﬁcient sparse
+attention architecture with cascade token and head pruning,”
+ArXiv, vol. abs/2012.09852, 2020.
+[43] X. Yang, M. Gao, Q. Liu, J. Setter, J. Pu, A. Nayak,
+S. Bell, K. Cao, H. Ha, P. Raina et al., “Interstellar: Using
+halide’s scheduling language to analyze dnn accelerators,”
+in Proceedings of the Twenty-Fifth International Conference
+on Architectural Support for Programming Languages and
+Operating Systems, 2020, pp. 369–383.
+[44] A. H. Zadeh, I. Edo, O. M. Awad, and A. Moshovos, “Gobo:
+Quantizing attention-based nlp models for low latency and
+energy efﬁcient inference,” in Annual IEEE/ACM International
+Symposium on Microarchitecture (MICRO), 2020, pp. 811–
+824.
+[45] M. Zaheer, G. Guruganesh, A. Dubey, J. Ainslie, C. Alberti,
+S. Ontanon, P. Pham, A. Ravula, Q. Wang, L. Yang et al.,
+“Big bird: Transformers for longer sequences,” arXiv preprint
+arXiv:2007.14062, 2020.
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.
+
+=== page 15 ===
+memory,” in Proceedings of the 24th Asia and South
+Paciﬁc Design Automation Conference, ser. ASPDAC
+’19. New York, NY, USA: Association for Computing
+Machinery, 2019, p. 591–596. [Online]. Available: https:
+//doi.org/10.1145/3287624.3287711
+
+[46] J. Zhang, Y. Zhao, M. Saleh, and P. Liu, “Pegasus: Pre-training
+with extracted gap-sentences for abstractive summarization,”
+in International Conference on Machine Learning. PMLR,
+2020, pp. 11 328–11 339.
+[47] M. Zhou, G. Chen, M. Imani, S. Gupta, W. Zhang, and T. Rosing, “Pim-dl: Boosting dnn inference on digital processing
+in-memory architectures via data layout optimizations,” in
+2021 30th International Conference on Parallel Architectures
+and Compilation Techniques (PACT), 2021, pp. 1–1.
+[48] M. Zhou, Y. Guo, W. Xu, B. Li, K. W. Eliceiri, and T. Rosing,
+“Mat: Processing in-memory acceleration for long-sequence
+attention,” in 2021 58th ACM/IEEE Design Automation
+Conference (DAC), 2021, pp. 25–30.
+[49] M. Zhou, M. Imani, S. Gupta, Y. Kim, and T. Rosing,
+“Gram: Graph processing in a reram-based computational
+
+[50] M. Zhou, L. Wu, M. Li, N. Moshiri, K. Skadron, and T. Rosing,
+“Ultra efﬁcient acceleration for de novo genome assembly via
+near-memory computing,” in 2021 30th International Conference on Parallel Architectures and Compilation Techniques
+(PACT), 2021, pp. 199–212.
+[51] M. Zhu, Y. Zhuo, C. Wang, W. Chen, and Y. Xie, “Performance
+evaluation and optimization of hbm-enabled gpu for dataintensive applications,” IEEE Transactions on Very Large
+Scale Integration (VLSI) Systems, vol. 26, no. 5, pp. 831–840,
+2018.
+
+
+
+Authorized licensed use limited to: Univ of Calif San Diego. Downloaded on July 18,2022 at 17:27:41 UTC from IEEE Xplore. Restrictions apply.

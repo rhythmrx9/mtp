@@ -1,0 +1,3452 @@
+# ASiM: Modeling and Analyzing Inference Accuracy of SRAM-Based Analog CiM Circuits
+# id: W4414008085 | key: 2025_Zhang_ASiM_TVLSI | TVLSI 2025 | card: ../cards/2025_Zhang_ASiM_TVLSI.md
+
+
+=== page 1 ===
+ARXIV PREPRINT, AUGUST 2025
+
+1
+
+ASiM: Modeling and Analyzing Inference Accuracy
+of SRAM-Based Analog CiM Circuits
+
+arXiv:2411.11022v4 [cs.AR] 2 Sep 2025
+
+Wenlun Zhang Graduate Student Member, IEEE,, Shimpei Ando,
+Yung-Chin Chen, and Kentaro Yoshioka Member, IEEE,
+
+Abstract—SRAM-based Analog Compute-in-Memory (ACiM)
+demonstrates promising energy efficiency for Deep Neural Network (DNN) processing. Nevertheless, efforts to optimize efficiency frequently compromise accuracy, and this trade-off
+remains insufficiently studied due to the difficulty of performing
+full-system validation. Specifically, existing simulation tools rarely
+target SRAM-based ACiM and exhibit inconsistent accuracy
+predictions, highlighting the need for a standardized, SRAM
+CiM circuit-aware evaluation methodology. This paper presents
+ASiM, a simulation framework for evaluating inference accuracy
+in SRAM-based ACiM systems. ASiM captures critical effects
+in SRAM based analog compute in memory systems, such as
+ADC quantization, bit parallel encoding, and analog noise, which
+must be modeled with high fidelity due to their distinct behavior
+in charge domain architectures compared to other memory
+technologies. ASiM supports a wide range of modern DNN
+workloads, including CNN and Transformer-based models such
+as ViT, and scales to large-scale tasks like ImageNet classification.
+Our results indicate that bit-parallel encoding can improve energy efficiency with only modest accuracy degradation; however,
+even 1 LSB of analog noise can significantly impair inference
+performance, particularly in complex tasks such as ImageNet.
+To address this, we explore hybrid analog-digital execution and
+majority voting schemes, both of which enhance robustness
+without negating energy savings. ASiM bridges the gap between
+hardware design and inference performance, offering actionable
+insights for energy-efficient, high-accuracy ACiM deployment.
+Code is available at https://github.com/Keio-CSG/ASiM
+Index Terms—Compute-in-memory, deep neural network, analog domain, SRAM, inference accuracy, simulation framework.
+
+I. I NTRODUCTION
+
+D
+
+EEP learning has brought revolutionary changes to a
+wide range of fields, not only in computer vision and
+natural language processing but also complex tasks spanning
+different modalities, delivering state-of-the-art performance.
+Recent advances have shown a scaling law in deep learning
+models, where performance consistently improves as the size
+of the model increases [1]. However, executing these largescale models in traditional von Neumann architectures leads
+to substantial energy consumption and latency [2], which
+poses critical challenges, particularly for edge devices with
+limited resources. Compute-in-Memory (CiM) has emerged as
+a novel paradigm to overcome these limitations by performing
+The authors are with the Department of Electronics and Electrical
+Engineering, Keio University, Kanagawa 223-8522, Japan (e-mail: wenlun zhang@keio.jp). This research was supported in part by the JST CREST
+JPMJCR21D2, JSPS Kakenhi 23H00467, Futaba Foundation, Asahi Glass
+Foundation, Telecommunications Advancement Foundation, and the KLL
+Ph.D. Program Research Grant. We also thank all anonymous reviewers and
+area chairs for their constructive feedback.
+
+computations directly within the memory arrays [3]. By
+reducing data movement between logic and memory, CiM
+architectures can achieve significant improvements in both
+energy efficiency and throughput.
+Among CiM architectures, Analog Compute-in-Memory
+(ACiM) offers high computational density and energy efficiency by leveraging the analog properties of memory cells to
+perform Multiply-and-ACcumulate (MAC) operations directly
+in the analog domain [4]. SRAM-based ACiM, in particular,
+has attracted attention due to its compatibility with standard
+CMOS processes and reliable charge-domain operation [5].
+In recent years, state-of-the-art ACiM designs have tended
+to compress input activations and perform MAC operations
+in a bit-parallel fashion while lowering ADC bit precision
+to achieve improved energy efficiency [6]–[10]. These techniques, while beneficial in some respects, exacerbate quantization errors and make it difficult to preserve inference
+accuracy, highlighting the importance of accurate and thorough
+evaluation.
+Despite of successive improvement on energy efficiency
+of ACiM designs, discussion regarding inference accuracy
+remains limited. This gap of understanding inference accuracy
+is particularly concerning by the challenges of validating
+ACiM circuits, because the massive scale of modern DNNs
+makes full hardware validation increasingly difficult. A more
+practical approach is partial validation, where researchers
+measure comprehensive characteristics of ACiM circuits and
+integrate them into software simulations to evaluate the endto-end inference accuracy [6], [7], [11], [12]. Although this
+approach theoretically yields simulation results comparable to
+full hardware measurements, modeling ACiM circuits presents
+numerous latent challenges that can lead to misleading accuracy assessments.
+We examined several existing simulation frameworks aimed
+at assessing inference accuracy and observed significant variation in their predictions. These discrepancies suggest that
+current tools may struggle to provide consistent guidance for
+design validation or silicon correlation. A key contributing
+factor is the lack of standardized, open-source simulators
+tailored specifically to SRAM-based ACiM. The inconsistent
+predictions produced by different tools highlight a key research
+question: What modeling components are essential for accurate inference evaluation in SRAM-based ACiM systems,
+and how can we ensure reliable, consistent predictions
+across diverse design scenarios? Addressing this gap would
+support the development of standardized evaluation practices
+and facilitate the broader adoption of ACiM architectures.
+
+=== page 2 ===
+ARXIV PREPRINT, AUGUST 2025
+
+In this paper, we introduce ASiM, an accurate simulation
+framework that bridges low-level circuit behavior and highlevel inference performance in SRAM-based ACiM systems.
+ASiM models essential circuit effects such as ADC quantization, bit-parallel encoding, and analog noise, enabling accurate
+evaluation of how hardware design choices impact DNN inference accuracy. Designed for practical use, ASiM integrates
+seamlessly with PyTorch as a plug-and-play tool, providing
+both modeling fidelity and ease of deployment. It supports
+SRAM ACiM specific architectural innovations, including bitparallel execution, and is compatible with modern DNNs
+such as Transformers. Using ASiM, we conduct a detailed
+analysis of how various circuit-level factors influence inference
+accuracy. The main findings are as follows:
+Analog noise within ACiM circuits severely impact
+inference accuracy: Our analysis reveals that even minor
+ADC readout errors of 1 LSB can propagate through the
+network and cause significant accuracy degradation.
+• Complex tasks demand stricter hardware design constraints: Inference on tasks like ImageNet is substantially
+more sensitive to circuit-level nonidealities than simpler
+benchmarks such as CIFAR-10. Maintaining accuracy on
+such tasks requires tighter design margins or the adoption
+of more robust approaches like Hybrid CiM (HCiM).
+• Bit-parallel ACiM improves energy efficiency but increases sensitivity to noise: While this architecture tolerates
+moderate quantization noise and achieves substantial energy
+savings, it is more susceptible to analog noise, necessitating
+stricter design standards to ensure inference reliability.
+•
+
+This paper makes the following contributions:
+We develop ASiM, an open-source simulation framework
+for systematic inference accuracy evaluation in SRAMbased ACiM systems. ASiM integrates with PyTorch and
+supports modern DNN architectures, including Transformers.
+• With ASiM, we analyze the impact of key circuit-level
+design factors on inference accuracy and uncover how
+specific noise sources degrade model performance, revealing
+sensitivity issues often overlooked in prior work.
+• Building on our findings, we provide practical design guidelines and solutions to improve ACiM inference accuracy,
+enhancing its practicality for real-world applications.
+
+•
+
+The remainder of this paper is organized as follows.
+Section II reviews related works and provides preliminary
+concepts on ACiM and inference evaluation metrics. Section III describes the detailed implementation and modeling
+methodology of the ASiM framework. Section IV presents
+a comprehensive analysis of how each ACiM design factor
+impacts DNN inference accuracy and highlights fundamental
+limitations. Section V provides simple yet effective solutions
+to improve ACiM inference accuracy. Section VI offers a
+comprehensive discussion of the ASiM framework alongside
+state-of-the-art ACiM designs. Finally, Section VII concludes
+the paper.
+
+2
+
+II. P RELIMINARIES
+A. Charge Domain ACiM using SRAM
+CiM accelerators break down multi-bit matrix multiplications into bit-wise MAC operations [13], as described in Eq. 1:
+
+O =x·w =
+
+P
+−1 Q−1
+X
+X
+
+N
+−1
+X
+
+p=0 q=0
+
+n=0
+
+(−1)k 2p+q
+
+xn [p]wn [q].
+
+(1)
+
+Here, x and w denote the N-dimensional input activation vector and weight vector, respectively, both represented in integer
+format with bit widths of P and Q. The factor k ∈ {0, 1} is
+used to manage negative conditions in 2’s complement for each
+bit-wise MAC cycle. In SRAM-based charge domain ACiM,
+weight bits are stored directly in memory cells to reduce
+frequent memory accesses, while activations are continuously
+refreshed and broadcast across the ACiM array. The resulting
+Dot Products (DPs) are temporarily stored in local capacitors;
+the accumulated charge is then shared or coupled along a
+Compute Bit-Line (CBL), and the voltage is finally read out
+using ADCs.
+Early version of bit-serial ACiM operates by broadcasting
+activations bit by bit, causing local capacitors to undergo either
+a full charge or discharge during each cycle. This effectively
+decomposes a matrix multiplication of P and Q bits into
+P × Q binary MAC cycles, as shown in Fig. 1(a). Progressing
+from bit-serial ACiM, the bit-parallel ACiM encodes input
+activations into y-bit compression via DACs, which allows
+multi-step DP voltage levels in the local capacitors and reduces
+the MAC cycles approximately to P/y × Q [10], as illustrated
+in Fig. 1(b). By minimizing the number of MAC cycles, bitparallel ACiM significantly enhances energy efficiency.
+However, compressing more activation bits into a single
+ADC readout can potentially degrade inference accuracy, as
+it introduces higher quantization noise than the traditional
+bit-serial scheme. Additionally, recent designs often reduce
+ADC precision to achieve maximum energy efficiency, further
+amplifying quantization noise, which may compromise DNN
+inference. Under these conditions, the intrinsic nonidealities
+of analog computations in ACiM, such as noise and signal
+distortion, become increasingly problematic. This creates additional complexities in determining optimal design policies.
+Despite successive advancements in ACiM architectures, there
+remains a lack of comprehensive analysis on how these factors
+affect inference accuracy. To fill this critical gap, we have
+developed ASiM, a comprehensive simulation framework, to
+analyze these effects and highlight the bottlenecks in charge
+domain ACiM, providing insights for future ACiM design
+improvements.
+B. Simulation Frameworks for ACiM
+Full DNN inference validation on ACiM prototypes requires
+significant resources. As an alternative, various simulation
+frameworks have been developed to model ACiM performance across memory types. These tools aid both pre-silicon
+design exploration and post-silicon performance evaluation.
+Some emphasize circuit-level performance modeling [14]–
+[16], while others incorporate analog nonidealities to assess
+
+=== page 3 ===
+ARXIV PREPRINT, AUGUST 2025
+
+Bit-Serial
+Bit-Cells
+
+3
+
+𝒘𝟎
+
+𝒙𝟎
+
+Input Activation
+
+𝒙[𝟑]
+
+𝒙[𝟐]
+
+𝒙[𝟏]
+
+𝒙[𝟎]
+
+×
+
+𝒘[𝟑]
+
+𝒘[𝟐]
+
+𝒘[𝟏]
+
+𝒘[𝟎]
+
+𝑫𝑷𝟎
+
+Drv.
+
+𝒘𝟏
+𝒙𝟏
+
+Weight
+
+𝑫𝑷𝟏
+
+Drv.
+
+𝒘𝑵−𝟏
+
+Input
+Drivers
+
+A/D
+
+Output MAC
+
+CSNR (SQNR) =
+
+𝒘[𝟐] ∙ 𝒘[𝟐] ∙ 𝒘[𝟐] ∙ 𝒘[𝟐] ∙
+𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+𝒘[𝟑] ∙ 𝒘[𝟑] ∙ 𝒘[𝟑] ∙ 𝒘[𝟑] ∙
+𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+
+𝑫𝑷𝑵−𝟏
+
+Drv.
+
+Activation
+Registers
+
+𝒘[𝟎] ∙ 𝒘[𝟎] ∙ 𝒘[𝟎] ∙ 𝒘[𝟎] ∙
+𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+𝒘[𝟏] ∙ 𝒘[𝟏] ∙ 𝒘[𝟏] ∙ 𝒘[𝟏] ∙
+𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+
+MAC Operation Cycle:
+Total Cycles = 4 × 4
+
+𝒙𝑵−𝟏
+
+additional term ση2 accounts for variations caused by analog
+nonidealities. Jia [24] used randomly generated weight and
+activation vectors, comparing the post-quantization output to
+the ideal full-precision output to measure the SQNR of a real
+device, as described by:
+
+Memory Array
+
+ADC
+
+Bit-Cells
+
+= 10 log10 [ PN −1
+
+×
+
+𝒘𝟏
+𝒙𝟏 [𝟏: 𝟎]
+
+𝑫𝑷𝟏
+
+D/A
+
+MAC Operation Cycle:
+Total Cycles = 2 × 4
+
+Output MAC
+
+𝒘[𝟐] ∙
+𝒙[𝟑] 𝒙[𝟐]
+
+𝑫𝑷𝑵−𝟏
+
+D/A
+
+Activation
+Registers
+
+𝒘[𝟑]
+
+Weight
+
+𝒘𝑵−𝟏
+
+𝒙𝑵−𝟏 [𝟏: 𝟎]
+
+𝒙[𝟑] 𝒙[𝟐]
+
+Input Activation Encoding
+
+𝒙[𝟏] 𝒙[𝟎]
+
+𝑫𝑷𝟎
+
+D/A
+
+𝒘[𝟑] ∙
+𝒙[𝟑] 𝒙[𝟐]
+
+DACs
+
+A/D
+
+ADC
+
+𝒘[𝟏] ∙
+𝒙[𝟑] 𝒙[𝟐]
+𝒘[𝟐] ∙
+𝒙[𝟏] 𝒙[𝟎]
+
+𝒘[𝟐]
+
+𝒘[𝟏]
+
+𝒘[𝟎] ∙
+𝒙[𝟑] 𝒙[𝟐]
+𝒘[𝟏] ∙
+𝒙[𝟏] 𝒙[𝟎]
+
+𝒘[𝟎]
+
+𝒘[𝟎] ∙
+𝒙[𝟏] 𝒙[𝟎]
+
+𝒘[𝟑] ∙
+𝒙[𝟏] 𝒙[𝟎]
+Bit-Shift Level
+
+(b)
+Fig. 1. Fundamental architecture and MAC operation of ACiM. (a) Bit-serial
+ACiM. (b) Bit-parallel ACiM.
+
+inference accuracy [17]–[20]. Frameworks such as X-PIM [21]
+aim to address both.
+However, most existing frameworks are optimized for nonvolatile memories like RRAM and Flash, whose noise characteristics differ from SRAM. In contrast, ASiM adheres
+to SRAM-specific modeling principles, using binary cycle
+decomposition and fine-grained modeling of MAC outputs
+to reflect real fabricated circuit behavior. Implemented within
+PyTorch, ASiM supports recent ACiM features including bitparallel operations and Transformer-based models, enabling
+flexible, accurate performance evaluation across diverse workloads.
+C. Evaluation Metrics for Inference Accuracy
+To quantify inference degradation from ACiM execution,
+metrics such as Signal to Quantization Noise Ratio (SQNR)
+and Compute Signal to Noise Ratio (CSNR) are commonly
+used [22]. SQNR captures noise from quantization alone,
+while CSNR accounts for additional analog effects. The original definitions of SQNR and CSNR are given in [23] as:
+σy2
+σy2
++
+,
+σy2i
+σy2o
+
+(2)
+
+σy2
+σy2
+σy2
++ 2 + 2,
+2
+σyi
+σyo
+ση
+
+(3)
+
+SQNR =
+
+CSNR =
+
+2
+n=0 yn
+
+2
+n=0 (yn − yˆn )
+
+Memory Array
+
+𝒘𝟎
+𝒙𝟎 [𝟏: 𝟎]
+
+(4)
+
+PN −1
+Bit-Shift Level
+
+(a)
+Bit-Parallel
+
+PSignal
+PNoise
+
+where σy2 is the variance of the ideal floating-point output, and
+σy2i and σy2o represent the variance of the output considering
+input and output quantization, respectively. For CSNR, the
+
+].
+
+Here, yn is the ideal full-precision output, and yˆn is the
+expected output from a real device. Yoshioka [25] extended
+this approach by introducing analog Gaussian noise into each
+binary MAC cycle to estimate the actual CSNR of ACiM
+chips. While the noise terms in the denominator of Eqs. 2
+and 3 can be minimized with careful circuit design, the signal
+term in the numerator is highly dependent on the specific DNN
+model and input data. Assuming a uniform distribution across
+the ADC’s full dynamic range can result in amplified signal
+variance, leading to an overestimation of CSNR.
+In this paper, we demonstrate that the output distribution
+in ACiM depends on factors such as the DNN model, input
+activations, and MAC cycle index. Consequently, CSNR may
+not reliably reflect inference quality in practice. Our ASiM
+framework offers a more representative evaluation for realistic
+DNN tasks and supports design space exploration grounded in
+accurate modeling.
+III. AS I M F RAMEWORK
+A. Overview
+The overview of ASiM framework is shown in Fig. 2. ASiM
+is implemented within PyTorch to ensure seamless integration
+with modern DNN workflows. It provides a plug-and-play simulation framework tailored for SRAM-based charge-domain
+ACiM. For MAC-heavy operations such as CONV, Linear,
+and Attention, ASiM modules can replace standard PyTorch layers, enabling bit-wise simulations with user-defined
+circuit parameters.
+During inference, quantized weights and activations are decomposed into binary bit tensors, split according to the predefined macro dimensions, and mapped onto the ACiM macros.
+The bit-wise simulation transforms the original floating-point
+operations into wbit×xbit×mapping operation is simulated using native PyTorch functions, producing ideal analog voltages
+on CBLs. ASiM then applies analog noise and ADC effects to
+these voltages. By leveraging PyTorch’s CUDA acceleration,
+ASiM achieves both simulation fidelity and high performance.
+Additionally, ASiM supports bit-parallel operation, where input activations are encoded based on encoding bit width, and
+the framework calculates bit-parallel voltage values using preconfigured algorithms, ensuring compatibility with most latest
+ACiM designs.
+B. Simulation Algorithm and Implementation Details
+1) Algorithm: A sample bit-serial simulation algorithm
+using the ASiM module is shown in Algorithm 1. The ASiM
+
+=== page 4 ===
+ARXIV PREPRINT, AUGUST 2025
+
+ASiM Framework
+
+4
+
+ACiM Macros
+
+ViT-B-32
+
+Map to Macros
+
+Block × L
+
+ASiM Modules
+
+nn.Linear
+
+GELU
+
+ASiMMultiheadAttention
+
+nn.Linear
+
+Replace Modules
+
+nn.MultiheadAttention
+
+ASiMConv2d(in_planes=64,
+PyTorch
+out_planes=128,
+Arguments
+kernel_size=3,
+wbit=8,
+xbit=8,
+adc_prec=8,
+Additional
+nrow=256,
+ASiM
+rand_noise_sigma=0.2,
+Arguments
+non_linear_sigma=0.2,
+act_enc=2,
+…)
+
+LayerNorm
+
+Activation Bit Matrix
+𝟏 𝟎
+𝟎 𝟏
+⋯
+𝟎 𝟎
+𝟏 𝟎
+𝟎 𝟎⋮
+𝟎
+𝟎⋮
+⋯ ⋱
+𝟏 𝟎𝟎 𝟏
+𝟏 𝟎𝟎 𝟎
+⋮𝟏 𝟎⋱ ⋯ ⋮𝟎 𝟏
+𝟏 𝟎
+𝟎 𝟏
+⋯
+𝟏 𝟎
+𝟎 𝟏
+
+Positional Encoding
+Embedding
+nn.Conv2d
+
+𝒙𝟎
+
+𝒘𝟎,𝟎
+
+𝒘𝟏,𝟎
+
+𝒘𝟎,𝟎
+
+𝒙𝟏
+𝒙𝟏
+
+𝒘𝟎,𝟏
+𝒘𝟎,𝟏
+
+𝒙𝟐
+𝒙𝟐
+
+𝒘𝟎,𝟐
+𝒘𝟎,𝟐
+
+𝒘𝟏,𝟎
+𝒘𝟏,𝟏
+𝒘𝟏,𝟏
+𝒘𝟏,𝟐
+𝒘𝟏,𝟐
+
+CBL<…> CBL<…>
+𝒘…,𝟎
+𝒘…,𝟎
+𝒘…,𝟏
+𝒘…,𝟏
+𝒘…,𝟐
+𝒘…,𝟐
+
+𝒘…,𝟎
+𝒘…,𝟎
+𝒘…,𝟏
+𝒘…,𝟏
+𝒘…,𝟐
+𝒘…,𝟐
+
+Map to Buffers
+
+LayerNorm
+
+ASiMConv2d
+
+𝒙𝟎
+
+CBL<1>
+
+𝒙𝑵−𝟑
+𝒙𝑵−𝟑
+
+𝒘𝟎,𝑵−𝟑
+
+𝒙𝑵−𝟐
+𝒙𝑵−𝟐
+
+𝒘𝟎,𝑵−𝟐
+
+𝒙𝑵−𝟏
+𝒙𝑵−𝟏
+
+𝒘𝟎,𝑵−𝟏
+
+𝒘𝟎,𝑵−𝟑
+
+𝒘𝟎,𝑵−𝟐
+
+𝒘𝟎,𝑵−𝟏
+
+𝒘𝟏,𝑵−𝟑
+𝒘𝟏,𝑵−𝟑
+𝒘𝟏,𝑵−𝟐
+𝒘𝟏,𝑵−𝟐
+𝒘𝟏,𝑵−𝟏
+𝒘𝟏,𝑵−𝟏
+
+𝒘…,𝑵−𝟑
+𝒘…,𝑵−𝟑
+𝒘…,𝑵−𝟐
+𝒘…,𝑵−𝟐
+𝒘…,𝑵−𝟏
+𝒘…,𝑵−𝟏
+
+𝒘…,𝑵−𝟑
+𝒘…,𝑵−𝟑
+𝒘𝟏,𝑵−𝟐
+𝒘𝟏,𝑵−𝟐
+
+Number of Row-Parallelism
+
+ASiMLinear
+
+Weight Bit Matrix
+𝟎 𝟎
+𝟎 𝟏
+⋯
+𝟏 𝟎
+𝟏 𝟏
+𝟏 𝟏⋮
+𝟏 𝟎⋮
+⋯ ⋱
+𝟎 𝟎𝟎 𝟏
+𝟏 𝟎𝟏 𝟎
+⋮𝟎 𝟎⋱ ⋯ ⋮𝟏 𝟎
+𝟎 𝟏
+𝟎 𝟎
+⋯
+𝟎 𝟎
+𝟏 𝟎
+
+CBL<0>
+
+𝒘𝟏,𝑵−𝟏
+𝒘𝟏,𝑵−𝟏
+
+Noise Injection:
+• Random Noise
+• Non-linearity
+MAC Quantization:
+• ADC Rounding
+
+A/D
+A/D
+A/D
+A/D
+
+A/D
+A/D
+A/D
+A/D
+
+Fig. 2. ASiM framework overview: ASiM is a plug-and-play simulation framework tailored for charge-domain ACiM inference. Users can seamlessly replace
+default PyTorch modules with ASiM modules to perform inference simulations by providing additional circuit parameters. The framework automatically
+decomposes the weights/activations and maps it to the designated macros, following ACiM computing rules while incorporating noise and ADC effects.
+
+module initializes user-provided arguments that define the
+characteristics of the prototype ACiM circuits. Once initialized, the module quantizes all model weights and input
+activations, decomposes them into binary bit tensors, and splits
+these tensors according to the predefined macro dimensions.
+During the forward pass of the ASiM modules, the ideal CBL
+voltage for each column is computed by applying PyTorch
+functions such as conv2d, linear, or matmul on each
+bit-serial cycle with binary tensors. After determining the
+ideal voltage value for each cycle, analog noise—based on
+the predefined noise model—is added to these voltage values.
+The CBL voltage is subsequently read out by ADCs, which
+round these analog values to the nearest discrete level based on
+ADC precision, followed by bit-shifting and accumulation to
+yield the final output activation values, as described in Eq. 1.
+2) Model Quantization: To streamline implementation, pertensor uniform quantization is employed as the quantization strategy for all model weights and activations in the
+ASiM modules. For post-ReLU activations in CNNs and postsoftmax attention in ViTs, where the activation values are
+consistently positive, unsigned quantization is used. For all
+model weights and the remaining activations, signed quantization in 2’s complement format is applied, where the MSB
+represents the sign. During the forward propagation of each
+layer using the ASiM module in a simulation, weight and
+activation tensors are quantized into integer format from
+floating-point values via a scaling factor. After completing
+the bit-wise computations, the results are converted back
+to floating-point format, thereby incorporating the effects of
+model quantization noise. Operations unrelated to ACiM, such
+as activation functions and batch normalization, are performed
+in floating-point format to exclude irrelevant influences.
+3) Mapping Strategy: In the ASiM configuration, we adopt
+the weight stationary data flow commonly used in most ACiM
+
+Algorithm 1 Bit-wise Simulation of ASiM Modules
+Input: Input activations
+Output: Output activations
+1: Initialize ASiM module with the following parameters:
+bit width for weights and activations, ADC precision, row
+parallelism, analog noise intensity, and others
+2: Quantize input activations and weights to X and W bits.
+Convert them into binary bit tensors and split them into
+N tensors to match the dimensions of the macros
+3: for Each mapping update: n = 0, 1, . . . , N − 1 do
+4:
+for Each weight bit index: i = 0, 1, . . . , W − 1 do
+5:
+for Each input bit index: j = 0, 1, . . . , X − 1 do
+6:
+Perform bit-wise computation:
+VM AC =nn.functional(wi , xj )
+7:
+if Analog noise is included then
+8:
+Generate and add noise:
+VM AC = VM AC + fN (σ)
+9:
+end if
+10:
+Apply ADC rounding function:
+M ACi,j = fADC (VM AC )
+11:
+Update multi-bit output activations:
+Output = Output + Shift(M ACi,j , i + j)
+12:
+end for
+13:
+end for
+14: end for
+15: return Output activations computed by the ACiM circuits
+
+designs, where model weights are stored in SRAM cells, and
+input activations are frequently refreshed and broadcast across
+the macro. In the MultiheadAttention layers, which
+involve matrix multiplications (QK and AV), Queries (Q) and
+Values (V) are stored in SRAM cells, while Keys (K) and
+Attention Scores (A) are broadcast across the macro, providing
+
+=== page 5 ===
+ARXIV PREPRINT, AUGUST 2025
+
+5
+
+an optimal configuration suitable for bit-parallel simulations.
+4) Activation Encoding: In bit-parallel simulations, activations are converted into multi-step voltage values using the
+specified encoding bit width. For unsigned activations, all bits
+are encoded directly according to the given parameter. If the
+activation bit width does not evenly divide the encoding bit
+width, the encoding begins with the LSB, and the remaining
+MSB bits are encoded separately. For signed activations, the
+MSB (sign bit) is processed in a bit-serial manner, while the
+remaining bits follow the same encoding rules as unsigned
+activations.
+5) Analog Noise Modeling: As detailed in Algorithm 1,
+analog noise can be added to the CBL voltage of each column
+to emulate real ACiM devices, enabling evaluation of its effect
+on inference accuracy. As ASiM is designed as a system-level
+simulator, it does not model or differentiate between specific
+low-level analog noise sources. Instead, the cumulative effect
+of these noise sources is abstracted as equivalent fluctuations
+on CBL voltage for ADC readout. Therefore, ASiM includes
+two simple noise models: random noise and nonlinearity,
+both of which can be configured with user-defined noise
+intensities. The combined analog noise model, incorporating
+these two noise types, reflects the majority of conditions found
+in fabricated circuits. Static offset noise, while potentially
+present in real circuits, can be mitigated through ADC code
+calibration and is therefore omitted from ASiM for simplicity.
+Random noise covers sources such as kT /C noise and
+random comparator decision errors, which can be simply
+represented with a Gaussian distribution modeling an ADC
+input-referred noise [26], [27]. The distribution has a mean
+of zero and a standard deviation corresponding to the noise
+intensity, with ASiM taking this intensity as a percentage
+relative to the entire operational voltage range. Nonlinearity
+arises from device mismatches and layout-specific issues;
+ASiM incorporates capacitance
+√ mismatch in local memory
+cells and DACs, scaled by N , where N is the number of
+capacitors in the CBL and DAC [28]. Due to the stochastic
+nature of mapping DNNs to ACiM hardware, spatial noise
+such as mismatch and PVT variation, is expected to have a
+similar impact on accuracy and is thus integrated into the
+overall random noise and nonlinearity model in this paper.
+Users can also incorporate custom noise models to account
+for nonlinearities specific to their designs, enabling tailored
+inference performance analysis with ASiM.
+6) ADC Modeling: ADCs convert the CBL voltage across
+the entire operational range into discrete steps, determined by
+ADC precision, as shown by:
+
+M AC = clamp ⌊VM AC ⌉ , 0, 2k − 1 ,
+
+(5)
+
+where VM AC denotes the CBL voltage before rounding, and
+M AC represents the digital MAC value after ADC rounding.
+Here, k is the ADC precision, and ⌊·⌉ denotes the round-tonearest operator. After rounding, the digital output is scaled
+back to its corresponding MAC value, followed by bit-shifting
+and accumulation to produce the final multi-bit output activations.
+
+In [29], the ADC’s dynamic range is clipped to a narrow
+span to increase granularity. While this approach can theoretically reduce quantization noise, it presents two significant
+drawbacks: (1) analog noise becomes proportionally more significant within the narrowed range, and (2) the implementation
+requires complex dynamic range adjustment circuits. Thus,
+this method tends to degrade the ADC’s Effective Number
+Of Bits (ENOB) in practice, potentially leading to optimistic
+accuracy estimations. In contrast, our ADC model captures
+the full range of possible CBL voltages, better reflecting realworld ACiM implementations, providing more reliable accuracy predictions while maintaining implementation simplicity.
+TABLE I
+C OMPARISON OF INFERENCE ACCURACY FOR A BIT- SERIAL AC I M MACRO
+WITH 256- ROW PARALLELISM UNDER A 6- BIT ADC AND 0.5 LSB RMS
+NOISE , EVALUATED USING SEVERAL EXISTING SIMULATORS WITH AN
+8 B /8 B R ES N ET-18 MODEL ON I MAGE N ET.
+
+ADC Model
+Accuracy
+
+CSNR
+
+CIMUFAS
+
+Saikia
+
+NeuroSim
+
+SNR
+65.44%
+
+Gaussian
+0.10%
+
+Adaptive
+40.82%
+
+Min-Max
+61.09%
+
+C. Preliminary Analysis of Existing Simulators
+We conducted a preliminary analysis using several prevailing simulation frameworks, and the predicted results are
+summarized in Table I. While each framework has its merits,
+differences in modeling approaches lead to divergent accuracy
+predictions, underscoring the importance of SRAM-specific
+modeling capabilities as offered by ASiM.
+Our analysis identifies ADC modeling and noise representation as key factors driving the divergence in accuracy
+predictions. For instance, the CSNR approach [10], [24], [30]
+models quantization and analog noise by injecting scaled random noise into the model’s forward pass based on a predefined
+SNR. However, it neglects the noise amplification caused by
+shifting and accumulation of partial MAC results, resulting
+in significant discrepancies from actual SRAM-based ACiM
+circuit behavior. While CIMUFAS [20] performs binary-level
+decomposition of CiM operations, it does not include an
+explicit ADC model and instead introduces Gaussian noise
+as a substitute, potentially limiting its ability to accurately
+reflect inference performance. Saikia’s model [29] assumes
+an idealized adaptive dynamic range mechanism that is not
+readily implementable in real ADCs, thereby underestimating
+the quantization error introduced by degraded ENOB in practical hardware. NeuroSim [14], [31] quantizes ADC outputs
+based on the Min-Max range of MAC results, which leads to
+overly optimistic estimations of ADC rounding effects and
+the corresponding impact of analog noise. Although each
+framework has its strengths, these modeling differences can
+lead to diverging accuracy predictions. Without clear guidance, such discrepancies may inadvertently influence circuit
+design decisions. This highlights the need for a consistent and
+accurate simulation methodology to support reliable evaluation
+and design exploration for ACiM systems.
+To address these concerns, ASiM simulates ADC behavior across its full dynamic range, accurately capturing both
+
+=== page 6 ===
+ARXIV PREPRINT, AUGUST 2025
+
+6
+
+100
+
+80
+75
+
+60
+
+IV. P ERFORMANCE A NALYSIS OF AC I M I NFERENCE
+A. Re-consider CSNR with Actual Data Distributions
+To establish a foundation for evaluating how different design
+factors impact inference accuracy, we first analyzed the CSNR
+under realistic neural network data distributions. Our analysis
+focuses on ResNet-18 and ViT-B-32 architectures using the
+CIFAR-10 dataset, with both models configured for 6-bit
+weight and 6-bit activation quantization. The distributions
+of several common layers processed by ACiM are shown
+in Fig. 4(a), with their bit-level sparsity for each bit index
+displayed in Fig. 4(b). In convolutional layers, we observed
+distinct patterns between weights and activations:
+
+68.17
+
+70
+
+Although ASiM is designed as a plug-and-play framework,
+directly using the default floating-point model for ACiM inference often leads to significant accuracy loss. To address this,
+we provide interfaces for Quantization-Aware Training (QAT)
+and Noise-Aware Training (NAT) for model fine-tuning [32],
+[33]. When set to Train mode and configured with the
+desired quantization bits for weights and activations, QAT
+is performed to help correct errors from model quantization.
+However, the model remains insufficiently robust for analog
+computing, as DNN models require retraining to accommodate
+diverse additional noise sources. To build a model that can
+withstand ADC quantization and analog noise simultaneously,
+ASiM supports NAT, enhancing model robustness as described
+by the equation:
+
+where O is the ideal output activation expected by model
+inference, and scaled Gaussian noise, η ∼ N (0, σ 2 ), is applied
+directly during the floating-point forward pass to emulate the
+noisy outputs generated by ACiM circuits. By fine-tuning the
+DNN model with various training noise intensities σ, we select
+a model that maintains acceptable baseline accuracy while
+maximizing noise tolerance for ACiM applications.
+We conducted NAT on ResNet-18 and ViT-B-32 using the
+CIFAR-10 and ImageNet datasets, respectively, with the baseline model accuracy under different training noise intensities
+value of σ shown in Fig. 3. As observed in many previous
+studies, ResNet models tend to be easier to fine-tune compared
+to ViT models, and the ImageNet task is generally more
+challenging than CIFAR-10. Consequently, we selected models
+optimized for ACiM applications in the following analysis,
+with a 2.0% accuracy drop for the CIFAR-10 task and around
+a 3.0% accuracy drop for the ImageNet task.
+
+CIFAR-10/ResNet-18
+CIFAR-10/ViT-B-32
+ImageNet/ResNet-18
+ImageNet/ViT-B-32
+
+85
+
+65
+
+(6)
+
+92.08
+
+90
+
+D. Noise-Aware Training
+
+e = O · (1 + η),
+O
+
+95.26
+
+95
+
+Accuracy (%)
+
+rounding effects and noise-induced errors based on the real
+MAC output distribution. Additionally, ASiM supports the
+latest Transformer-based models and incorporates advanced
+features such as bit-parallel ACiM evaluation. Lastly, ASiM’s
+modular design allows for seamless integration into various
+codebases, making it a user-friendly and adaptable tool for
+ACiM circuit evaluation.
+
+0
+
+10
+
+20
+
+30
+
+40
+
+65.49
+
+50
+
+60
+
+70
+
+80
+
+90
+
+100
+
+Training Noise Intensity (%)
+Fig. 3. Noise-Aware Training: accuracy of 8b/8b baseline models across different training noise intensities. ResNet models demonstrate greater robustness
+compared to ViT, while ImageNet proves more challenging than CIFAR-10.
+
+Activations show a characteristic of one-sided distribution
+due to ReLU operations that zero out negative values.
+• Activation bit-level sparsity remains consistently below
+40%, with MSBs being particularly sparse.
+• Weights exhibit a normal distribution, resulting in approximately 50% bit-level sparsity across all bit positions.
+•
+
+The ViT architecture presents more complex distribution patterns and distinctive sparsity distribution. In the linear layers:
+QKV projection layers show significant cross-channel variations due to LayerNorm operations [34].
+• Both weights and activations display two-sided distributions
+with numerous small values quantized to zero in per-tensor
+quantization configuration.
+• By these reasons, bit-level sparsity in QKV projections
+consistently ranges between 20% and 30% for both weights
+and activations.
+•
+
+The attention computation demonstrates particularly diverse
+characteristics:
+Value (V) matrices follow a normal distribution with approximately 50% bit-level sparsity.
+• In most cases, attention scores (A) exhibit a long-tail
+distribution characterized by predominantly small values
+with occasional large outliers, resulting in bit-level sparsity
+varies dramatically from 0% to 60%, with MSBs showing
+exceptionally high sparsity.
+•
+
+The MAC output for each binary cycle is statistically
+proportional to the bit-level sparsity of weights and activations
+[35], implying that the expected CBL voltage depends on
+the cycle indices and is generally constrained to a narrow
+range, rather than utilizing the full ADC dynamic range. Fig. 5
+illustrates an example of bit-serial MAC outputs for CONV
+layer inputs from Fig. 4, using an ACiM macro with 256-row
+parallelism and an 8-bit ADC. The MAC output corresponding
+to the MSB of activations is nearly zero, with a very low
+probability of being non-zero due to the minimal bit-level
+sparsity in the activation. As the activation bit index shifts
+toward the LSBs, the MAC output increases, driven by rising
+bit-level sparsity. However, the maximum MAC output span
+in the CONV layer remains only 50 within the full ADC
+
+=== page 7 ===
+Density
+
+Density
+
+Density
+
+Density
+
+Density
+
+Density
+
+ARXIV PREPRINT, AUGUST 2025
+
+7
+
+B. ADC Quantization Noise
+
+0.10
+
+CONV: Weight
+
+0.05
+0.00
+0.40
+
+−30
+
+−20
+
+−10
+
+0
+
+10
+
+20
+
+30
+
+CONV: Activation
+
+0.20
+0.00
+0.60
+
+0
+
+10
+
+20
+
+30
+
+40
+
+50
+
+60
+
+QKV: Weight
+
+0.30
+0.00
+0.60
+
+−30
+
+−20
+
+−10
+
+0
+
+10
+
+20
+
+30
+
+QKV: Activation
+
+0.30
+0.00
+0.60
+
+−30
+
+−20
+
+−10
+
+0
+
+10
+
+20
+
+30
+
+AV: Attention
+
+0.30
+0.00
+0.10
+
+0
+
+10
+
+20
+
+30
+
+40
+
+50
+
+60
+
+AV: Value
+
+0.05
+0.00
+
+−30
+
+−20
+
+−10
+
+0
+
+10
+
+20
+
+30
+
+(a)
+100
+CONV: Weight
+QKV: Weight
+AV: Attention
+
+Sparsity (%)
+
+80
+
+CONV: Activation
+QKV: Activation
+AV: Value
+
+60
+40
+20
+0
+5
+
+4
+
+3
+
+2
+
+1
+
+0
+
+Bit Index
+
+(b)
+Fig. 4. Quantized DNN model input distribution analysis. (a) Data distribution
+of representative DNN layers after 6b/6b quantization. (b) Bit-level sparsity
+for each cluster in (a), measured per bit index, where sparsity represents the
+ratio of 1’s at each bit position.
+
+dynamic range of 256. This suggests that the signal variance in
+Eq. 3 is not fixed but is data-dependent and remains confined
+to a limited range. The near-zero signal span in the MSB
+cycles leads to a signal variance close to zero, making the
+output highly susceptible to noise. Conventional estimates,
+assuming uniform distribution of weights and inputs [24], [25],
+predict a signal variance of DR2ADC /12, which is significantly
+higher than the actual variance, resulting in optimistic CSNR
+estimates. This observation holds for all types of DNN layers,
+as indicated by the sparsity in Fig. 4(b), motivating us to
+comprehensively verify how each design factor influences
+inference performance in real DNN applications.
+
+We begin our exploration of inference accuracy by examining the quantization noise introduced by ADCs in ACiM
+circuits. Unlike Digital Compute-in-Memory (DCiM), where
+inference accuracy is influenced solely by model quantization, the ADC rounding effect in ACiM circuits introduces
+additional quantization errors to each MAC output.
+Boundary Precision. We define ADC boundary precision
+as the precision that corresponds exactly to the row-parallelism
+of the ACiM. For example, in a conventional bit-serial ACiM
+with a row-parallelism dimension of 2k , the boundary precision is k, which would ideally translate the CBL voltage
+into digital code. Using an ADC with precision lower than
+k introduces quantization errors that could degrade inference
+accuracy, while ADC precision higher than k is redundant
+and adds unnecessary area and energy overhead. To provide a
+quantitative example of how reducing ADC precision affects
+performance, we consider an ACiM macro configured with a
+row parallelism of 256 and 4-bit activation encoding. In this
+configuration, each local capacitor can represent 16 distinct
+states (from 0 to 15), and a lossless readout must span the
+entire computational range from 0 to 3,840 to accurately
+capture all possible MAC outputs. As a result, achieving errorfree readout requires an ADC boundary precision of 12 bits
+to avoid any rounding-induced errors.
+Trade-offs and Design Policy. While increasing rowparallelism dimension improves ACiM throughput, it also
+requires higher ADC precision to maintain the same computational accuracy. In this paper, we selected a row parallelism
+of 256 as it provides an optimal balance between throughput
+and tunable ADC precision. An optimized design carefully
+selects ADC precision slightly below the boundary precision,
+balancing minor accuracy loss with significant efficiency gains.
+Experiments. We performed inference simulations on the
+CIFAR-10 and ImageNet datasets using the ResNet-18 CNN
+model and the ViT-B-32 Transformer model, respectively.
+Both models are trained with 8b/8b weight/activation QAT, followed by fine-tuning with appropriate noise intensities through
+NAT. We analyzed the accuracy loss due to quantization noise
+for both bit-serial and bit-parallel scheme to identify the
+optimal ACiM settings for each model and dataset.
+1) Experimental Analysis on Bit-serial Scheme: To assess
+the minimum ADC bit precision necessary for bit-serial ACiM,
+we performed simulations across various ADC precisions on
+a macro with row parallelism of 256, with results shown
+in Fig. 6. For ResNet-18 on CIFAR-10, ADC precision
+can be lowered by up to 2 bits below the boundary with
+minimal accuracy loss. However, on the more challenging
+ImageNet dataset, lowering ADC by even 1 bit below the
+boundary precision leads to an accuracy loss of approximately
+10% compared to the baseline, indicating potential issues
+in practical applications. In contrast, any reduction in ADC
+precision below the boundary causes inference accuracy to
+approach random guessing in ViT-B-32. Fig. 6 thus confirms
+that Transformer models are generally more sensitive to ADC
+precision than CNNs, and ImageNet is indeed a more complex
+task than CIFAR-10, in line with design intuition. Our findings
+
+=== page 8 ===
+ARXIV PREPRINT, AUGUST 2025
+
+240
+
+MAC Output
+
+220
+
+8
+
+x[5] MAC Cycle:
+
+x[4] MAC Cycle:
+
+x[3] MAC Cycle:
+
+x[2] MAC Cycle:
+
+x[1] MAC Cycle:
+
+x[0] MAC Cycle:
+
+μ = 0.007
+σ = 0.096
+
+μ = 0.583
+σ = 1.436
+
+μ = 6.085
+σ = 6.411
+
+μ = 26.817
+σ = 8.027
+
+μ = 41.921
+σ = 10.624
+
+μ = 44.837
+σ = 10.025
+
+80
+60
+40
+20
+w[0]·x[0]
+
+w[1]·x[0]
+
+w[3]·x[0]
+
+w[2]·x[0]
+
+w[4]·x[0]
+
+w[5]·x[0]
+
+w[0]·x[1]
+
+w[1]·x[1]
+
+w[3]·x[1]
+
+w[2]·x[1]
+
+w[4]·x[1]
+
+w[0]·x[2]
+
+w[5]·x[1]
+
+w[1]·x[2]
+
+w[2]·x[2]
+
+w[3]·x[2]
+
+w[4]·x[2]
+
+w[5]·x[2]
+
+w[0]·x[3]
+
+w[1]·x[3]
+
+w[2]·x[3]
+
+w[4]·x[3]
+
+w[3]·x[3]
+
+w[0]·x[4]
+
+w[5]·x[3]
+
+w[1]·x[4]
+
+w[2]·x[4]
+
+w[3]·x[4]
+
+w[4]·x[4]
+
+w[5]·x[4]
+
+w[0]·x[5]
+
+w[1]·x[5]
+
+w[2]·x[5]
+
+w[4]·x[5]
+w[3]·x[5]
+
+w[5]·x[5]
+
+0
+
+Fig. 5. Distribution of MAC outputs in the convolutional layer of a 6b/6b CNN for each bit-serial cycle, using an ACiM macro with row parallelism of 256
+and 8-bit ADC. The MAC outputs associated with the MSBs of the activation are consistently low, while outputs increase as the activation bit index moves
+toward the LSBs. Still, the maximum signal span across all cycles remains only 50 within the full ADC dynamic range of 256.
+
+ADC Precision
+6
+7
+8
+9
+10
+
+ResNet-18
+CIFAR-10 (92.08%) ImageNet (65.49%)
+90.37
+2.00
+91.80
+55.84
+92.08
+65.48
+92.08
+65.54
+92.08
+65.60
+
+ViT-B-32
+CIFAR-10 (95.26%) ImageNet (68.17%)
+9.94
+0.11
+13.36
+0.15
+95.27
+68.14
+95.28
+68.23
+95.22
+68.13
+
+Fig. 6. Shmoo plot of inference accuracy under varying ADC precision for a
+bit-serial ACiM macro with a row-parallelism of 256, evaluated using an 8b/8b
+DNN model. The accuracy of the digital counterpart is provided alongside
+each model’s name for reference.
+
+suggest that:
+• Only CNN-based models targeting CIFAR-10-level tasks
+can afford ADC precision reductions below boundary precision.
+• More complex models and tasks must retain ADC precision
+at or above boundary precision.
+2) Experimental Analysis on Bit-parallel Scheme: We proceed to analyze the accuracy degradation caused by quantization noise in bit-parallel ACiM. Simulations were performed
+on a macro with row parallelism of 256, increasing ADC
+precision from 8 bits to determine the best configuration for
+each DNN model and dataset in bit-parallel scheme. Encoding
+bit widths were chosen as 2 and 4, and results were compared
+with the bit-serial configuration. Activations were quantized
+to 9 bits for signed data in 2’s complement format, with
+the sign bit processed in bit-serial mode while the remaining
+bits were evenly encoded within 2-bit and 4-bit widths to
+allow a fair comparison with unsigned activations. Notably,
+each additional encoding bit requires a one-bit increase in
+ADC boundary precision in bit-parallel scheme, as higher
+ADC resolution is needed to eliminate quantization errors from
+encoding.
+As illustrated in Fig. 7, ResNet-18 on CIFAR-10 can encode
+activations to 4 bits while retaining 8-bit ADC precision with
+minimal accuracy loss. For ViT-B-32, 2-bit activation encoding
+preserves ADC precision at 8 bits, while 4-bit encoding
+requires a 1–2 bit increase in ADC precision for comparable
+inference performance. On the more challenging ImageNet
+task with ResNet-18, 2-bit and 4-bit encoding require 1 and 2
+bits of additional ADC precision to reach accuracy equivalent
+
+to bit-serial scheme, respectively. For ViT-B-32, achieving
+lossless inference requires a 2 and 3 bits increase in ADC
+precision for 2-bit and 4-bit encoding, respectively.
+We evaluate the trade-off between energy savings and
+accuracy loss using the design parameter of the prototype
+chip in [30], with results shown in Fig. 8. For our prototype,
+the energy required to increase ADC precision by one bit
+remains below a 30% rise up to 11 bits, while encoding an
+additional bit for activations reduces ACiM cycles by half,
+yielding significant energy gains. Thus, encoding activations
+with 4 bits results in nearly a fourfold reduction in energy per
+classification across most models and datasets, with minimal
+impact on inference accuracy. Even in the challenging combination of ViT-B-32 and ImageNet, 4-bit activation encoding
+reduces energy consumption by roughly 40%, indicating that
+combining higher ADC precision with more compressed activation bits per ACiM cycle achieves both energy efficiency and
+high inference accuracy. Our experimental analysis stresses on
+the following crucial points:
+• Quantization error grows with increasing encoding width
+but decreases with higher ADC precision. However, pushing
+ADC to the boundary precision is not always necessary in
+bit-parallel ACiM.
+• Higher activation encoding bit compresses more information
+into each LSB, giving the bit-parallel MAC a higher weight
+in the output activations when converted back to floatingpoint values. Since ADC quantization error consistently
+remains under 0.5 LSB, configuring bit-parallel scheme
+with appropriate activation encoding and ADC precision can
+create an optimal combination that maintains noise intensity
+to manageable levels in Fig. 3, while enabling energyefficient DNN inference.
+C. Analog Noise
+Although our previous analysis demonstrated that ADC
+quantization error minimally impacts DNN inference accuracy,
+making bit-parallel scheme viable for ACiM efficiency improvements, this assumption is established on ideal noise-free
+conditions. Real ACiM accelerators face various additional
+
+=== page 9 ===
+ARXIV PREPRINT, AUGUST 2025
+
+9
+
+ResNet-18
+CIFAR-10 (92.08%)
+ImageNet (65.49%)
+Bit-Serial
+Enc = 2
+Enc = 4
+Bit-Serial
+Enc = 2
+Enc = 4
+92.08
+91.93
+91.36
+65.51
+55.73
+16.26
+92.09
+92.10
+91.96
+65.55
+64.45
+59.04
+92.08
+92.03
+91.96
+65.58
+65.16
+65.04
+92.07
+92.12
+91.97
+65.47
+65.33
+65.56
+92.06
+92.09
+92.08
+65.51
+65.46
+65.42
+
+ADC Precision
+8
+9
+10
+11
+12
+
+ViT-B-32
+CIFAR-10 (95.26%)
+ImageNet (68.17%)
+Bit-Serial
+Enc = 2
+Enc = 4
+Bit-Serial
+Enc = 2
+Enc = 4
+95.22
+94.39
+57.89
+68.19
+56.35
+0.45
+95.26
+95.04
+93.77
+68.24
+66.48
+45.87
+95.24
+95.16
+95.04
+68.10
+67.06
+64.74
+95.29
+95.17
+95.12
+68.14
+68.06
+67.71
+95.24
+95.30
+95.27
+68.20
+68.08
+68.03
+
+Fig. 7. Shmoo plot of inference accuracy under varying ADC precision for a bit-parallel ACiM macro with a row-parallelism of 256, evaluated using an
+8b/8b DNN model. Results for encoding bit widths of 2 and 4 are shown and compared with those of the bit-serial counterparts. The accuracy of the digital
+counterpart is provided alongside each model’s name for reference.
+
+Energy per Classification (μJ)
+
+450
+
+ResNet-18/CIFAR-10
+ViT-B-32/CIFAR-10
+
+400
+
+ResNet-18/ImageNet
+ViT-B-32/ImageNet
+
+350
+
+Bit-Serial
+
+Bit-Serial
+
+300
+250
+
+Enc = 2
+Enc = 4
+
+200
+
+Enc = 2
+
+150
+
+Bit-Serial
+
+100
+
+0
+64
+
+Enc = 4
+
+Enc = 2
+Enc = 4
+
+50
+65
+
+66
+
+Bit-Serial
+Enc = 4
+
+Enc = 2
+67
+
+68
+
+92
+
+93
+
+94
+
+95
+
+96
+
+Accuracy (%)
+
+Fig. 8. Energy cost and corresponding inference accuracy for bit-serial and
+bit-parallel ACiM configurations across various DNN models and datasets.
+Compressing more bits within a single cycle yields significant energy savings.
+
+noise sources that require careful consideration. To assess
+this, we incorporated random noise and nonlinearity into
+simulations, analyzing their effects on inference accuracy. As
+detailed in Section III, random noise includes kT /C noise
+and comparator decision errors, while nonlinearity accounts
+for layout-specific issues and device mismatch, analyzed here
+based on capacitor mismatch in the CBL and DAC.
+Noise Definition. In the following analysis, analog noise is
+modeled as a Gaussian distribution, with its intensity characterized by the following two metrics: (1) Vpp (%): This metric
+provides a direct representation of noise standard deviation
+as a percentage of the full dynamic range in the CBL. For
+instance, a noise level of 0.1 in Vpp (%) corresponds to a
+standard deviation of σ = 1 mV when Vpp = 1 V. (2)
+LSBrms : Since most ACiM studies report noise levels using
+the Root-Mean-Square (RMS) value relative to the ADC’s
+LSB [6]–[8], [10], [12], [24], [30], we also provide LSBrms as
+a reference. This metric offers a more intuitive understanding
+of noise characteristics in relation to the column ADC, making
+it particularly useful for ACiM designers.
+Fig. 9(a) shows a shmoo plot of accuracy for a 256-rowparallel ACiM macro with an 8-bit ADC at various random
+noise intensities, revealing that analog noise can heavily impact ACiM circuit inference. Unlike quantization, which limits
+maximum error to 0.5 LSB of the ADC, analog noise can
+produce readout errors on CBL voltage exceeding 1 LSB,
+introducing greater inaccuracies into final output activations.
+This effect is amplified in bit-parallel scheme, where each LSB
+error has an even larger effect on the final activation. Our
+
+findings indicate task-specific noise tolerance thresholds:
+Simple Tasks (CIFAR-10 & CNN). In these simple tasks,
+noise intensity should be kept below 0.15 Vpp (%) (∼ 0.4
+LSBrms ) to maintain inference accuracy above 90%. This
+requirement tightens to 0.025 Vpp (%) (∼ 0.1 LSBrms ) for 4-bit
+activation encoding in bit-parallel scheme, setting a stringent
+standard for real-world use.
+Complex Tasks (ViT or ImageNet). For complex tasks,
+accuracy drops sharply with increased noise intensity, making
+the requirements even stricter. In such cases, with an operational voltage Vpp of 1 V for bit-serial scheme, noise intensity
+needs to be controlled below 0.5 mV to enable functional
+classification in silicon.
+In the nonlinearity analysis shown in Fig. 9(b), a similar
+trend appears, with the transition boundary shifting slightly
+downward as nonlinearity diminishes with increased ADC
+output code. However, as seen in Fig. 5, the MAC output
+is concentrated in lower-valued regions, making nonlinearity
+effects still significant.
+At a specific noise level, lower ADC precision can round
+out smaller errors in the CBL voltage, but any readout errors
+that do occur may result in greater inaccuracies in the output
+activation. Conversely, higher ADC precision increases the
+likelihood of errors but minimizes their overall impact on
+inference quality. This leads to a key design question: how
+to choose ADC precision to optimize inference accuracy.
+Leveraging ASiM, we evaluated accuracy degradation across
+varying noise intensities and ADC precision for both bit-serial
+and bit-parallel ACiM. The results in Fig. 10 indicate that
+as ADC precision increases, the rate of accuracy degradation
+decreases, highlighting the benefit of higher ADC resolution
+for robust inference.
+To validate our findings on the impact of analog noise,
+we conducted a detailed examination of the ACiM inference
+process using a 3b/3b ResNet-18 on CIFAR-10 (Fig. 11). Here,
+blue squares represent binary cycles with their respective bit
+indices, while purple squares indicate their bit-shift weights. In
+line with Fig. 5, binary MAC values are relatively small within
+the 256 range. A 1-bit error introduced by ADC readout during
+MSB cycles can greatly alter the final output activation due
+to the amplification effect of bit-shift weight. The impact of
+noise manifests through two primary pathways:
+• First, an 1-bit error introduced by ADC readout during MSB
+cycles can dramatically alter the final output activation due
+to the amplification effect of bit-shift weight. These large
+activation errors propagates through layers and severely
+compromise the classifier’s decision accuracy.
+
+=== page 10 ===
+ARXIV PREPRINT, AUGUST 2025
+
+10
+
+ResNet-18
+Vpp (%) / LSBrms
+0.000 / 0.000
+0.025 / 0.064
+0.050 / 0.128
+0.075 / 0.191
+0.100 / 0.255
+0.125 / 0.319
+0.150 / 0.383
+0.175 / 0.446
+0.200 / 0.510
+
+Bit-Serial
+92.08
+92.08
+92.06
+92.00
+91.84
+91.35
+90.71
+89.25
+86.74
+
+CIFAR-10 (92.08%)
+Enc = 2
+91.93
+92.00
+91.02
+89.09
+86.16
+81.86
+74.51
+64.95
+55.30
+
+Enc = 4
+91.36
+90.49
+87.91
+82.47
+74.76
+63.60
+53.27
+41.69
+33.52
+
+ViT-B-32
+
+Bit-Serial
+65.51
+65.51
+65.48
+62.51
+3.76
+0.15
+0.12
+0.11
+0.10
+
+ImageNet (65.49%)
+Enc = 2
+55.73
+49.47
+0.12
+0.10
+0.10
+0.11
+0.10
+0.11
+0.10
+
+Enc = 4
+16.26
+0.12
+0.11
+0.12
+0.10
+0.09
+0.10
+0.10
+0.11
+
+Bit-Serial
+95.22
+95.22
+93.70
+10.10
+10.00
+10.00
+9.97
+10.02
+10.00
+
+CIFAR-10 (95.26%)
+Enc = 2
+94.39
+79.01
+10.21
+10.05
+10.00
+10.10
+10.01
+10.01
+10.03
+
+Bit-Serial
+95.22
+95.22
+95.19
+92.44
+24.45
+11.49
+10.02
+9.98
+10.00
+
+CIFAR-10 (95.26%)
+Enc = 2
+94.39
+94.21
+93.26
+62.99
+12.82
+10.10
+10.02
+10.00
+10.04
+
+Enc = 4
+57.89
+10.05
+10.00
+10.02
+10.00
+9.95
+10.00
+10.00
+10.01
+
+Bit-Serial
+68.19
+68.19
+38.91
+0.11
+0.11
+0.10
+0.09
+0.10
+0.10
+
+ImageNet (68.17%)
+Enc = 2
+56.35
+0.88
+0.10
+0.11
+0.13
+0.10
+0.08
+0.10
+0.10
+
+Enc = 4
+0.45
+0.09
+0.10
+0.09
+0.08
+0.10
+0.11
+0.10
+0.10
+
+Bit-Serial
+68.19
+68.19
+68.08
+22.44
+0.14
+0.10
+0.09
+0.15
+0.11
+
+ImageNet (68.17%)
+Enc = 2
+56.35
+55.90
+19.71
+0.15
+0.11
+0.12
+0.10
+0.13
+0.11
+
+Enc = 4
+0.45
+0.13
+0.11
+0.13
+0.12
+0.10
+0.10
+0.14
+0.15
+
+(a)
+ResNet-18
+Vpp (%) / LSBrms
+0.000 / 0.000
+0.025 / 0.064
+0.050 / 0.128
+0.075 / 0.191
+0.100 / 0.255
+0.125 / 0.319
+0.150 / 0.383
+0.175 / 0.446
+0.200 / 0.510
+
+Bit-Serial
+92.08
+92.08
+92.10
+92.00
+92.10
+91.71
+91.50
+91.27
+90.62
+
+CIFAR-10 (92.08%)
+Enc = 2
+91.93
+92.03
+91.79
+91.15
+90.42
+89.41
+87.81
+86.37
+84.30
+
+Enc = 4
+91.36
+91.27
+90.59
+89.50
+88.20
+87.20
+84.76
+83.03
+79.72
+
+ViT-B-32
+
+Bit-Serial
+65.51
+65.51
+65.49
+64.54
+38.63
+1.12
+0.12
+0.11
+0.09
+
+ImageNet (65.49%)
+Enc = 2
+55.73
+55.33
+2.71
+0.12
+0.12
+0.13
+0.09
+0.10
+0.10
+
+Enc = 4
+16.26
+0.11
+0.12
+0.10
+0.10
+0.10
+0.09
+0.10
+0.10
+
+Enc = 4
+57.89
+40.13
+11.41
+10.00
+10.00
+10.02
+10.00
+10.00
+10.08
+
+(b)
+
+range where NAT can improve robustness and mitigate errors,
+as shown in Fig. 3.
+
+100
+90
+80
+70
+60
+50
+40
+30
+20
+0.00
+
+7b, Bit-Serial
+8b, Bit-Serial
+9b, Bit-Serial
+
+D. Simulation to Silicon Correlation
+
+7b, Enc = 2
+8b, Enc = 2
+9b, Enc = 2
+
+0.05
+
+0.10
+
+0.15
+
+0.20
+
+Noise Intensity (%)
+
+Fig. 10. Accuracy degradation under different noise intensities for bitserial and bit-parallel ACiM with varying ADC precision levels on ResNet18/CIFAR-10. Increasing ADC precision mitigates the effects of noise.
+
+③ LSB Error: 18 → 19
+
+3b/3b Bit-Serial MAC
+
+① MSB Error: 0 → 1
+
+0
+
+×
+
+0
+
+7
+
+0
+
+5
+
+9
+
+5
+
+9
+
+18
+
+① Output w/ MSB Error: -22
+Dequantize to Float: -0.2863
+Error % to Ideal: 266.7%
+
+② Output w/ Middle Bit Error: -10
+Dequantize to Float: -0.1301
+Error % to Ideal: 66.7%
+
+② Middle Bit Error: 9 → 10
+
+Bit-shift Weight
+
+24
+
+23
+
+22
+
+Ideal MAC Output: -6
+Dequantize to Float: -0.0781
+
+21
+
+20
+
+③ Output w/ LSB Error: -5
+Dequantize to Float: -0.0651
+Error % to Ideal: 16.7%
+
+Fig. 11. Real-world example of bit-serial MAC in 3b/3b ResNet-18 on
+CIFAR-10 with 256-row-parallel macro by 8-bit ADC. A 1-bit error has
+catastrophic effects in MSB cycles but is more tolerable in LSB cycles.
+
+Second, these errors generate outliers in the output layers,
+expanding the quantization scale in subsequent layers and
+further increasing model quantization error.
+Consequently, inference accuracy degrades sharply when errors occur during MSB cycles, and unfortunately, ACiM
+cannot control in which cycle the errors arise. However, if
+the error occurs in lower bit cycles, the inaccuracy on output
+activation can be reduced to less than 70%, staying within the
+•
+
+ADC Error Distribution. To verify that the noise model
+accurately reflects real ADC error characteristics, we generate
+random weight and input activation vectors, perform MAC
+operations on our prototype ACiM chip [30], and measure the
+resulting voltage using an ADC, comparing it with the ideal
+output. This process is repeated 30,000 times, and the recorded
+error distribution is shown in Fig. 12. As depicted, the error
+exhibits a bell-shaped pattern, where most ADC readings are
+correct, but occasional errors occur in the range of 1 to 3
+LSBs. This distribution aligns well with our noise modeling
+assumption, validating the Gaussian noise model used in ASiM
+as an accurate representation of the noise encountered in ACiM
+chips.
+0.8
+Density
+
+Accuracy (%)
+
+Fig. 9. Shmoo plot of inference accuracy across different noise intensities for an ACiM macro with a row-parallelism of 256 using an 8-bit ADC, evaluated
+by an 8b/8b DNN model. ResNet-18 is trained with 100% and 50% , and ViT-B-32 is trained with 60% and 40% training noise intensities for CIFAR-10 and
+ImageNet, respectively. Two noise models are assessed separately: (a) Random noise and (b) Nonlinearity. The accuracy of the digital counterpart is provided
+alongside each model’s name for reference.
+
+0.6
+
+MAC Error
+
+0.4
+0.2
+0.0
+−3
+
+−2
+
+−1
+0
+1
+MAC Error (LSB)
+
+2
+
+3
+
+Fig. 12. Error distribution in ADC output recorded from an ACiM prototype
+chip [30] over 30,000 trials.
+
+Silicon Validation. To validate the accuracy of ASiM in
+predicting inference results for real chips, we compared its
+ResNet-18 accuracy predictions with the silicon validation
+results of our prototype chip reported in CR-CIM [30]. In the
+silicon test, CR-CIM processed the compute-intensive CONV
+and Linear layers of an 8b/8b ResNet-18 on-chip, while
+
+=== page 11 ===
+ARXIV PREPRINT, AUGUST 2025
+
+the remaining layers were handled off-chip, replicating the
+same setup used in ASiM simulations. The measured LSBrms
+noise was equally divided and allocated into random noise and
+nonlinearity. ASiM predicted an accuracy of 91.84%, which
+closely corresponded to the 91.70% measured in CR-CIM.
+Furthermore, we configured our prototype chip with varying
+ADC precision levels, and ASiM successfully identified the
+inflection point at which inference accuracy begins to degrade.
+The predicted trend closely matches our silicon measurements,
+supporting the validity of ASiM in evaluating inference accuracy.
+
+11
+
+Binary MAC Cycle:
+
+𝒘[𝟎] ∙ 𝒘[𝟎] ∙ 𝒘[𝟎] ∙ 𝒘[𝟎] ∙ 𝒘[𝟎] ∙ 𝒘[𝟎] ∙ 𝒘[𝟎] ∙ 𝒘[𝟎] ∙
+𝒙[𝟕] 𝒙[𝟔] 𝒙[𝟓] 𝒙[𝟒] 𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+
+𝒘[𝟏] ∙ 𝒘[𝟏] ∙ 𝒘[𝟏] ∙ 𝒘[𝟏] ∙ 𝒘[𝟏] ∙ 𝒘[𝟏] ∙ 𝒘[𝟏] ∙ 𝒘[𝟏] ∙
+𝒙[𝟕] 𝒙[𝟔] 𝒙[𝟓] 𝒙[𝟒] 𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+
+Digital
+
+𝒘[𝟐] ∙ 𝒘[𝟐] ∙ 𝒘[𝟐] ∙ 𝒘[𝟐] ∙ 𝒘[𝟐] ∙ 𝒘[𝟐] ∙ 𝒘[𝟐] ∙ 𝒘[𝟐] ∙
+𝒙[𝟕] 𝒙[𝟔] 𝒙[𝟓] 𝒙[𝟒] 𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+𝒘[𝟑] ∙ 𝒘[𝟑] ∙ 𝒘[𝟑] ∙ 𝒘[𝟑] ∙ 𝒘[𝟑] ∙ 𝒘[𝟑] ∙ 𝒘[𝟑] ∙ 𝒘[𝟑] ∙
+𝒙[𝟕] 𝒙[𝟔] 𝒙[𝟓] 𝒙[𝟒] 𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+
+Analog
+
+𝒘[𝟒] ∙ 𝒘[𝟒] ∙ 𝒘[𝟒] ∙ 𝒘[𝟒] ∙ 𝒘[𝟒] ∙ 𝒘[𝟒] ∙ 𝒘[𝟒] ∙ 𝒘[𝟒] ∙
+𝒙[𝟕] 𝒙[𝟔] 𝒙[𝟓] 𝒙[𝟒] 𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+𝒘[𝟓] ∙ 𝒘[𝟓] ∙ 𝒘[𝟓] ∙ 𝒘[𝟓] ∙ 𝒘[𝟓] ∙ 𝒘[𝟓] ∙ 𝒘[𝟓] ∙ 𝒘[𝟓] ∙
+𝒙[𝟕] 𝒙[𝟔] 𝒙[𝟓] 𝒙[𝟒] 𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+𝒘[𝟔] ∙ 𝒘[𝟔] ∙ 𝒘[𝟔] ∙ 𝒘[𝟔] ∙ 𝒘[𝟔] ∙ 𝒘[𝟔] ∙ 𝒘[𝟔] ∙ 𝒘[𝟔] ∙
+𝒙[𝟕] 𝒙[𝟔] 𝒙[𝟓] 𝒙[𝟒] 𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+Digital/Analog Boundary Level
+8
+
+9
+
+10
+
+11
+
+12
+
+13
+
+14
+
+15
+
+(a)
+
+V. T OWARDS ACCURATE AC I M I NFERENCE
+100
+
+Accuracy (%)
+
+In prior sections, we performed a detailed analysis of
+inference accuracy using ACiM circuits and explained the
+mechanism how these noise degrades inference, highlighting
+that analog noise is a fundamental barrier to achieving high
+accuracy. This challenge is difficult to overcome through
+circuit design alone, as achieving a noise-free analog design is
+extremely difficult, especially in complex tasks. However, we
+can still optimize the application of ACiM circuits to mitigate
+inference accuracy concerns while leveraging their energy efficiency benefits. This section introduces and analyzes two simple and practical methods for improving inference accuracy:
+HCiM and majority voting. These two approaches employ a
+trade-off strategy to enhance inference accuracy. Specifically,
+HCiM sacrifices area and energy efficiency, while majority
+voting compromises both energy efficiency and throughput in
+exchange for improved accuracy.
+
+Analog Cycle Ratio = 91%
+
+𝒘[𝟕] ∙ 𝒘[𝟕] ∙ 𝒘[𝟕] ∙ 𝒘[𝟕] ∙ 𝒘[𝟕] ∙ 𝒘[𝟕] ∙ 𝒘[𝟕] ∙ 𝒘[𝟕] ∙
+𝒙[𝟕] 𝒙[𝟔] 𝒙[𝟓] 𝒙[𝟒] 𝒙[𝟑] 𝒙[𝟐] 𝒙[𝟏] 𝒙[𝟎]
+0
+
+ResNet-18/CIFAR-10
+Boundary Level = 3
+
+80
+60
+40
+
+CIFAR-10/ResNet-18
+ImageNet/ResNet-18
+CIFAR-10/ViT-B-32
+ImageNet/ViT-B-32
+
+20
+0
+0%
+
+20%
+
+40%
+
+60%
+
+80%
+
+100%
+
+Ratio of Analog Cycle
+
+(b)
+Fig. 13. Digital-Analog HCiM for DNN inference accuracy improvement. (a)
+8b/8b HCiM workload management and (b) Inference accuracy versus analog
+cycle ratio for different models and datasets using a noisy ACiM macro (noise
+intensity = 0.8 LSBrms ). A majority of cycles can be processed by ACiM, with
+MSB cycles allocated to the digital domain to achieve a balance between
+accuracy and efficiency.
+
+A. Hybrid CiM
+Hybrid Analog-Digital computing is proposed to strike a
+balance between computing accuracy and efficiency, enabling
+both high accuracy and energy efficiency [36]. In the CiM
+domain, Analog-Digital HCiM has shown significant promise
+for practical applications [35], [37], [38]. HCiM separates
+binary cycles between DCiM and ACiM: the majority of cycles
+remain in the analog domain to maximize energy efficiency,
+while MSB cycles, which carry greater weight due to bit
+shifting, are processed in digital domain to maintain error
+within a manageable range, as depicted in Fig. 13(a). We evaluated HCiM accuracy by configuring a 256-row-parallel ACiM
+macro with an 8-bit ADC under high noise intensity (0.8
+LSBrms ). Fig. 13(b) shows accuracy in relation to the analog
+cycle ratio, achieved by adjusting the analog-digital boundary
+across models and datasets. With a boundary level set to 3 in
+ResNet-18/CIFAR-10 task, transferring only 6 cycles to DCiM
+restores inference accuracy close to baseline, while retaining
+91% of cycles in ACiM under noisy conditions. Although
+previous sections show that complex tasks are sensitive to
+analog noise, transferring over half of the binary cycles to
+DCiM allows accuracy to match baseline while improving the
+energy efficiency. Even for the most challenging case of ViTB-32 on ImageNet, maintaining over 40% of cycles in the
+analog domain is sufficient to stabilize accuracy even in a less
+optimized ACiM macro.
+
+ACiM begins to outperform DCiM at a row-parallelism of
+64, with energy efficiency improving to a 7× gain as rowparallelism scales up to 1024 [4]. At a row-parallelism of
+256, ACiM achieves approximately 3× the TOPS/W of DCiM.
+Building upon this benchmark, the HCiM approach illustrated
+in Fig. 13(b) results in 6%, 20%, 30%, and 36% decrease
+in TOPS/W for CIFAR-10/ResNet-18, ImageNet/ResNet-18,
+CIFAR-10/ViT-B-32, and ImageNet/ViT-B-32, respectively,
+compared to full ACiM execution. However, HCiM still provides 182%, 140%, 110%, and 90% TOPS/W gains over full
+DCiM execution, showcasing its strong potential for energyefficient CiM deployment in real-world applications.
+B. Majority Voting
+HCiM provides a way to fully eliminate inaccuracies in
+MSB cycles but requires additional digital logic in the ACiM
+arrays, adding complexity to the design. An alternative approach, majority voting, preserves the ACiM architecture
+but increases power consumption in exchange for enhanced
+inference accuracy. To achieve performance comparable to
+HCiM, we oversampled the MSB cycles in ACiM and applied majority voting to these MAC results. For the 6 MSB
+cycles (boundary level = 3) in the ResNet-18/CIFAR-10 task,
+we conducted oversampling at different noise intensities. As
+shown in Fig. 14(a), the equivalent standard deviation of
+
+=== page 12 ===
+ARXIV PREPRINT, AUGUST 2025
+
+12
+
+TABLE II
+C OMPARISON OF D IFFERENT S IMULATION F RAMEWORKS FOR DNN I NFERENCE A SSESSMENT.
+CIMUFAS [20]
+
+Saikia’s Modeling [29]
+
+MLP+NeuroSim [14]
+
+DNN+NeuroSim [31]
+
+ASiM
+
+RRAM
+Current
+Gaussian
+✓
+×
+×
+×
+
+SRAM
+Charge
+Adaptive
+✓
+×
+×
+×
+
+RRAM
+Current
+Min-Max
+×
+×
+×
+×
+
+SRAM
+Current
+Min-Max
+✓
+×
+×
+✓
+
+SRAM
+Charge
+Full Dynamic Range
+✓
+✓
+✓
+✓
+
+Primary Memory
+Primary Domain
+ADC Modeling
+CNN Support
+Transformer Support
+Bit-Parallel Support
+Modular Design Support
+
+√
+noise intensity decreases at a rate of N [39], and inference
+accuracy improves with increasing sampling times. Fig. 14(b)
+shows the computational overhead associated with majority
+voting of an 8b/8b DNN model under different boundary
+level configurations and oversampling iterations. Even with
+a less optimized ACiM macro at a noise intensity of 0.7
+LSBrms , oversampling the top 6 cycles 7 times achieves 90%
+inference accuracy, with a total cycle increase of less than
+40%. As digital accelerators generally consume significantly
+more power, ACiM retains its superiority over other alternative DNN accelerators. However, for complex tasks, designs
+must prioritize minimizing analog noise-induced errors. It
+is important to note that majority voting effectively reduces
+random noise, including kT/C noise and random comparator
+decision errors, but does not mitigate systematic errors. To
+compensate for systematic errors, approaches such as NAT or
+ADC code post-calibration are necessary to enhance inference
+performance.
+
+Accuracy (%)
+
+100
+
+Digital Accuracy = 92.08%
+
+A. Comparison with Other Simulation Frameworks
+Table II compares our ASiM framework with other inference simulation frameworks. One key distinction lies in
+the modeling of ADC behavior, which significantly impacts
+inference performance. Saikia’s modeling [29] employs an
+adaptive dynamic range, which is challenging to implement
+in real-world applications, whereas CIMUFAS [20] bypasses
+ADC rounding by introducing Gaussian noise instead. NeuroSim [14], [31] assumes that the ADC dynamic range is
+defined by the Min-Max range of each MAC output, leading to
+overly optimistic inference results. Unlike these frameworks,
+ASiM simulates ADC behavior across its full dynamic range,
+accurately capturing both rounding effects and noise-induced
+errors based on the real MAC output distribution. Additionally, ASiM supports the latest Transformer-based models
+and incorporates advanced features such as bit-parallel ACiM
+evaluation. Lastly, ASiM’s modular design allows for seamless
+integration into various codebases, making it a user-friendly
+and adaptable tool for ACiM circuit evaluation.
+
+90
+80
+
+B. Model Extension
+
+70
+60
+
+ResNet-18 & CIFAR-10
+σ = 0.5 LSB
+σ = 0.7 LSB
+
+50
+40
+w/o
+1
+Oversampling
+
+3
+
+4
+
+5
+
+6
+
+σ = 0.6 LSB
+σ = 0.8 LSB
+7
+
+8
+
+9
+
+Number of Sampling
+
+(a)
+
+Total Cycles
+
+VI. D ISCUSSION
+
+200
+180
+160
+140
+120
+100
+80
+60
+40
+20
+0
+
+Level = 1
+Level = 4
+
+Level = 2
+Level = 5
+
+Level = 3
+
+Default Cycle Number = 64
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+9
+
+Number of Sampling
+
+As ACiM technologies rapidly evolve, the incorporation
+of emerging memories and novel circuit designs continues
+to enhance system efficiency. Although ASiM is initially
+designed for charge-domain SRAM ACiM, its modular and
+adaptable structure allows users to easily modify it for other
+architectures. Taking RRAM as an example, where crossbar
+cells store multi-bit weights, the loop over binary weight
+bits in Algorithm 1 is unnecessary and can be omitted.
+This adjustment enables each ADC to translate the quantized
+current value for a RRAM column. Meanwhile, the capacitor
+nonlinearity model used for SRAM should be replaced with
+a noise model that more accurately captures conductance
+variation in RRAM. With such minimal changes, users can
+leverage ASiM’s core logic to create more faithful simulations
+for their specific circuit implementations. We encourage the
+research community to extend ASiM to better support diverse
+and emerging ACiM technologies.
+
+(b)
+Fig. 14. Oversampling MSB cycles with majority voting to improve inference
+accuracy. (a) Inference accuracy of ResNet-18/CIFAR-10 versus sampling
+count at varying analog noise intensities, with a boundary level set to 3.
+(b) Total cycle count across majority voting configurations, with the standard
+8b/8b model requiring 64 bit-serial cycles.
+
+C. Comparison Across State-of-the-Art CiM Designs
+To evaluate the practical inference performance of SRAMbased ACiM, we compare representative designs that can be
+accurately modeled within the ASiM framework. All simulations are conducted using a unified 8b/8b ResNet-18 model on
+
+=== page 13 ===
+ARXIV PREPRINT, AUGUST 2025
+
+13
+
+the CIFAR-10 benchmark. The resulting inference accuracy,
+energy efficiency, and area efficiency are normalized to a 22
+nm technology node and 0.9 V supply voltage and summarized
+in Fig. 15. The size of each bubble represents the estimated
+area efficiency, calculated as the average area per basic CiM
+cell. Relevant design parameters are extracted from their respective publications and summarized in Table III. For designs
+where LSBrms was not reported, a nominal value of 0.5 LSB
+was assumed. The designs under evaluation include a range
+of representative schemes: the standard Bit-Parallel/Bit-Serial
+(BPBS [24]) architecture for multi-bit DNN processing; the
+Sparsity-Adaptive (Spar.-Adapt. [13]) scheme, which skips
+redundant ADC conversions by exploiting activation sparsity;
+the End-to-End Analog (E2E Analog [40]) pipeline, which
+maintains analog signal integrity throughout computation;
+the Differential Switched-Capacitor (Diff.-SC [41]) design,
+which utilizes differential compute lines to enhance dynamic
+range and ADC precision; and the Capacitor-Reconfigured
+CiM (CR-CIM [30]) scheme, which reuses cell capacitors
+to improve ADC resolution. In addition, CR-CIM is also
+configured with a reduced 6-bit ADC to demonstrate accuracy degradation, followed by recovery via majority voting.
+For completeness, the HCiM (Hybrid [42]) and two DCiM
+designs [43], [44] are also included as references.
+
+Energy Efficiency (TOPS/W)
+
+300
+Diff.-SC [41]
+
+250
+CR-CIM (6-bit) [30]
+
+200
+
+CR-CIM (6-bit) + Majority Voting
+
+150
+CR-CIM (8-bit) [30]
+
+100
+um2/Cell
+
+BPBS [24]
+
+3.0
+2.0
+1.0
+
+50
+
+E2E Analog [40]
+
+0
+70
+
+Hybrid [42]
+
+Approx. DCiM [44]
+Spar.-Adapt. [13]
+
+75
+
+80
+
+85
+
+DCiM [43]
+
+90
+
+95
+
+Accuracy (%)
+
+Fig. 15. Comparison of state-of-the-art CiM designs analyzed using ASiM.
+Design parameters are listed in Table III. Bubble size indicates the estimated
+chip area, and both energy efficiency and area are normalized to a 0.9 V
+supply voltage at the 22 nm technology node using spatial scaling factors.
+
+such aggressive configurations, underscoring the importance
+of meticulous ACiM design. The HCiM architecture proposed
+in [42] achieves approximately 2× energy efficiency improvement and significantly reduced area cost compared to standard
+DCiM, while incurring negligible accuracy loss, highlighting
+its promise for future exploration. Furthermore, by applying 3
+times oversampling to majority voting with a boundary level of
+3, the 6-bit CR-CIM design recovers accuracy from 72.74%
+to 90.55%, while achieving a 65% improvement in energy
+efficiency compared to its 8-bit configuration. This indicates
+its strong potential for low-power applications where moderate
+accuracy degradation is acceptable.
+VII. C ONCLUSIONS
+We presented ASiM in this paper, an open-source simulation
+framework specifically developed to assess and optimize inference accuracy in SRAM-based ACiM circuits. ASiM allows
+researchers to easily integrate their ACiM circuits into the
+PyTorch ecosystem, enabling the evaluation of various design
+factors under realistic conditions that include quantization
+noise, analog imperfections, and ADC constraints. Our extensive analysis using ASiM revealed critical insights for ACiM
+design. Although the bit-parallel approach can substantially
+improve energy efficiency while tolerating quantization noise,
+analog noise poses a serious threat to inference accuracy,
+creating stringent design requirements. We also showed that
+higher ADC precision is crucial for more complex models
+and tasks, such as ImageNet and ViT, while CNNs on simpler datasets can reduce ADC precision without significant
+accuracy loss. Furthermore, we found that largest computation
+errors primarily occur in the MSB cycles, where even a minor
+ADC readout error as small as 1 LSB can result in severe inference degradation. To tackle these challenges, we recommended
+two strategies: HCiM and majority voting, both of which
+aim to ensure accurate MSB cycle computation. Incorporating
+these methods shows promise in enhancing inference accuracy
+without diminishing inherent advantage on energy efficiency,
+presenting a promising strategy for deploying ACiM reliably
+in real-world applications.
+R EFERENCES
+
+TABLE III
+PARAMETERS OF STATE - OF - THE - ART AC I M DESIGNS PRESENTED IN
+F IG . 15, WITH SPECIFICATIONS EXTRACTED FROM THEIR PUBLICATIONS .
+Design
+
+Parallelism
+
+Act. Enc.
+
+ADC
+
+LSBrms
+
+BPBS [24]
+Spar.-Adapt. [13]
+E2E Analog [40]
+Diff.-SC [41]
+CR-CIM [30]
+Hybrid [42]
+
+2,305
+256
+64
+1,152
+512
+256
+
+1b
+1b
+4b
+4b
+1b
+2b
+
+8b
+8b
+5b
+10b
+10b
+8b
+
+0.37
+N/A
+0.27
+0.40
+0.58
+N/A
+
+Based on Fig. 15, the Spar.-Adapt. and 8-bit CR-CIM
+designs yield the highest inference accuracy, primarily because
+they operate above the boundary ADC precision. In contrast,
+more aggressive designs typically demonstrate superior energy
+efficiency but at the cost of reduced inference accuracy. Designs with lower reported LSBrms values tend to better support
+
+[1] J. Kaplan, S. McCandlish, T. Henighan, T. B. Brown, B. Chess, R. Child,
+S. Gray, A. Radford, J. Wu, and D. Amodei, “Scaling laws for neural
+language models,” ArXiv, vol. abs/2001.08361, 2020.
+[2] M. Horowitz, “1.1 computing’s energy problem (and what we can do
+about it),” in 2014 IEEE International Solid-State Circuits Conference
+Digest of Technical Papers (ISSCC), 2014, pp. 10–14.
+[3] N. Verma, H. Jia, H. Valavi, Y. Tang, M. Ozatay, L.-Y. Chen, B. Zhang,
+and P. Deaville, “In-memory computing: Advances and prospects,” IEEE
+Solid-State Circuits Magazine, vol. 11, no. 3, pp. 43–55, 2019.
+[4] J. Sun, P. Houshmand, and M. Verhelst, “Analog or digital in-memory
+computing? benchmarking through quantitative modeling,” in 2023
+IEEE/ACM International Conference on Computer Aided Design (ICCAD), 2023, pp. 1–9.
+[5] H. Valavi, P. J. Ramadge, E. Nestler, and N. Verma, “A 64-tile 2.4mb in-memory-computing cnn accelerator employing charge-domain
+compute,” IEEE Journal of Solid-State Circuits, vol. 54, no. 6, pp. 1789–
+1799, 2019.
+[6] B. Zhang, J. Saikia, J. Meng, D. Wang, S. Kwon, S. Myung, H. Kim,
+S. J. Kim, J.-S. Seo, and M. Seok, “Macc-sram: A multistep accumulation capacitor-coupling in-memory computing sram macro for deep
+convolutional neural networks,” IEEE Journal of Solid-State Circuits,
+vol. 59, no. 6, pp. 1938–1949, 2024.
+
+=== page 14 ===
+ARXIV PREPRINT, AUGUST 2025
+
+[7] K. Lee, J. Kim, and J. Park, “A 28-nm 50.1-tops/w p-8t sram computein-memory macro design with bl charge-sharing-based in-sram dac/adc
+operations,” IEEE Journal of Solid-State Circuits, vol. 59, no. 6, pp.
+1926–1937, 2024.
+[8] B. Zhang, S. Yin, M. Kim, J. Saikia, S. Kwon, S. Myung, H. Kim,
+S. J. Kim, J.-S. Seo, and M. Seok, “Pimca: A programmable in-memory
+computing accelerator for energy-efficient dnn inference,” IEEE Journal
+of Solid-State Circuits, vol. 58, no. 5, pp. 1436–1449, 2023.
+[9] X. Yang and N. Sun, “A 4-bit mixed-signal mac macro with one-shot
+adc conversion,” IEEE Journal of Solid-State Circuits, vol. 58, no. 9,
+pp. 2648–2658, 2023.
+[10] Z. Chen, Z. Wen, W. Wan, A. R. Pakala, Y. Zou, W.-C. Wei, Z. Li,
+Y. Chen, and K. Yang, “Pico-ram: A pvt-insensitive analog computein-memory sram macro with in situ multi-bit charge computing and 6t
+thin-cell-compatible layout,” IEEE Journal of Solid-State Circuits, pp.
+1–13, 2024.
+[11] H. Jia, M. Ozatay, Y. Tang, H. Valavi, R. Pathak, J. Lee, and N. Verma,
+“15.1 a programmable neural-network inference accelerator based on
+scalable in-memory computing,” in 2021 IEEE International Solid-State
+Circuits Conference (ISSCC), vol. 64, 2021, pp. 236–238.
+[12] Z. Jiang, S. Yin, J.-S. Seo, and M. Seok, “C3sram: An in-memorycomputing sram macro based on robust capacitive coupling computing
+mechanism,” IEEE Journal of Solid-State Circuits, vol. 55, no. 7, pp.
+1888–1897, 2020.
+[13] C.-Y. Yao, T.-Y. Wu, H.-C. Liang, Y.-K. Chen, and T.-T. Liu, “A fully bitflexible computation in memory macro using multi-functional computing
+bit cell and embedded input sparsity sensing,” IEEE Journal of SolidState Circuits, vol. 58, no. 5, pp. 1487–1495, 2023.
+[14] P.-Y. Chen, X. Peng, and S. Yu, “Neurosim: A circuit-level macro
+model for benchmarking neuro-inspired architectures in online learning,”
+IEEE Transactions on Computer-Aided Design of Integrated Circuits
+and Systems, vol. 37, no. 12, pp. 3067–3080, 2018.
+[15] S. H. H. Shadmehri, A. BanaGozar, M. Kamal, S. Stuijk, A. AfzaliKusha, M. Pedram, and H. Corporaal, “Syscim: Systemc-ams simulation
+of memristive computation in-memory,” in 2022 Design, Automation &
+Test in Europe Conference & Exhibition (DATE), 2022, pp. 1467–1472.
+[16] X. Wang, X. Sun, Y. Han, and X. Chen, “Pimsim-nn: An isa-based
+simulation framework for processing-in-memory accelerators,” in 2024
+Design, Automation & Test in Europe Conference & Exhibition (DATE),
+2024, pp. 1–2.
+[17] M. J. Rasch, D. Moreda, T. Gokmen, M. Le Gallo, F. Carta, C. Goldberg,
+K. El Maghraoui, A. Sebastian, and V. Narayanan, “A flexible and
+fast pytorch toolkit for simulating training and inference on analog
+crossbar arrays,” in 2021 IEEE 3rd International Conference on Artificial
+Intelligence Circuits and Systems (AICAS), 2021, pp. 1–4.
+[18] C. Lammie, W. Xiang, B. Linares-Barranco, and M. Rahimi Azghadi,
+“Memtorch: An open-source simulation framework for memristive deep
+learning systems,” Neurocomputing, vol. 485, pp. 124–133, 2022.
+[19] J. Wang, S. Kim, J. Heo, and C. S. Park, “ef2lowsim: System-level
+simulator of eflash-based compute-in-memory accelerators for convolutional neural networks,” in 2023 Design, Automation & Test in Europe
+Conference & Exhibition (DATE), 2023, pp. 1–6.
+[20] Z. Wang, J. Yue, C. He, Z. Dai, F. Xiang, Z. Cong, Y. He, X. Feng,
+and Y. Liu, “A user-friendly fast and accurate simulation framework for
+non-ideal factors in computing-in-memory architecture,” in 2023 IEEE
+International Symposium on Circuits and Systems (ISCAS), 2023, pp.
+1–5.
+[21] I. Jeong and J.-E. Park, “X-pim: Fast modeling and validation framework
+for mixed-signal processing-in-memory using compressed equivalent
+model in system verilog,” in 2024 Design, Automation & Test in Europe
+Conference & Exhibition (DATE), 2024, pp. 1–6.
+[22] M. Kang, Y. Kim, A. D. Patil, and N. R. Shanbhag, “Deep in-memory
+architectures for machine learning–accuracy versus efficiency tradeoffs,” IEEE Transactions on Circuits and Systems I: Regular Papers,
+vol. 67, no. 5, pp. 1627–1639, 2020.
+[23] S. K. Gonugondla, C. Sakr, H. Dbouk, and N. R. Shanbhag, “Fundamental limits on the precision of in-memory architectures,” in 2020
+IEEE/ACM International Conference On Computer Aided Design (ICCAD), 2020, pp. 1–9.
+[24] H. Jia, H. Valavi, Y. Tang, J. Zhang, and N. Verma, “A programmable
+heterogeneous microprocessor based on bit-scalable in-memory computing,” IEEE Journal of Solid-State Circuits, vol. 55, no. 9, pp. 2609–2621,
+2020.
+[25] K. Yoshioka, “A 818–4094 tops/w capacitor-reconfigured analog cim for
+unified acceleration of cnns and transformers,” IEEE Journal of SolidState Circuits, pp. 1–12, 2024.
+
+14
+
+[26] W. P. Zhang and X. Tong, “Noise modeling and analysis of sar adcs,”
+IEEE Transactions on Very Large Scale Integration (VLSI) Systems,
+vol. 23, no. 12, pp. 2922–2930, 2015.
+[27] J. Kim, B. S. Leibowitz, J. Ren, and C. J. Madden, “Simulation and
+analysis of random decision errors in clocked comparators,” IEEE
+Transactions on Circuits and Systems I: Regular Papers, vol. 56, no. 8,
+pp. 1844–1857, 2009.
+[28] V. Tripathi and B. Murmann, “Mismatch characterization of small metal
+fringe capacitors,” IEEE Transactions on Circuits and Systems I: Regular
+Papers, vol. 61, no. 8, pp. 2236–2242, 2014.
+[29] J. Saikia, S. Yin, S. K. Cherupally, B. Zhang, J. Meng, M. Seok,
+and J.-S. Seo, “Modeling and optimization of sram-based in-memory
+computing hardware design,” in 2021 Design, Automation & Test in
+Europe Conference & Exhibition (DATE), 2021, pp. 942–947.
+[30] K. Yoshioka, “34.5 a 818-4094tops/w capacitor-reconfigured cim macro
+for unified acceleration of cnns and transformers,” in 2024 IEEE
+International Solid-State Circuits Conference (ISSCC), vol. 67, 2024,
+pp. 574–576.
+[31] X. Peng, S. Huang, Y. Luo, X. Sun, and S. Yu, “Dnn+neurosim: An endto-end benchmarking framework for compute-in-memory accelerators
+with versatile device technologies,” in 2019 IEEE International Electron
+Devices Meeting (IEDM), 2019, pp. 32.5.1–32.5.4.
+[32] M. Nagel, M. Fournarakis, R. A. Amjad, Y. Bondarenko, M. van Baalen,
+and T. Blankevoort, “A white paper on neural network quantization,”
+ArXiv, vol. abs/2106.08295, 2021.
+[33] K. Lee, J. Kim, and J. Park, “Low-cost 7t-sram compute-in-memory
+design based on bit-line charge-sharing based analog-to-digital conversion,” in 2022 IEEE/ACM International Conference On Computer Aided
+Design (ICCAD), 2022, pp. 1–8.
+[34] Y. Bondarenko, M. Nagel, and T. Blankevoort, “Understanding and
+overcoming the challenges of efficient transformer quantization,” ArXiv,
+vol. abs/2109.12948, 2021.
+[35] W. Zhang, S. Ando, Y.-C. Chen, S. Miyagi, S. Takamaeda-Yamazaki,
+and K. Yoshioka, “Pacim: A sparsity-centric hybrid compute-in-memory
+architecture via probabilistic approximation,” in Proceedings of the 43rd
+IEEE/ACM International Conference on Computer-Aided Design, 2024.
+[36] M. R. Haq Rashed, S. K. Jha, and R. Ewetz, “Hybrid analog-digital inmemory computing,” in 2021 IEEE/ACM International Conference On
+Computer Aided Design (ICCAD), 2021, pp. 1–9.
+[37] P.-C. Wu, J.-W. Su, L.-Y. Hong, J.-S. Ren, C.-H. Chien, H.-Y. Chen, C.E. Ke, H.-M. Hsiao, S.-H. Li, S.-S. Sheu, W.-C. Lo, S.-C. Chang, C.-C.
+Lo, R.-S. Liu, C.-C. Hsieh, K.-T. Tang, and M.-F. Chang, “A 22nm
+832kb hybrid-domain floating-point sram in-memory-compute macro
+with 16.2-70.2tflops/w for high-accuracy ai-edge devices,” in 2023 IEEE
+International Solid-State Circuits Conference (ISSCC), 2023, pp. 126–
+128.
+[38] Y.-C. Chen, S. Ando, D. Fujiki, S. Takamaeda-Yamazaki, and K. Yoshioka, “Osa-hcim: On-the-fly saliency-aware hybrid sram cim with dynamic precision configuration,” in 2024 29th Asia and South Pacific
+Design Automation Conference (ASP-DAC), 2024, pp. 539–544.
+[39] A. Verreault, P.-V. Cicek, and A. Robichaud, “Oversampling adc: A
+review of recent design trends,” IEEE Access, vol. 12, pp. 121 753–
+121 779, 2024.
+[40] K. Shiba, Z. Zhan, K. Nii, Y. Wang, T.-Y. J. Chang, A. Kosuge,
+M. Hamada, and T. Kuroda, “A 28-nm 0.8m-weights/mm2 9.1-tops/mm2
+sram-based all-analog compute-in-memory using fine-grained structured
+pruning with adaptive-ranging adc,” in 2024 IEEE European Solid-State
+Electronics Research Conference (ESSERC), 2024, pp. 365–368.
+[41] J. Lee, B. Zhang, and N. Verma, “A switched-capacitor sram in-memory
+computing macro with high-precision, high-efficiency differential architecture,” in 2024 IEEE European Solid-State Electronics Research
+Conference (ESSERC), 2024, pp. 357–360.
+[42] X. Chen, S. Li, Z. Zhang, W. Zheng, X. Tan, Y. Tang, Y. Shi, L. Ren,
+Y. Mai, F. Liu, J. Chen, Z. Zhang, A. Guo, T. Xiong, B. Wang, X. Liu,
+W. Shan, B. Liu, H. Cai, J. Yang, and X. Si, “14.6 a 28nm 64kb bitrotated hybrid-cim macro with an embedded sign-bit-processing array
+and a multi-bit-fusion dual-granularity cooperative quantizer,” in 2025
+IEEE International Solid-State Circuits Conference (ISSCC), vol. 68,
+2025, pp. 260–262.
+[43] Y.-D. Chih, P.-H. Lee, H. Fujiwara, Y.-C. Shih, C.-F. Lee, R. Naous,
+Y.-L. Chen, C.-P. Lo, C.-H. Lu, H. Mori, W.-C. Zhao, D. Sun, M. E.
+Sinangil, Y.-H. Chen, T.-L. Chou, K. Akarvardar, H.-J. Liao, Y. Wang,
+M.-F. Chang, and T.-Y. J. Chang, “16.4 an 89tops/w and 16.3tops/mm2
+all-digital sram-based full-precision compute-in memory macro in 22nm
+for machine-learning edge applications,” in 2021 IEEE International
+Solid-State Circuits Conference (ISSCC), vol. 64, 2021, pp. 252–254.
+
+=== page 15 ===
+ARXIV PREPRINT, AUGUST 2025
+
+[44] D. Wang, C.-T. Lin, G. K. Chen, P. Knag, R. K. Krishnamurthy, and
+M. Seok, “Dimc: 2219tops/w 2569f2/b digital in-memory computing
+macro in 28nm based on approximate arithmetic hardware,” in 2022
+IEEE International Solid-State Circuits Conference (ISSCC), vol. 65,
+2022, pp. 266–268.
+
+15
+
+=== page 16 ===
+ARXIV PREPRINT, AUGUST 2025
+
+240
+
+16
+
+x[5] MAC Cycle
+
+x[4] MAC Cycle
+
+x[3] MAC Cycle
+
+x[2] MAC Cycle
+
+x[0] MAC Cycle
+
+x[1] MAC Cycle
+
+Range
+
+60
+40
+20
+
+w[0]·x[0]
+
+w[1]·x[0]
+
+w[3]·x[0]
+
+w[2]·x[0]
+
+w[4]·x[0]
+
+w[5]·x[0]
+
+w[0]·x[1]
+
+w[1]·x[1]
+
+w[2]·x[1]
+
+w[3]·x[1]
+
+w[4]·x[1]
+
+w[0]·x[2]
+
+w[5]·x[1]
+
+w[1]·x[2]
+
+w[2]·x[2]
+
+w[3]·x[2]
+
+w[4]·x[2]
+
+w[5]·x[2]
+
+w[0]·x[3]
+
+w[1]·x[3]
+
+w[2]·x[3]
+
+w[4]·x[3]
+
+w[3]·x[3]
+
+w[0]·x[4]
+
+w[5]·x[3]
+
+w[1]·x[4]
+
+w[2]·x[4]
+
+w[3]·x[4]
+
+w[4]·x[4]
+
+w[5]·x[4]
+
+w[0]·x[5]
+
+w[1]·x[5]
+
+w[2]·x[5]
+
+w[5]·x[5]
+
+w[4]·x[5]
+w[3]·x[5]
+
+0
+
+Fig. 16. Distribution of MAC outputs in the Query Projection of a 6b/6b ViT-B-32 for each bit-serial cycle, using an ACiM macro with row parallelism of
+256 and 8-bit ADC.
+
+A PPENDIX
+!""#ABC#'#EF*
+8V888#'#8V888
+8V8S:#'#8V8;7
+8V8:8#'#8V<S=
+8V8>:#'#8V<?<
+8V<88#'#8VS::
+8V<S:#'#8V@<?
+8V<:8#'#8V@=@
+8V<>:#'#8V77;
+8VS88#'#8V:<8
+
+Accuracy (%)
+
+100
+80
+60
+
+ResNet-18 w/o NAT
+ResNet-18 w/ NAT @ σ = 100%
+ViT-B-32 w/o NAT
+ViT-B-32 w/ NAT @ σ = 60%
+
+40
+20
+0
+
+0
+
+10
+
+20
+
+30
+
+40
+
+50
+
+60
+
+70
+
+Noise Intensity (Inference) (%)
+
+80
+
+90
+
+100
+
+Fig. 18. Shmoo plot of inference accuracy across different random noise
+intensities for an ACiM macro with a row-parallelism of 256 using 8-bit
+ADC, evaluated by an 8b/8b ResNet-18 on CIFAR-10.
+
+Accuracy (%)
+
+(a)
+100
+90
+80
+70
+60
+50
+40
+30
+20
+10
+0
+
+ResNet-18 w/o NAT
+ResNet-18 w/ NAT @ σ = 50%
+ViT-B-32 w/o NAT
+ViT-B-32 w/ NAT @ σ = 40%
+
+0
+
+10
+
+20
+
+30
+
+40
+
+50
+
+60
+
+70
+
+Noise Intensity (Inference) (%)
+
+A.BC.I-<=#a3#EcGeA-<8#A?@V7SBC
+*+I-F.L+0N
+234#R#S
+234#R#7
+!"#$%
+!%#&'
+((#)&
+!"#$%
+!)#*'
+'(#"+
+!"#$%
+(*#&$
+*(#**
+!"#%&
++!#&)
+"(#'!
+!%#"$
+*&#((
+%$#**
+((#+(
+"*#""
+)+#!(
+(%#)!
+%"#!*
+)"#)&
++!#*"
+)+#'$
+))#++
+*%#*&
+)"#$)
+))#$"
+
+80
+
+90
+
+100
+
+(b)
+Fig. 17. Inference accuracy of 8b/8b ResNet-18 and ViT-B/32 models, with
+and without NAT, evaluated under varying noise intensities. (a) CIFAR-10.
+(b) ImageNet.
+
+A G ENERAL P ERSPECTIVE ON MAC D ISTRIBUTION
+Although we only illustrate the MAC output of convolutional layers in CNNs, we argue that the trend shown in Fig. 5
+is generalizable across diverse DNN models and layers. In
+particular, the MAC output of each ACiM column is proportional to the bit-level sparsity of weights and activations. The
+expected MAC value at an ACiM column can be expressed
+as:
+P (DP = 1) = P (w = 1 ∩ x = 1) = P (w = 1) · P (x = 1),
+(7)
+E(M AC) = n · P (DP = 1).
+
+(8)
+
+Here, the expected MAC output equals the product of the
+row parallelism n and the probability that a local dot product
+evaluates to ”1”. This probability further decomposes into the
+product of the bit-level sparsity of weights and activations [35].
+The derivation indicates that MAC outputs are fundamentally
+governed by sparsity patterns. For example, even when both
+weight and activation bits have a 50% probability of being ”1”,
+the MAC output only spans roughly 25% of the full dynamic
+range. Thus, sparsity inherently constrains the MAC span, and
+this trend persists across different depths and architectures.
+To further analyze distribution characteristics, the weights
+and input activations in DNNs generally follow two representative types: (1) a symmetric, Gaussian-like distribution,
+or (2) a one-sided long-tailed distribution. After quantization
+into binary representations, their bit-level sparsity patterns
+align with those shown in Fig. 4(b). For type (1), the bit
+sparsity across indices fluctuates around 50%, whereas for
+type (2), it typically falls between 0% and 40%, depending
+on the bit index. Although distribution shapes may vary
+across models and layers, the resulting bit-level sparsity after
+quantization remains consistent. As illustrated in Fig. 4(b), two
+dominant sparsity curves correspond to these two distribution
+types, despite some shape differences observed in Fig.4(a).
+Overall, modern DNN weights and activations largely conform
+to one of these two categories. Consequently, according to
+Eq. 8, the column-wise MAC voltages observed by ADCs
+
+=== page 17 ===
+SD = 1.02 LSB
+
+Random Noise Model
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+9 10 11 12 13 14 15
+
+15
+14
+13
+12
+11
+10
+9
+8
+7
+6
+5
+4
+3
+2
+1
+0
+
+SD = 0.17 LSB
+
+MAC
+
+15
+14
+13
+12
+11
+10
+9
+8
+7
+6
+5
+4
+3
+2
+1
+0
+
+17
+
+MAC
+
+MAC
+
+ARXIV PREPRINT, AUGUST 2025
+
+Nonlinearity Model
+
+SD = 1.09 LSB
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+(a)
+
+7
+
+8
+
+(b)
+
+9 10 11 12 13 14 15
+
+15
+14
+13
+12
+11
+10
+9
+8
+7
+6
+5
+4
+3
+2
+1
+0
+
+SD = 0.44 LSB
+
+Random Noise Model
+w/ Majority Voting
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+9 10 11 12 13 14 15
+
+(c)
+
+Fig. 19. Linearity plots of a 4-bit ADC under different noise models: (a) Random noise. (b) Nonlinearity-induced distortion. (c) Random noise with majority
+voting applied via 5 times oversampling.
+
+are confined within a limited dynamic range, which warrants
+careful modeling for inference accuracy.
+For reference, we analyze the MAC outputs of a 256-rowparallel ACiM macro in the Query Projection of the Attention
+Block in ViT-B-32, with both weights and activations quantized to 6 bits. As shown in Fig. 16, the observed MAC values
+remain consistently below 60, which is far smaller than the
+theoretical maximum of 256. Remarkably, this distribution is
+even narrower than that observed in CNN layers (Fig. 5),
+thereby imposing stricter precision requirements on ACiM
+circuits.
+Q UANTITATIVE E VALUATION OF N OISE -AWARE T RAINING
+In this section, we quantitatively evaluate the effectiveness
+of NAT. We analyze ResNet-18 and ViT-B-32 models trained
+on CIFAR-10 and ImageNet with noise intensities of 100%,
+60%, 50%, and 40%. These models were subsequently tested
+under varying inference-time noise levels and compared with
+their non-NAT counterparts, as shown in Fig. 17. The results
+clearly indicate that NAT enhances model robustness, enabling
+improved tolerance to higher noise levels during inference.
+To strengthen our argument, we simulate the 8b/8b ResNet18 model on CIFAR-10 using the same experimental configuration as in Fig. 9(a), except that the weights are obtained
+without NAT. The corresponding accuracy shmoo in Fig. 18
+shows a sharper decline relative to the NAT-enhanced counterpart, thereby underscoring the necessity of NAT in improving
+the robustness of ACiM-based systems.
+E XAMINING N OISE M ODELING IN AS I M
+To provide clearer insight into the noise models adopted
+in ASiM, we visualize the simulated noise behavior using
+linearity plots. Figs. 19(a) and (b) show the MAC output
+characteristics of a 4-bit ADC under both the random noise
+model and the nonlinearity model. In both cases, the relative
+noise intensity is configured at LSBrms = 1.0, and the error
+bars indicate the standard deviation (σ) of the MAC readout.
+For the random noise model, each MAC output follows a
+Gaussian distribution with σ ≈ 1.02 LSB. Under the nonlinearity model, smaller MAC values show larger variations
+(σ ≈ 1.09 LSB), whereas the variation decreases gradually for
+
+larger MAC values (σ ≈ 0.17 LSB). This trend is consistent
+with capacitor mismatch effects, where fewer active capacitors
+induce greater variation at lower MAC levels.
+The majority voting approach mitigates analog noise by
+statistically reducing errors through oversampling. To illustrate
+this effect, we apply 5× oversampling (with LSBrms = 1.0)
+and show the corresponding linearity plot in Fig. 19(c). As
+observed, majority voting reduces the standard deviation from
+approximately 1.02 LSB to 0.44 LSB, thereby improving
+MAC precision and enhancing inference accuracy.

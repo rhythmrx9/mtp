@@ -1,0 +1,963 @@
+# Tiny but Accurate: A Pruned, Quantized and Optimized Memristor Crossbar Framework for Ultra Efficient DNN Implementation
+# id: W3013407975 | key: 2020_Ma_TinyButAccurate_ASPDAC | ASP-DAC 2020 | card: ../cards/2020_Ma_TinyButAccurate_ASPDAC.md
+
+
+=== page 1 ===
+Tiny but Accurate: A Pruned, Quantized and Optimized Memristor
+Crossbar Framework for Ultra Efficient DNN Implementation
+Xiaolong Ma†1 , Geng Yuan†1 , Sheng Lin1 , Caiwen Ding2 , Fuxun Yu3 , Tao Liu4 , Wujie Wen4 , Xiang Chen3 , Yanzhi Wang1
+1
+
+Northeastern University, 2 University of Connecticut, 3 George Mason University, 4 Florida International University
+E-mail: 1 {ma.xiaol, yuan.geng, lin.sheng,}@husky.neu.edu, 1 yanz.wang@northeastern.edu,
+
+arXiv:1908.10017v1 [eess.SP] 27 Aug 2019
+
+2
+
+caiwen.ding@uconn.edu, 3 {fyu2, xchen26}@gmu.edu, 4 {tliu023, wwen}@fiu.edu
+
+Abstract— The state-of-art DNN structures involve
+intensive computation and high memory storage. To
+mitigate the challenges, the memristor crossbar array
+has emerged as an intrinsically suitable matrix computation and low-power acceleration framework for DNN
+applications. However, the high accuracy solution for
+extreme model compression on memristor crossbar array architecture is still waiting for unraveling. In this
+paper, we propose a memristor-based DNN framework which combines both structured weight pruning
+and quantization by incorporating alternating direction
+method of multipliers (ADMM) algorithm for better
+pruning and quantization performance. We also discover the non-optimality of the ADMM solution in
+weight pruning and the unused data path in a structured pruned model. Motivated by these discoveries,
+we design a software-hardware co-optimization framework which contains the first proposed Network Purification and Unused Path Removal algorithms targeting on post-processing a structured pruned model
+after ADMM steps. By taking memristor hardware
+constraints into our whole framework, we achieve extreme high compression ratio on the state-of-art neural network structures with minimum accuracy loss.
+For quantizing structured pruned model, our framework achieves nearly no accuracy loss after quantizing weights to 8-bit memristor weight representation.
+We share our models at anonymous link https://bit.
+ly/2VnMUy0.
+
+1
+
+Introduction
+
+Structured weight pruning [1–3] and weight quantization [4–6] techniques are developed to facilitate weight compression and computation acceleration to solve the high demand for parallel computation and storage resources [7–9].
+Even though models are compressed, computation complexity still burden the overall performance of the state-ofart CMOS hardware applications.
+To mitigate the bottleneck caused by CMOS-based DNN
+architectures, the next-generation device/circuit technologies [10,11] triumph CMOS in their non-volatility, high energy efficiency, in-memory computing capability and high
+scalability. Memristor crossbar device has shown its potential for bearing all these characteristic which makes it
+intrinsically suitable for large DNN hardware architecture
+design. A memristor crossbar device can perform matrix∗† These authors contributed equally.
+
+vector multiplication in the analog domain and the computation is in O(1) time complexity [12, 13]. Motivated by
+the fact that there is no precedent model that is structured
+pruned and quantized as well as satisfying memristor hardware constraints, in this work, a memristor-based ADMM
+regularized optimization method is utilized both on structured pruning and weight quantization in order to mitigate
+the accuracy degradation during extreme model compression. A structured pruned model can potentially benefit
+for high-parallelism implementation in crossbar architecture. Further more, quantized weights can reduce hardware imprecision during read/write procedure, and save
+more hardware footprint due to less peripheral circuits are
+needed to support fewer bits.
+However, to achieve ultra-high compression ratio, an
+ADMM pruning method [3, 14] cannot fully exploit all redundancy in a neural network model. As a result, we design
+a hardware-software co-optimization framework in which
+we investigate Network Purification and Unused Path Removal after the procedure of structured weight pruning with
+ADMM. Moreover, we utilize distilled knowledge from software model to guide our memristor hardware constraint
+quantization. To the best of our knowledge, we are the first
+to combine extreme structured weight pruning and weight
+quantization in an unified and systematic memristor-based
+framework. Also, we are the first to discover the redundant weights and unused path in a structured pruned DNN
+model and design a sophisticate co-optimization framework
+to boost higher model compression rate as well as maintain
+high network accuracy. By incorporating memristor hardware constraints in our model, our frameworks are guaranteed feasible for a real memristor crossbar device. The
+contributions of this paper include:
+• We adopt ADMM for efficiently optimizing the nonconvex problem and utilized this method on structured
+weight pruning.
+• We systematically investigate the weight quantization
+on a pruned model with memristor hardware constraints.
+• We design a software-hardware co-optimization framework in which Network Purification and Unused Path
+Removal are first proposed.
+We evaluate our proposed memristor framework on different networks. We conclude that structured pruning
+method with memristor-based ADMM regularized optimization achieves high compression ratio and desirable
+
+=== page 2 ===
+high accuracy. Software and hardware experimental results
+shows our memristor framework is very energy efficient and
+saves great amount of hardware footprint.
+
+2
+
+3
+
+Background on Memristors
+
+3.1
+
+Memristor Crossbar Model
+
+Memristor [10] crossbar is an array structure consists of
+memristors, horizontal Word-lines and Vertical Bit-lines,
+as shown in Figure 1. Due to its outstanding performance
+on computing matrix-vector multiplications (MVM), memristor crossbars are widely used as dot-product accelerator
+in recent neuromorphic computing designs [19]. By programming the conductance state (which is also known as
+“memristance”) of each memristor, the weight matrix W
+can be mapped onto the memristor crossbar. Given the
+input voltage vector Vi , the MVM output current vector
+Ij can be obtained in time complexity of O(1).
+3.2
+
+Challenges in Memristor Crossbars Implementation and Mitigation Techniques
+
+Different from the software-based designs, hardware imperfection is one of the key issues that causes the hardware non-ideal behaviors and needs to be considered in
+memristor-based designs. The hardware imperfection of
+memristor devices are mainly come from the imperfect fabrication process and the memristor features.
+Process Variation. Process variation is one major
+hardware imperfection that caused by the fluctuations
+in fabrication process. It mainly comes from the lineedge roughness, oxide thickness fluctuations, and random
+dopant variations [20]. Inevitably, process variation plays
+an increasingly significant role as the process technology
+scales down to nanometer level. In a DNN hardware design, the non-ideal behaviors caused by process variations
+may lead to an accuracy degradation.
+State Drift. State drift is the phenomenon that the
+memristance would change after several reading oper-
+
+Vertical
+Bit Line
+
+V2
+
+undoped
+
+Related Works
+
+Heuristic weight pruning methods [15] are widely used in
+neuromorphic computing designs to reduce the weight storage and computing delay [16]. [16] implemented weight
+pruning techniques on a neuromorphic computing system using irregular pruning caused unbalanced workload,
+greater circuits overheads and extra memory requirement
+on indices. To overcome the limitations, [17] proposed
+group connection deletion, which structually prunes connections to reduce routing congestion between memristor
+crossbar arrays.
+Weight quantization can mitigate hardware imperfection of memristor including state drift and process variations, caused by the imperfect fabrication process or by
+the device feature itself [4, 5]. [18] presented a technique
+to reduce the overhead of Digital-to-Analog Converters
+(DACs)/Analog-to-Digital Converters (ADCs) in resistive
+random-access memory (ReRAM) neuromorphic computing systems. They first normalized the data, and then
+quantized intermediary data to 1-bit value. This can be
+directly used as the analog input for ReRAM crossbar and,
+hence, avoids the need of DACs.
+
+BL
+
+V1
+
+V3
+
+doped
+WL
+
+Wi,j
+
+Vi
+Horizontal
+World Line I 1
+
+I2 I3
+
+Ij
+
+Figure 1: memristor and memristor crossbar
+tions [21]. It is known that memristor is a thin-film device
+constructed by a region highly doped with oxygen vacancies and an undoped region. By nature, applying an electric
+field across the memristor over a period of time, the oxygen vacancies would migrate to the direction along with
+the electric field, which leads to the (memristance) state
+drift. Consequently, an error will incur when the state of
+memristor drifts to another state level.
+It has been proved that applying quantization on
+memristor-based designs can mitigate the undesired impacts caused by hardware imperfections [22].
+
+4
+
+A Memristor-Based Highly Compressed
+DNN Framework
+
+The memristor crossbar structure has shown its potential for neuromorphic computing system compared to the
+CMOS technologies [16]. Due to great amount of weights
+and computations that involved in networks, an efficient
+and highly performed framework is needed to conquer
+the memory storage and energy consumption problems.
+We propose an unified memristor-based framework including memristor-based ADMM regularized optimization and
+masked mapping.
+4.1
+
+Problem Formulation
+
+ADMM [23] is an advanced optimization technique which
+decompose an original problem into subproblems that
+can be solved separately and iteratively. By adopting memristor-based ADMM regularized optimization, the
+framework can guarantee the solution feasibility (satisfying
+memristor hardware constraints) while provide high solution quality (no obvious accuracy degradation after pruning).
+First, the memristor-based ADMM regularized optimization starts from a pre-trained full size DNN model without
+compression. Consider an N -layer DNNs, sets of weights
+of the i-th (CONV or FC) layer are denoted by Wi . And
+the loss
+function associated with the DNN is denoted by
+
+f {Wi }N
+i=1 . The overall problem is defined by
+minimize
+
+
+f {Wi }N
+i=1 ,
+
+subject to
+
+Wi ∈ Pi , Wi ∈ Qi , i = 1, . . . , N.
+
+{Wi }
+
+(1)
+
+Given the value
+P of αi , the memristor-based constraint set
+Pi = {Wi | (structured Wi 6= 0) ≤ αi } and Qi ={the
+weights in the i-th layer are mapped to the quantization
+values}, where αi is predefined hyper parameters. The general constraint can be extended in structured pruning such
+as filter pruning, channel pruning and column pruning,
+which facilitate high-parallelism implementation in hardware.
+
+=== page 3 ===
+Filter 1
+
+Filter 1
+
+Filter 1
+
+Filter 2
+
+Filter 2
+
+Filter 2
+
+which (5) is the proximal step, (6) is projection step and
+(7) is dual variables update.
+The optimal solution is the Euclidean projection (masked
+mapping) of Wik+1 + Uki and Wik+1 + Vik onto Pi and Qi .
+Namely, elements in solution that less than αi will be set to
+zero. In the meantime, those kept elements are quantized
+to the closest valid memristor state value.
+
+Filter Ai
+
+Filter Ai
+
+Filter Ai
+
+Uk+1
+:= Uki +Wik+1 −Yik+1 ; Vik+1 := Vik +Wik+1 −Zk+1
+(7)
+i
+i
+
+...
+
+Filter Shape Pruning
+
+...
+
+Channel Pruning
+
+...
+
+Filter Pruning
+
+4.3
+
+Memristor-Based Structured Weight Pruning
+
+Figure 2: Illustration of filter-wise, channel-wise and shapewise structured sparsities.
+Similarly, for weight quantization, elements in Qi are
+the solutions of Wi . Assume set of qi,1 , qi,2 , · · · , qi,Mi is
+the available memristor state value which is the elements
+in Wi , where Mi denotes the number of available quantization level in layer i. Suppose qi,j indicates the j-th
+quantization level in layer i, which gives
+
+In order to accommodate high-parallelism implementation
+in hardware, we use structured pruning method [1] instead
+of the irregular pruning method [15] to reduce the size
+of the weight matrix while avoid extra memory storage
+requirement for indices. Figure 2 shows different types
+of structured sparsity which include filter-wise sparsity,
+channel-wise sparsity and shape-wise sparsity.
+Figure 3 (a) shows the general matrix multiplication
+qi,j ∈ [−memrmax , −memrmin ] ∪ [memrmin , memrmax ]
+(2)
+(GEMM) view of the DNN weight matrix and the different
+where memrmin , memrmax are the minimum and maxi- structured weight pruning methods. The structured pruning corresponds to removing rows (filters-wise) or columns
+mum memristance value of a specified memristor device.
+(shape-wise) or the combination of them. We can see that
+4.2 Memristor-based ADMM regularized opti- after structured weight pruning, the remaining weight matrix is still regular and without extra indices.
+mization step
+Figure 3 (b) illustrate the memristor crossbar schematic
+Corresponding to every memristor-based constraint set of size reduction from corresponding structured weight prunPi and Qi , a indicator functions is utilized to incorporate ing and Figure 3 (c) shows physical view of the memPi and Qi into objective functions, which are
+ristor crossbar blocks. A CONV layer has n filters, m
+channels which include total k columns, and is denoted
+(
+(
+0
+if Wi ∈ Pi ,
+0
+if Wi ∈ Qi , as W ∈ Rn×k . Due to the increasing reading/writing ergi (Wi ) =
+hi (Wi ) =
++∞ otherwise,
++∞ otherwise,
+rors caused by expanding the memristor crossbar size, we
+limited our design by using multiple 128×64 [25] crossbars
+for i = 1, . . . , N . Substituting into (1) and we get
+for all DNN layers. In Figure 3 (c), i, j denote columns
+N
+N
+X
+ X
+and rows for each crossbar, X represent inputs and c is the
+gi (Yi ) +
+hi (Zi ),
+minimize
+f {Wi }N
+i=1 +
+{Wi }
+column number which is also shown in Figure 3 (a). By
+(3)
+i=1
+i=1
+easy calculation, one can derived that there’s k/j different
+subject to Wi = Yi = Zi , i = 1, . . . , N,
+crossbars to store one filter’s weights as a block unit. So
+We incorporate auxiliary variables Yi and Zi , dual vari- there’s total p = n/j blocks to store W ∈ Rn×k . Within
+ables Ui and Vi , and the augmented Lagrangian formation each block, the outputs of each crossbar will be propagated
+through an ADC. Then We column-wisely sum the interLρ {·} of problem (3) is
+mediate results of all crossbars.
+N
+X
+ρi
+N 
+2
+minimize
+{Wi }
+
+f {Wi }i=1 +
+
+i=1
+
++
+
+2
+
+kWi − Yi + Ui kF
+
+N
+X
+
+(4)
+
+ρi
+kWi − Zi + Vi k2F ,
+2
+i=1
+
+We can see that the first term in problem (4) is original DNN loss function, and the second and third term are
+differentiable and convex. As a result, subproblem (4) can
+be solved by stochastic gradient descent [24] as the original
+DNN training.
+The standard ADMM algorithm [23] steps proceed by
+repeating, for k = 0, 1, . . ., the following subproblems iterations:
+Wik+1 := minimize Lρ ({Wi }, {Yik }, {Uki })
+{Wi }
+
+(5)
++ Lρ ({Wi }, {Zki }, {Vik })
+
+Yik+1 , Zk+1
+:= minimize Lρ ({Wik+1 }, {Yi }, {Uki })
+i
+{Yi ,Zi }
+
+(6)
++ Lρ ({Wik+1 }, {Zi }, {Vik })
+
+5
+
+Software-hardware Co-optimization
+
+Due to the existence of the non-optimality of ADMM process and the accuracy degradation problem of quantizing
+sparse DNN, a software-hardware co-optimization framework is desired. In this section we propose: (i) network
+purification and unused path removal to efficiently remove
+redundant channels or filters, (ii) memristor model quantization by using distilled knowledge from software helper.
+5.1
+
+Network Purification and Unused Path Removal
+
+Weight pruning with memristor-based ADMM regularized
+optimization can significantly reduce the number of weights
+while maintaining high accuracy. However, does the pruning process really remove all unnecessary weights?
+From our analysis on the DNN data flow, we find that
+if a whole filter is pruned, after General Matrix Multiply
+
+=== page 4 ===
+Schematic View
+Memristor block size view
+
+channel m
+
+filter j
+
+Block 1
+
+size shrinked
+memristor block
+
+filter n*
+
+channel 1channel 2 channel m*
+
+filter 1*
+filter n* C1
+
+Ci Ci+1
+
+C2i
+
+smallest
+memristor block
+
+Ck
+
+(a)
+size shrink
+original size
+
+filter prune
+column prune
+
+filter n*
+
+Block p
+C1
+
+Ci
+
+channel 1
+
+(b)
+
+Sense Amplifier
+
+filter 1*
+
+channel 2
+
+ADC
+Sense Amplifier
+
+filter n
+
+filter 1*
+
+xk
+
+xi
+
+ADC
+SUM
+
+ADC
+SUM
+
+ADC
+
+SUM
+
+ADC
+
+Decoder
+
+x1 x2 x3
+
+full size memristor block
+
+channel 1
+
+DAC Column Decoder
+
+channel m
+
+Sense Amplifier
+
+filter 1
+filter 2
+filter 3
+
+channel 1 channel 2
+
+Data / Control
+
+Decoder
+
+GEMM view of weight reduction
+
+Physical View
+
+ADC
+SUM
+
+ADC
+
+ADC
+SUM
+
+SUM
+
+ADC
+
+Ck
+
+channel m*
+
+(c)
+
+may not be the same filter
+with original weight matrix
+
+Figure 3: Structured weight pruning and reduction of hardware resources
+(GEMM), the generated feature maps by this filter will be
+“blank”. If we map those “blank” feature input to next
+layer, the corresponding unused input channel weights become removable. By the same token, a pruned channel also
+causes the corresponding filter in previous layer removable.
+Figure 4 gives a clear illustration about the corresponding relationship between pruned filters/channels and correspond unused channels/filters.
+To better optimize the unused path removal effect we
+discussed above, we derive an emptiness ratio parameter η
+to define what can be treated as an empty channel. Suppose Λi is the number of columns per channel in layer i,
+and j is channel index. We have
+δ
+X
+
+ηi,j =
+(columnk ! = 0) /δ δ ∈ Λi
+(8)
+k=1
+
+If ηi,j exceeds a pre-defined threshold, we can assume that
+this channel is empty and thus actually prune every column in it. However, if we remove all columns that satisfy
+η, dramatic accuracy drop will occur and it will be hard
+to recover by retraining because some relatively “important” weights might be removed. To mitigate this problem,
+we design Network Purification algorithm dealing with the
+non-optimality problem of the ADMM process. We set-up
+an criterion constant σi,j to represent channel j’s importance score, which is derived from an accumulation proceδ
+dure:
+X
+σi,j =
+kcolumnk k2F /δ δ ∈ Λi
+(9)
+k=1
+
+One can think of this process as if collection evidence for
+whether each channel that contains one or several columns
+need to be removed. A channel can only be treated as empty
+when both equation (8) and (9) are satisfied. Network Purification also works on purifying remaining filters and thus
+remove more unused path in the network. Algorithm 1
+shows our generalized method of the P-RM method where
+T h1 . . . T h4 are hyper-parameter thresholds values.
+5.2
+
+Memristor Weight Quantization
+
+Traditionally, DNN in software is composed by 32-bit
+weights. But on a memristor device, the weights of a neural
+
+-0.4 0.3 0.1
+
+Feature maps from
+previous layer
+
+0.8 1.2 0.6
+1.1 0.6 -2.1
+
+Weight kernel
+Channel
+
+Feature maps to
+next layer
+
+Channel
+Filter
+
+Filter
+
+...
+Layer i weight matrix
+
+Layer i+1 weight matrix
+
+Figure 4: Unused data path caused by structured pruning
+Algorithm 1: Network purification & Unused path removal
+Result: Redundant weights and unused paths removed
+Load ADMM pruned model
+δ = numbers of columns per channel
+for i ← 1 until last layer do
+for j ← 1 until last channel in layeri do
+for each: k ∈ δ and kcolumnk k2F < T h1 do
+calculate: equation (8), (9);
+end
+if ηi,j < T h2 and σi,j < T h3 then
+prune(channeli,j )
+prune(f ilteri−1,j ) when i 6= 1;
+end
+end
+for m ← 1 until last f ilter in layeri do
+if f ilterm is empty or kf ilterm k2F < T h4 then
+prune(f ilteri,m )
+prune(channeli+1,m ) when i 6= last layer index;
+end
+end
+end
+
+network are represented by the memristance of the memristor (i.e. the memristance range constraint Qi in ADMM
+process). Due to the limited memristance range of the
+memristor devices, the weight values exceeding memristance range cannot be represented precisely. Meanwhile,
+the write-on value and the exact value mismatch when
+mapping weights on memristor crossbar will also cause the
+reading mismatch if the amount of the value shift exceeds
+state level range.
+In order to mitigate the memristance range limitation
+and the mapping mismatch, larger range between state
+level (qi,1 , qi,2 , · · · , qi,Mi ) is needed which means fewer bits
+are representing weights. To better maintain accuracy, we
+use a pretrained high-accuracy teacher model to provide
+
+=== page 5 ===
+Table 1: Structured weight pruning results on multi-layer network on MNIST, CIFAR-10 and ImageNet datasets. (P-RM:
+Network Purification and Unused Path Removal). Accuracies in ImageNet results are reported in Top-5 accuracy.
+Method
+
+Original model
+Accuracy
+
+Compression Rate
+Without P-RM
+
+Group Scissor [17]
+
+99.15%
+
+our
+LeNet-5
+
+99.17%
+
+4.16×
+23.18×
+34.46×
+45.54×
+
+Accuracy
+Without P-RM
+MNIST
+99.14%
+99.20%
+99.06%
+98.48%
+
+Group Scissor [17]
+
+82.01%
+
+our
+ConvNet
+
+84.41%
+
+2.35×
+2.35×
+*2.93×
+5.88×
+
+CIFAR-10
+82.09%
+84.55%
+84.53%
+83.58%
+
+our
+VGG-16
+our
+ResNet-18
+SSL [1] AlexNet
+our AlexNet
+our ResNet-18
+our ResNet-50
+
+93.70%
+94.14%
+
+80.40%
+82.40%
+89.07%
+92.86%
+
+Prune Ratio
+With P-RM
+N/A
+39.23×
+*87.93×
+231.82×
+
+Accuracy
+With P-RM
+
+Weight Quantization
+Accuracy (8-bit)
+
+N/A
+N/A
+99.20%
+99.16%
+99.06%
+99.04%
+98.48%
+98.05%
+*numbers of parameter reduced: 25.2K
+
+N/A
+N/A
+N/A
+N/A
+N/A
+84.33%
+N/A
+N/A
+83.93%
+N/A
+N/A
+83.01%
+44.67×
+93.36%
+93.04%
+20.16×
+93.36%
+*50.02×
+92.73%
+92.46%
+5.83×
+93.79%
+52.07×
+93.79%
+93.71%
+15.14×
+93.20%
+*59.84×
+93.22%
+93.27%
+*numbers of parameter reduced on ConvNet: 102.30K, VGG-16 : 14.42M, ResNet-18 : 10.97M
+ImageNet ILSVRC-2012
+1.40×
+80.40%
+N/A
+N/A
+N/A
+4.69×
+81.76%
+5.13×
+81.76%
+80.45%
+3.02×
+88.41%
+3.33×
+88.36%
+88.47%
+2.00×
+92.26%
+2.70×
+92.27%
+92.20%
+numbers of parameter reduced on AlexNet: 1.66M, ResNet-18 : 7.81M, ResNet-50 : 14.77M
+
+Algorithm 2: Distillation Quantization
+Result: distillation quantization with memristor hardware
+constraints
+student ← model pruned and ready to apply quantization;
+teacher ← model with a deeper structure and higher accuracy;
+for step ← 1 until lstudent converge do
+studentq = apply quantization(ws , Q);
+calculate T 2 L(ps , pt ) of studentq & teacher;
+back propagate on student ←
+
+∂(T 2 L(ps ,pt ))
+;
+∂(studentq )
+
+end
+
+distillation loss to add on our memristor model (referred
+as student model) loss to provide better training performance.
+lstudent = (1 − σ)L(ps , pr ) + σT 2 L(ps , pt )
+
+(10)
+
+The L in first term in (10) is the memristor model (student) loss, and in second term is distillation loss between
+student and teacher. ps and pt are outputs of student and
+teacher and pr is the ground-truth label. σ is a balancing
+parameter, and T is the temperature parameter.
+
+6
+
+Experimental Results
+
+In this section, we show the experimental results of our
+proposed memristor-based DNN framework in which structured weight pruning and quantization with memristorbased ADMM regularized optimization are included. Our
+software-hardware co-optimization framework (i.e. Network Purification, Unused Path Removal (P-RM)) are also
+thoroughly compared. We test MNIST dataset on LeNet5 and CIFAR-10 dataset using ConvNet (4 CONV layers
+and 1 FC layer), VGG-16 and ResNet-18, and we also
+show our ImageNet results on AlexNet, ResNet-18 and
+ResNet-50. The accuracy of pruned and quantized model
+results are tested based on our software models that incorporated with memristor hardware constraints. Models are
+trained on an eight NVIDIA GTX-2080Ti GPUs server using PyTorch API. Our memristor model on MATLAB and
+the NVSim [26] is used to calculate power consumption
+and area cost of the memristors and memristor crossbars.
+
+Figure 5: Effect of removing redundant weights and unused
+paths. (dataset: CIFAR-10; Accuracy: VGG-16-93.36%,
+ResNet-18-93.79%)
+The 1R crossbar structure is used in our design. And we
+choose the memristor device that has Ron = 1M Ω and
+Rof f = 10M Ω. The memristor precision is 4-bit, which
+indicates that 16 state-levels can be represented by a single memristor device, and two memristors are combined to
+represent 8-bit weight in our framework. For the peripheral
+circuits, the power and area is calculated based on 45nm
+technology. And H-tree distribution networks are used to
+access all the memristor crossbars.
+As shown in Table 1, we show groups of different prune
+ratios and 8-bits quantization with accuracies on each network structure. Figure 5 proves our previous arguments
+that ADMM’s non-optimality exists in a structured pruned
+model. P-RM can further optimize the loss function.
+Please note all of the results are based on non-retraining
+process. Below are some results highlights on different
+dataset with different network structures.
+MNIST. With LeNet-5 network, comparing to original
+accuracy (99.17%), our proposed P-RM framework achieve
+231.82× compression with minor accuracy loss while other
+state-of-art compression ratios are lossless. And no accuracy losses are observed after quantization on 40× and 88×
+models and only 0.4% accuracy drop on 231.82× model.
+On the other hand, Group Scissor [17] only has 4.16× compression rate.
+CIFAR-10. Convnet structure are relative shallow so
+ADMM reaches a relative optimal local minimum, so post-
+
+=== page 6 ===
+Table 2: Area/power comparison between models with and
+without P-RM on ResNet-18 and VGG-16 on CIFAR-10
+
+framework of structured weight pruning for dnns,” arXiv preprint
+arXiv:1807.11091, 2018.
+[4] E. Park, J. Ahn, and S. Yoo, “Weighted-entropy-based quantization
+for deep neural networks,” in CVPR, 2017.
+[5] J. Wu, C. Leng, Y. Wang, Q. Hu, and J. Cheng, “Quantized convolutional neural networks for mobile devices,” in CVPR, 2016.
+[6] S. Lin, X. Ma, S. Ye, G. Yuan, K. Ma, and Y. Wang, “Toward
+extremely low bit and lossless accuracy in dnns with progressive
+admm,” arXiv preprint arXiv:1905.00789, 2019.
+
+processing is not necessary. But we still outperform Group
+Scissor [17] in accuracy (84.55% to 82.09%) when compression rate is same (2.35×). For larger networks, when a minor accuracy loss is allowed, our proposed P-RM method
+improves the prune ratio to 50.02× and 59.84× on VGG-16
+and ResNet-18 respectively, and no obvious accuracy loss
+after quantization on pruned models.
+ImageNet. AlexNet model outperform SSL [1] both
+in compression rate (4.69× to 1.40×) and network accuracy (81.76% to 80.40%), with or without P-RM. Our
+ResNet-18 and ResNet-50 models also achieve unprecedented 3.33× with 88.36% accuracy and 2.70× with 92.27%
+respectively. No accuracy losses are observed after quantization on pruned ResNet-18/50 models and around 1%
+accuracy loss on 5.13× compressed AlexNet model.
+Table 2 shows our highlighted memristor crossbar power
+and area comparisons of ResNet-18 and VGG-16 models. By using our proposed P-RM method, the area
+and power of the 5.83× (15.14×) ResNet-18 model is reduced from 0.235mm2 (0.117mm2 ) and 3.359W (1.622W )
+to 0.042mm2 (0.041mm2 ) and 0.585W (0.556W ), without any accuracy loss. For VGG-16 20.16× model, after
+using our P-RM method, the area and power is reduced
+from 0.113mm2 and 1.611W to 0.056mm2 (0.053mm2 ) and
+0.824W (0.754W ), where the compression ratio is achieved
+44.67× (50.02×) with 0% (0.63%) accuracy degradation.
+
+7
+
+Conclusion
+
+In this paper, we designed an unified memristor-based
+DNN framework which is tiny in overall hardware footprint
+and accurate in test performance. We incorporate ADMM
+in weight structured pruning and quantization to reduce
+model size in order to fit our designed tiny framework.
+We find the non-optimality of the ADMM solution and
+design Network Purification and Unused Path Removal in
+our software-hardware co-optimization framework, which
+achieve better results comparing to Gourp Scissor [17] and
+SSL [1]. On AlexNet, VGG-16 and ResNet-18/50, after
+structured weight pruning and 8-bit quantization, model
+size, power and area are significant reduced with negligible
+accuracy loss.
+
+References
+[1] W. Wen, C. Wu, Y. Wang, Y. Chen, and H. Li, “Learning structured
+sparsity in deep neural networks,” in NeurIPS, 2016, pp. 2074–2082.
+[2] X. Ma, G. Yuan, S. Lin, Z. Li, H. Sun, and Y. Wang, “Resnet
+can be pruned 60x: Introducing network purification and unused path removal (p-rm) after weight pruning,” arXiv preprint
+arXiv:1905.00136, 2019.
+[3] T. Zhang, K. Zhang, S. Ye, J. Li, J. Tang, W. Wen, X. Lin,
+M. Fardad, and Y. Wang, “Adam-admm: A unified, systematic
+
+[7] W. Niu, X. Ma, Y. Wang, and B. Ren, “26ms inference time for
+resnet-50: Towards real-time execution of all dnns on smartphone,”
+arXiv preprint arXiv:1905.00571, 2019.
+[8] H. Li, N. Liu, X. Ma, S. Lin, S. Ye, T. Zhang, X. Lin, W. Xu, and
+Y. Wang, “Admm-based weight pruning for real-time deep learning
+acceleration on mobile devices,” in Proceedings of the 2019 on Great
+Lakes Symposium on VLSI, 2019.
+[9] C. Ding, A. Ren, G. Yuan, X. Ma, J. Li, N. Liu, B. Yuan, and
+Y. Wang, “Structured weight matrices-based hardware accelerators
+in deep neural networks: Fpgas and asics,” in Proceedings of the
+2018 on Great Lakes Symposium on VLSI, 2018.
+[10] D. B. Strukov, G. S. Snider, D. R. Stewart, and R. S. Williams, “The
+missing memristor found,” nature, vol. 453, no. 7191, p. 80, 2008.
+[11] X. Ma, Y. Zhang, G. Yuan, A. Ren, Z. Li, J. Han, J. Hu, and
+Y. Wang, “An area and energy efficient design of domain-wall
+memory-based deep convolutional neural networks using stochastic
+computing,” in ISQED. IEEE, 2018.
+[12] L. Chua, “Memristor-the missing circuit element,” IEEE Transactions on circuit theory, vol. 18, no. 5, pp. 507–519, 1971.
+[13] G. Yuan, C. Ding, R. Cai, X. Ma, Z. Zhao, A. Ren, B. Yuan, and
+Y. Wang, “Memristor crossbar-based ultra-efficient next-generation
+baseband processors,” in MWSCAS, 2017.
+[14] S. Ye, X. Feng, T. Zhang, X. Ma, S. Lin, Z. Li, K. Xu, W. Wen,
+S. Liu, J. Tang et al., “Progressive dnn compression: A key
+to achieve ultra-high weight pruning and quantization rates using
+admm,” arXiv preprint arXiv:1903.09769, 2019.
+[15] S. Han, J. Pool, J. Tran, and W. Dally, “Learning both weights and
+connections for efficient neural network,” in NeurIPS, 2015.
+[16] A. Ankit, A. Sengupta, and K. Roy, “Trannsformer: Neural network
+transformation for memristive crossbar based neuromorphic system
+design,” in Proceedings of ICCD, 2017.
+[17] Y. Wang, W. Wen, B. Liu, D. Chiarulli, and H. Li, “Group scissor:
+Scaling neuromorphic computing design to large neural networks,”
+in DAC. IEEE, 2017.
+[18] L. Xia, T. Tang, W. Huangfu, M. Cheng, X. Yin, B. Li, Y. Wang,
+and H. Yang, “Switched by input: power efficient structure for rrambased convolutional neural network,” in DAC. ACM, 2016, p. 125.
+[19] A. Shafiee, A. Nag, N. Muralimanohar, and et.al, “ISAAC: A Convolutional Neural Network Accelerator with In-Situ Analog Arithmetic
+in Crossbars,” in ISCA 2016.
+[20] S. Kaya, A. R. Brown, A. Asenov, D. Magot, e. D. LintonI, T.”,
+and C. Tsamis, “Analysis of statistical fluctuations due to line edge
+roughness in sub-0.1µm mosfets,” 2001.
+[21] J. J. Yang, M. D. Pickett, X. Li, D. A. Ohlberg, D. R. Stewart, and R. S. Williams, “Memristive switching mechanism for
+metal/oxide/metal nanodevices,” Nature Nanotechnology, 2008.
+[22] C. Song, B. Liu, W. Wen, H. Li, and Y. Chen, “A quantization-aware
+regularized learning method in multilevel memristor-based neuromorphic computing system,” in 2017 NVMSA. IEEE, 2017.
+[23] S. Boyd, N. Parikh, E. Chu, B. Peleato, J. Eckstein et al., “Distributed optimization and statistical learning via the alternating direction method of multipliers,” Foundations and Trends® in Machine learning, 2011.
+[24] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,” arXiv preprint arXiv:1412.6980, 2014.
+[25] M. Hu, C. E. Graves, C. Li, and e. Li, Yunning, “Memristor-Based
+Analog Computation and Neural Network Classification with a Dot
+Product Engine,” Advanced Materials, 2018.
+[26] X. Dong, C. Xu, S. Member, Y. Xie, S. Member, and N. P.
+Jouppi, “Nvsim: A circuit-level performance, energy, and area model
+for emerging nonvolatile memory,” IEEE TRANSACTIONS ON
+COMPUTER-AIDED DESIGN OF INTEGRATED CIRCUITS
+AND SYSTEMS.
